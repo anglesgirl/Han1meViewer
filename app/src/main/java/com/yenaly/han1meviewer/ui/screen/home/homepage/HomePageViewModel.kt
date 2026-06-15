@@ -24,6 +24,7 @@ import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.yenaly_libs.utils.getSpValue
 import com.yenaly.yenaly_libs.utils.putSpValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +33,9 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.milliseconds
 
 class HomePageViewModel: ViewModel() {
     data class SessionExpiredMessage(
@@ -48,7 +51,7 @@ class HomePageViewModel: ViewModel() {
     private val _sessionExpiredMessage = MutableSharedFlow<SessionExpiredMessage>()
     val sessionExpiredMessage = _sessionExpiredMessage
 
-    private val _announcements = MutableLiveData<List<Announcement>>()
+    private var homePageJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -58,17 +61,25 @@ class HomePageViewModel: ViewModel() {
     }
 
     fun getHomePage(isRefresh: Boolean = false){
-        viewModelScope.launch {
+        homePageJob?.cancel()
+        homePageJob = viewModelScope.launch {
             val current = _homePageFlow.value
-            if (isRefresh && current is PageState.Success){
+            if (isRefresh && current is PageState.Success) {
                 _homePageFlow.value = current.copy(isRefreshing = true)
+            } else if (isRefresh && current is PageState.Error && current.cachedInfo != null) {
+                _homePageFlow.value = PageState.Success(info = current.cachedInfo, isRefreshing = true)
             } else if (!isRefresh && current !is PageState.Success){
                 _homePageFlow.value = PageState.Loading
             }
-            val announcementsDeferred = async(Dispatchers.IO) { fetchAnnouncementsFromFirebase() }
+            val announcementsDeferred = async(Dispatchers.IO) {
+                withTimeoutOrNull(ANNOUNCEMENTS_TIMEOUT_MILLIS.milliseconds) {
+                    fetchAnnouncementsFromFirebase()
+                }.orEmpty()
+            }
             NetworkRepo.getHomePage().collect { networkState ->
                 when (networkState){
                     is WebsiteState.Error -> {
+                        announcementsDeferred.cancel()
                         if (networkState.throwable is LoginStateExpiredException) {
                             logout()
                             _sessionExpiredMessage.emit(
@@ -114,15 +125,25 @@ class HomePageViewModel: ViewModel() {
                                 list.add(announcement)
                             }
                         }
-                        continuation.resume(list.sortedBy { it.priority })
+                        if (continuation.isActive) {
+                            continuation.resume(list.sortedBy { it.priority })
+                        }
                     } else {
-                        continuation.resume(emptyList())
+                        if (continuation.isActive) {
+                            continuation.resume(emptyList())
+                        }
                     }
                 }.addOnFailureListener { e ->
                     Log.e("Announcement", "读取失败: ${e.message}")
-                    continuation.resume(emptyList()) // 失败也容错返回空列表
+                    if (continuation.isActive) {
+                        continuation.resume(emptyList()) // 失败也容错返回空列表
+                    }
                 }
         }
+
+    private companion object {
+        const val ANNOUNCEMENTS_TIMEOUT_MILLIS = 5_000L
+    }
 
     fun dismissAnnouncements(){
         putSpValue("last_dismiss_time", System.currentTimeMillis(), "setting_pref")
@@ -177,36 +198,6 @@ class HomePageViewModel: ViewModel() {
     fun updateHKeyframes(entity: HKeyframeEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             DatabaseRepo.HKeyframe.update(entity)
-        }
-    }
-    fun loadAnnouncements(forceRefresh: Boolean = false) {
-        val lastDismissTime = getSpValue("last_dismiss_time", 0L, "setting_pref")
-        val shouldShowAnno = System.currentTimeMillis() - lastDismissTime > 24*60*60*1000L
-        if (!shouldShowAnno) {
-            _announcements.value = emptyList()
-            return
-        }
-        if (_announcements.value != null && !forceRefresh) return
-
-        val announcementsRef = database.getReference("announcements")
-
-        announcementsRef.get().addOnSuccessListener { snapshot ->
-            val list = mutableListOf<Announcement>()
-            if (snapshot.exists()) {
-                for (announceSnap in snapshot.children) {
-                    val announcement = announceSnap.getValue(Announcement::class.java)
-                    if (announcement != null && announcement.isActive) {
-                        list.add(announcement)
-                    }
-                }
-                _announcements.postValue(list.sortedBy { it.priority })
-            } else {
-                _announcements.postValue(emptyList())
-            }
-            Log.i("Announcement",list.toString())
-        }.addOnFailureListener { e ->
-            Log.e("Announcement", "读取失败: ${e.message}")
-            _announcements.postValue(emptyList())
         }
     }
 }

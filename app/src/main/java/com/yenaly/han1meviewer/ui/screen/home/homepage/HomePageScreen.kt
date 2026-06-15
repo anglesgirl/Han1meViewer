@@ -1,4 +1,4 @@
-package com.yenaly.han1meviewer.ui.screen.home
+package com.yenaly.han1meviewer.ui.screen.home.homepage
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -35,11 +35,7 @@ import com.yenaly.han1meviewer.ui.component.PullRefreshOverlay
 import com.yenaly.han1meviewer.ui.component.isFirstPageEmpty
 import com.yenaly.han1meviewer.ui.component.isFirstPageError
 import com.yenaly.han1meviewer.ui.component.isFirstPageLoading
-import com.yenaly.han1meviewer.ui.screen.home.homepage.HomePageContent
-import com.yenaly.han1meviewer.ui.screen.home.homepage.HomeUiEvent
 import com.yenaly.han1meviewer.ui.screen.home.homepage.component.HomePageTopBar
-import com.yenaly.han1meviewer.ui.screen.home.homepage.toHomePageErrorMessageRes
-import com.yenaly.han1meviewer.ui.screen.home.homepage.HomePageViewModel
 
 /**
  * 首页容器屏幕，负责连接 ViewModel 状态与导航回调。

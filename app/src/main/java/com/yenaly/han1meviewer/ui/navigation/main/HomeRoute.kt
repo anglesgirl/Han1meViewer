@@ -16,7 +16,7 @@ import com.yenaly.han1meviewer.logic.model.Announcement
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.screen.home.homepage.component.AnnouncementDialog
 import com.yenaly.han1meviewer.ui.component.TripleButtonDialog
-import com.yenaly.han1meviewer.ui.screen.home.HomePageScreen
+import com.yenaly.han1meviewer.ui.screen.home.homepage.HomePageScreen
 import com.yenaly.han1meviewer.ui.screen.home.homepage.HomeUiEvent
 import com.yenaly.han1meviewer.ui.screen.home.homepage.LocalSearchHistoryQuery
 import com.yenaly.han1meviewer.ui.viewmodel.CheckInCalendarViewModel
