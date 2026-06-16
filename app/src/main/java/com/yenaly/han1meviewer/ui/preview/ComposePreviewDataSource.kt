@@ -1,8 +1,6 @@
 @file:Suppress("UNUSED")
 package com.yenaly.han1meviewer.ui.preview
 
-import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.ViewModel
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.entity.download.DownloadGroupEntity
 import com.yenaly.han1meviewer.logic.entity.download.HanimeDownloadEntity
@@ -21,7 +19,6 @@ import com.yenaly.han1meviewer.logic.model.SubscriptionItem
 import com.yenaly.han1meviewer.logic.model.SubscriptionVideosItem
 import com.yenaly.han1meviewer.logic.model.VideoComments
 import com.yenaly.han1meviewer.ui.screen.home.homepage.HomeCategory
-import com.yenaly.han1meviewer.ui.screen.home.preview.getchupreview.GetchuPreviewViewModel
 import kotlinx.datetime.LocalDate
 
 
