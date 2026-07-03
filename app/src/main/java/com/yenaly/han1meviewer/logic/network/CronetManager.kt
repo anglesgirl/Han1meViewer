@@ -59,6 +59,9 @@ object CronetManager {
      *
      * ECH 在 Cronet 中是自动的：当 DoH 启用且服务端支持时，
      * BoringSSL 会自动用从 DNS HTTPS 记录获取的 ECHConfig 加密 ClientHello。
+     *
+     * DoH 通过 experimentalOptions 配置（JSON 格式）。
+     * 如果 setExperimentalOptions 不可用，通过反射调用。
      */
     private fun buildEngine(): CronetEngine {
         val dohUrl = DohConfig.resolveUrl() ?: "https://cloudflare-dns.com/dns-query"
@@ -74,12 +77,24 @@ object CronetManager {
 
         Log.i(TAG, "CronetEngine config: DoH=$dohUrl, ECH=auto")
 
-        return CronetEngine.Builder(applicationContext)
+        val builder = CronetEngine.Builder(applicationContext)
             .enableQuic(true)
             .enableHttp2(true)
             .enableBrotli(true)
-            .setExperimentalOptions(experimentalOptions)
-            .build()
+
+        // setExperimentalOptions 可能在某些 Cronet API 版本中不可用，用反射兼容
+        try {
+            val method = CronetEngine.Builder::class.java
+                .getMethod("setExperimentalOptions", String::class.java)
+            method.invoke(builder, experimentalOptions)
+            Log.i(TAG, "setExperimentalOptions called via reflection")
+        } catch (e: NoSuchMethodException) {
+            Log.w(TAG, "setExperimentalOptions not available, DoH may not work: ${e.message}")
+        } catch (e: Exception) {
+            Log.w(TAG, "setExperimentalOptions failed: ${e.message}")
+        }
+
+        return builder.build()
     }
 
     /**

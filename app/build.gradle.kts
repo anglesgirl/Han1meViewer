@@ -181,7 +181,6 @@ dependencies {
     implementation(libs.cronet.okhttp)
     implementation(libs.play.services.cronet) {
         exclude(group = "org.chromium.net", module = "cronet-common")
-        exclude(group = "org.chromium.net", module = "cronet-api")
     }
 
     // pic
