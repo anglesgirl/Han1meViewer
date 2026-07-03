@@ -1,7 +1,6 @@
 package com.yenaly.han1meviewer.logic.network
 
 import android.util.Log
-import com.google.android.gms.net.CronetProviderInstaller
 import com.yenaly.yenaly_libs.utils.applicationContext
 import org.chromium.net.CronetEngine
 
@@ -13,7 +12,7 @@ import org.chromium.net.CronetEngine
  * 2. 用该公钥加密 TLS ClientHello 中的敏感部分（包括真实 SNI）
  * 3. 中间人只能看到通往 CDN 前端的加密连接，无法基于 SNI 做精准阻断
  *
- * Cronet (Chrome 同款网络栈) 内置 BoringSSL，原生支持 ECH。
+ * 使用 cronet-embedded 内置 Cronet 实现（Chrome 同款网络栈），内置 BoringSSL 原生支持 ECH。
  * 当 DoH 配置启用后，ECH 会自动协商（服务端需支持，Cloudflare 全站默认开启）。
  *
  * @project Han1meViewer ECH fork
@@ -31,8 +30,8 @@ object CronetManager {
         private set
 
     /**
-     * 初始化 Cronet 引擎。通过 Google Play Services 加载 Cronet 实现，
-     * 避免在 APK 中内置 Cronet 二进制文件。
+     * 初始化 Cronet 引擎。
+     * 使用 cronet-embedded 内置实现，无需 Google Play Services。
      *
      * @param onReady 初始化完成回调（无论成功或失败都会调用）
      */
@@ -43,18 +42,16 @@ object CronetManager {
             return
         }
 
-        CronetProviderInstaller.installProvider(applicationContext)
-            .addOnSuccessListener {
-                Log.i(TAG, "Cronet provider installed, building engine with ECH + DoH")
-                engine = buildEngine()
-                isReady = true
-                onReady?.invoke()
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Cronet provider unavailable, falling back to OkHttp: ${e.message}")
-                isReady = false
-                onReady?.invoke()
-            }
+        try {
+            Log.i(TAG, "Building Cronet engine with ECH + DoH (embedded)")
+            engine = buildEngine()
+            isReady = true
+            onReady?.invoke()
+        } catch (e: Exception) {
+            Log.e(TAG, "Cronet init failed, falling back to OkHttp: ${e.message}")
+            isReady = false
+            onReady?.invoke()
+        }
     }
 
     /**
