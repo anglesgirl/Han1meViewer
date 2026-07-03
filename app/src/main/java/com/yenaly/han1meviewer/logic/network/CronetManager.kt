@@ -1,6 +1,7 @@
 package com.yenaly.han1meviewer.logic.network
 
 import android.util.Log
+import com.google.android.gms.net.CronetProviderInstaller
 import com.yenaly.yenaly_libs.utils.applicationContext
 import org.chromium.net.CronetEngine
 
@@ -13,8 +14,8 @@ import org.chromium.net.CronetEngine
  * 3. 中间人只能看到通往 CDN 前端的加密连接，无法基于 SNI 做精准阻断
  *
  * Cronet（Chrome 同款网络栈）内置 BoringSSL，原生支持 ECH。
- * 运行时由系统自动加载 Cronet provider（通过 Google Play Services）。
- * 如果设备不支持，自动回退到 OkHttp。
+ * 通过 Google Play Services 的 CronetProviderInstaller 动态加载 Cronet 实现。
+ * 如果设备不支持 GMS，自动回退到 OkHttp。
  *
  * @project Han1meViewer ECH fork
  */
@@ -32,8 +33,8 @@ object CronetManager {
 
     /**
      * 初始化 Cronet 引擎。
-     * 直接构建 CronetEngine，系统会自动查找可用的 Cronet provider。
-     * 如果设备没有可用的 provider，回退到 OkHttp。
+     * 先通过 CronetProviderInstaller 从 Google Play Services 加载 Cronet provider，
+     * 成功后构建 CronetEngine。如果 GMS 不可用，回退到 OkHttp。
      *
      * @param onReady 初始化完成回调（无论成功或失败都会调用）
      */
@@ -44,16 +45,24 @@ object CronetManager {
             return
         }
 
-        try {
-            Log.i(TAG, "Building Cronet engine with ECH + DoH")
-            engine = buildEngine()
-            isReady = true
-            Log.i(TAG, "Cronet engine ready")
-        } catch (e: Exception) {
-            Log.e(TAG, "Cronet init failed, falling back to OkHttp: ${e.message}")
-            isReady = false
-        }
-        onReady?.invoke()
+        CronetProviderInstaller.installProvider(applicationContext)
+            .addOnSuccessListener {
+                Log.i(TAG, "Cronet provider installed, building engine with ECH + DoH")
+                try {
+                    engine = buildEngine()
+                    isReady = true
+                    Log.i(TAG, "Cronet engine ready")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Cronet engine build failed: ${e.message}")
+                    isReady = false
+                }
+                onReady?.invoke()
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Cronet provider unavailable, falling back to OkHttp: ${e.message}")
+                isReady = false
+                onReady?.invoke()
+            }
     }
 
     /**
@@ -81,7 +90,7 @@ object CronetManager {
             .enableHttp2(true)
             .enableBrotli(true)
 
-        // setExperimentalOptions 可能需要特定 Cronet API 版本，用反射兼容
+        // setExperimentalOptions 配置 DoH，用反射兼容不同 Cronet API 版本
         try {
             val method = CronetEngine.Builder::class.java
                 .getMethod("setExperimentalOptions", String::class.java)

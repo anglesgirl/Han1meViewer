@@ -21,6 +21,12 @@ plugins {
     id("com.github.ben-manes.versions") version "0.54.0"
 }
 
+// 全局排除 cronet-shared，避免与 cronet-api 的 org.chromium.net 命名空间冲突
+// play-services-cronet 从 GMS 动态加载 Cronet 实现，不需要 cronet-shared
+configurations.all {
+    exclude(group = "org.chromium.net", module = "cronet-shared")
+}
+
 android {
     compileSdk = property("compile.sdk")?.toString()?.toIntOrNull()
 
@@ -179,6 +185,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.dns.over.https)
     implementation(libs.cronet.okhttp)
+    implementation(libs.play.services.cronet)
 
     // pic
 
