@@ -1,5 +1,5 @@
 permissions:
-  contents: read
+  contents: write
 name: CI
 
 on:
@@ -44,8 +44,33 @@ jobs:
         env:
           HA1_VERSION_SOURCE: 'ci'
 
-      - name: Upload APK
+      - name: Rename APK
+        run: |
+          mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Han1meViewer-ECH-debug.apk
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Han1meViewer-ECH-debug-${{ github.sha }}
+          name: Han1meViewer-ECH-debug
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ECH-v1.0
+          name: Han1meViewer ECH 支持
+          body: |
+            ## ECH (Encrypted Client Hello) 支持
+
+            通过集成 Cronet 网络栈加密 TLS ClientHello 中的 SNI，防止基于 SNI 的网络屏蔽。
+
+            ### 功能
+            - ECH 加密 SNI（默认开启）
+            - DoH 配合 ECH 自动协商
+            - 无 Google Play Services 时自动回退到 OkHttp
+            - 设置 > 网络中可开关 ECH
+
+            ### 下载
+            直接下载下方 APK 安装即可。
+          files: app/build/outputs/apk/debug/Han1meViewer-ECH-debug.apk
+          prerelease: false
