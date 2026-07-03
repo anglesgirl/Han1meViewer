@@ -8,7 +8,10 @@ import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.ImageResult
 import com.yenaly.yenaly_libs.utils.applicationContext
+import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.logic.network.CronetManager
 import com.yenaly.han1meviewer.logic.network.HDns
+import com.google.net.cronet.okhttptransport.CronetInterceptor
 import okhttp3.OkHttpClient
 import java.lang.ref.WeakReference
 import java.util.concurrent.TimeUnit
@@ -18,12 +21,33 @@ object HImageMeower {
 
     private const val TAG = "CoilImageNyanner"
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .dns(HDns())
-        .build()
+    private val okHttpClient = buildOkHttpClient()
 
-    private val imageLoader = ImageLoader.Builder(applicationContext)
+    private fun buildOkHttpClient(): OkHttpClient {
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+
+        if (Preferences.useECH && CronetManager.isReady && CronetManager.engine != null) {
+            CronetManager.engine?.let { engine ->
+                builder.addInterceptor(CronetInterceptor.newBuilder(engine).build())
+            }
+        } else {
+            builder.dns(HDns())
+        }
+        return builder.build()
+    }
+
+    /**
+     * 当 Cronet 就绪或 DoH 设置变更后调用，重建图片加载客户端。
+     */
+    fun rebuildClient() {
+        val newClient = buildOkHttpClient()
+        imageLoader = ImageLoader.Builder(applicationContext)
+            .okHttpClient(newClient)
+            .build()
+    }
+
+    private var imageLoader = ImageLoader.Builder(applicationContext)
         .okHttpClient(okHttpClient)
         .build()
 

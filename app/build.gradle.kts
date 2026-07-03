@@ -178,6 +178,8 @@ dependencies {
     implementation(libs.converter.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.dns.over.https)
+    implementation(libs.cronet.okhttp)
+    implementation(libs.play.services.cronet)
 
     // pic
 

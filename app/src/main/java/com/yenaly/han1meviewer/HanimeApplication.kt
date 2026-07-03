@@ -13,9 +13,12 @@ import com.google.firebase.crashlytics.setCustomKeys
 import com.google.firebase.database.database
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
+import com.yenaly.han1meviewer.logic.network.CronetManager
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.HanimeNetwork
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.util.AnimeShaders
+import com.yenaly.han1meviewer.util.HImageMeower
 import com.yenaly.han1meviewer.util.ThemeUtils
 import com.yenaly.yenaly_libs.base.YenalyApplication
 import com.yenaly.yenaly_libs.utils.LanguageHelper
@@ -46,6 +49,7 @@ class HanimeApplication : YenalyApplication() {
         }
         ProxySelector.setDefault(HProxySelector())
         HProxySelector.rebuildNetwork()
+        initCronet()
         initFirebase()
         initNotificationChannel()
         MPVLib.create(applicationContext)
@@ -59,6 +63,22 @@ class HanimeApplication : YenalyApplication() {
         }
         val selected = Preferences.fakeLauncherIcon
         switchLauncher(selected)
+    }
+
+    /**
+     * 初始化 Cronet 引擎（用于 ECH 支持）。
+     * 异步加载 Google Play Services 的 Cronet 实现，
+     * 就绪后重建网络层使 CronetInterceptor 生效。
+     */
+    private fun initCronet() {
+        if (!Preferences.useECH) return
+        CronetManager.init {
+            if (CronetManager.isReady) {
+                Log.i(TAG, "Cronet ready, rebuilding network with ECH")
+                HanimeNetwork.rebuildNetwork()
+                HImageMeower.rebuildClient()
+            }
+        }
     }
 
     private fun initFirebase() {

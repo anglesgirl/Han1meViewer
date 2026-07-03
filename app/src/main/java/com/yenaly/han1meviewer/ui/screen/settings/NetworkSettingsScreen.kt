@@ -32,9 +32,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
+import com.yenaly.han1meviewer.logic.network.CronetManager
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.HanimeNetwork
 import com.yenaly.han1meviewer.ui.component.ChoiceDialog
 import com.yenaly.han1meviewer.ui.component.SettingNavigationItem
 import com.yenaly.han1meviewer.ui.component.SettingSwitchItem
@@ -257,6 +260,32 @@ fun NetworkSettingsScreen(
                 summary = state.dohSummary,
                 iconRes = R.drawable.baseline_doh_24,
                 onClick = { showDohDialog = true },
+            )
+        }
+
+        item {
+            var echChecked by rememberSaveable { mutableStateOf(Preferences.useECH) }
+            SettingSwitchItem(
+                title = "ECH 加密 (Encrypted Client Hello)",
+                summary = if (echChecked) {
+                    if (CronetManager.isReady) "已开启 · SNI 已加密" else "已开启 · 等待 Cronet 初始化"
+                } else {
+                    "关闭"
+                },
+                checked = echChecked,
+                iconRes = R.drawable.baseline_doh_24,
+                onCheckedChange = { newValue ->
+                    echChecked = newValue
+                    Preferences.useECH = newValue
+                    if (newValue && !CronetManager.isReady) {
+                        CronetManager.init {
+                            HanimeNetwork.rebuildNetwork()
+                        }
+                    } else {
+                        CronetManager.rebuildEngine()
+                        HanimeNetwork.rebuildNetwork()
+                    }
+                },
             )
         }
 

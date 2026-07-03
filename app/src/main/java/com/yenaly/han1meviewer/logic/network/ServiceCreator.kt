@@ -5,7 +5,9 @@ import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.HA1_GITHUB_API_URL
 import com.yenaly.han1meviewer.HJson
 import com.yenaly.han1meviewer.Preferences
+import com.google.net.cronet.okhttptransport.CronetInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.CloudflareInterceptor
+import com.yenaly.han1meviewer.logic.network.interceptor.CronetCookieInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.GetchuInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.UrlLoggingInterceptor
@@ -78,44 +80,87 @@ object ServiceCreator {
      */
     fun rebuildOkHttpClient() {
         hClient = buildHClient()
+        downloadClient = buildDownloadClient()
         getchuClient = buildGetchuClient()
     }
 
+    /**
+     * 是否使用 Cronet 传输层（启用 ECH）。
+     * Cronet 不可用时自动回退到原始 OkHttp。
+     */
+    private fun useCronet(): Boolean =
+        Preferences.useECH && CronetManager.isReady && CronetManager.engine != null
+
+    /**
+     * 添加 Cronet 拦截器到 OkHttpClient.Builder。
+     * CronetInterceptor 必须是最后一个应用拦截器。
+     * CookieJar 被 Cronet 绕过，需通过 CronetCookieInterceptor 手动处理。
+     */
+    private fun OkHttpClient.Builder.addCronetIfNeeded(
+        cookieJar: HCookieJar? = null,
+    ): OkHttpClient.Builder {
+        if (!useCronet()) return this
+        // Cronet 模式下手动处理 Cookie（OkHttp CookieJar 被绕过）
+        cookieJar?.let { addInterceptor(CronetCookieInterceptor(it)) }
+        CronetManager.engine?.let { engine ->
+            addInterceptor(CronetInterceptor.newBuilder(engine).build())
+        }
+        return this
+    }
+
     private fun buildGetchuClient(): OkHttpClient {
-        return OkHttpClient.Builder()
+        val builder = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
-            .cookieJar(CookieJar.NO_COOKIES)
-            .proxySelector(HProxySelector())
-            .dns(dns)
-            .build()
+
+        if (useCronet()) {
+            builder.addCronetIfNeeded()
+        } else {
+            builder.cookieJar(CookieJar.NO_COOKIES)
+                .proxySelector(HProxySelector())
+                .dns(dns)
+        }
+        return builder.build()
     }
 
     private fun buildDownloadClient(): OkHttpClient {
-        return OkHttpClient.Builder()
+        val builder = OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
-            .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
-            .dns(dns)
-            .build()
+
+        if (useCronet()) {
+            // Cronet 不支持强制 HTTP/1.1，使用默认协议（QUIC/HTTP2）
+            builder.addCronetIfNeeded()
+        } else {
+            builder.protocols(listOf(Protocol.HTTP_1_1))
+                .dns(dns)
+        }
+        return builder.build()
     }
 
     /**
      * Build OkHttpClient
      */
     private fun buildHClient(): OkHttpClient {
-        return OkHttpClient.Builder()
+        val builder = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
-            .cache(cache)
-            .cookieJar(HCookieJar())
-            .proxySelector(HProxySelector())
-            .dns(dns)
-            .build()
+
+        if (useCronet()) {
+            // Cronet 模式：CookieJar/cache/proxy/dns 全部被绕过
+            // 用 CronetCookieInterceptor 手动处理 Cookie
+            builder.addCronetIfNeeded(HCookieJar())
+        } else {
+            builder.cache(cache)
+                .cookieJar(HCookieJar())
+                .proxySelector(HProxySelector())
+                .dns(dns)
+        }
+        return builder.build()
     }
 
     private fun buildGithubClient(): OkHttpClient {
