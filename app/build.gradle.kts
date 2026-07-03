@@ -178,10 +178,10 @@ dependencies {
     implementation(libs.converter.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.dns.over.https)
-    implementation(libs.cronet.okhttp)
-    implementation(libs.play.services.cronet) {
-        exclude(group = "org.chromium.net", module = "cronet-common")
+    implementation(libs.cronet.okhttp) {
+        exclude(group = "org.chromium.net", module = "cronet-api")
     }
+    implementation(libs.play.services.cronet)
 
     // pic
 
