@@ -30,32 +30,8 @@ jobs:
           DATA: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
           if [ -z "$DATA" ]; then
-            echo "GOOGLE_SERVICES_JSON_BASE64 secret not set, using placeholder"
-            cat > app/google-services.json << 'EOF'
-            {
-              "project_info": {
-                "project_number": "000000000000",
-                "project_id": "placeholder-00000",
-                "storage_bucket": "placeholder-00000.appspot.com"
-              },
-              "client": [
-                {
-                  "client_info": {
-                    "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
-                    "android_client_info": {
-                      "package_name": "com.yenaly.han1meviewer"
-                    }
-                  },
-                  "oauth_client": [],
-                  "api_key": [
-                    { "current_key": "AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }
-                  ],
-                  "services": {}
-                }
-              ],
-              "configuration_version": "1"
-            }
-            EOF
+            echo "GOOGLE_SERVICES_JSON_BASE64 not set, using placeholder"
+            printf '{"project_info":{"project_number":"000000000000","project_id":"placeholder","storage_bucket":"placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000000000","android_client_info":{"package_name":"com.yenaly.han1meviewer"}},"oauth_client":[],"api_key":[{"current_key":"AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}],"services":{}}],"configuration_version":"1"}' > app/google-services.json
           else
             echo $DATA | base64 -di > app/google-services.json
           fi
