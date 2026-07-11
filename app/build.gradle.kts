@@ -21,16 +21,10 @@ plugins {
     id("com.github.ben-manes.versions") version "0.54.0"
 }
 
-// cronet-embedded 包含 cronet-common 的原生实现代码，两者共用 org.chromium.net 命名空间。
-// cronet-okhttp 传递依赖旧版 cronet-api:98.x，与 cronet-embedded:113.x 冲突。
-// 解决方案：排除 cronet-common（实现重复），强制 cronet-api 版本与 embedded 一致。
+// play-services-cronet 和 cronet-okhttp 都传递依赖 org.chromium.net:cronet-shared，
+// 与 cronet-api 命名空间冲突，排除它（GMS 运行时提供实现）。
 configurations.all {
-    exclude(group = "org.chromium.net", module = "cronet-common")
-    resolutionStrategy.eachDependency {
-        if (requested.group == "org.chromium.net" && requested.name == "cronet-api") {
-            useVersion("113.5672.61")
-        }
-    }
+    exclude(group = "org.chromium.net", module = "cronet-shared")
 }
 
 android {
@@ -190,8 +184,8 @@ dependencies {
     implementation(libs.converter.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.dns.over.https)
-    implementation(libs.cronet.embedded)
     implementation(libs.cronet.okhttp)
+    implementation(libs.play.services.cronet)
 
     // pic
 
