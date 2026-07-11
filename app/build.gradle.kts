@@ -21,6 +21,13 @@ plugins {
     id("com.github.ben-manes.versions") version "0.54.0"
 }
 
+// cronet-embedded 包含 cronet-common + cronet-api 的全部代码，
+// 三者共用 org.chromium.net 命名空间，排除后两者避免 manifest 冲突
+configurations.all {
+    exclude(group = "org.chromium.net", module = "cronet-common")
+    exclude(group = "org.chromium.net", module = "cronet-api")
+}
+
 android {
     compileSdk = property("compile.sdk")?.toString()?.toIntOrNull()
 
