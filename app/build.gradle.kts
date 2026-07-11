@@ -22,9 +22,15 @@ plugins {
 }
 
 // cronet-embedded 包含 cronet-common 的原生实现代码，两者共用 org.chromium.net 命名空间。
-// 保留 cronet-api（API 接口定义），只排除 cronet-common（实现重复）。
+// cronet-okhttp 传递依赖旧版 cronet-api:98.x，与 cronet-embedded:113.x 冲突。
+// 解决方案：排除 cronet-common（实现重复），强制 cronet-api 版本与 embedded 一致。
 configurations.all {
     exclude(group = "org.chromium.net", module = "cronet-common")
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.chromium.net" && requested.name == "cronet-api") {
+            useVersion("113.5672.61")
+        }
+    }
 }
 
 android {
