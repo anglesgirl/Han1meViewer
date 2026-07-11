@@ -13,9 +13,12 @@ import com.google.firebase.crashlytics.setCustomKeys
 import com.google.firebase.database.database
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
+import com.yenaly.han1meviewer.logic.network.CronetManager
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.HanimeNetwork
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.util.AnimeShaders
+import com.yenaly.han1meviewer.util.HImageMeower
 import com.yenaly.han1meviewer.util.ThemeUtils
 import com.yenaly.yenaly_libs.base.YenalyApplication
 import com.yenaly.yenaly_libs.utils.LanguageHelper
@@ -45,6 +48,7 @@ class HanimeApplication : YenalyApplication() {
             DynamicColors.applyToActivitiesIfAvailable(this)
         }
         ProxySelector.setDefault(HProxySelector())
+        CronetManager.init()
         HProxySelector.rebuildNetwork()
         initFirebase()
         initNotificationChannel()

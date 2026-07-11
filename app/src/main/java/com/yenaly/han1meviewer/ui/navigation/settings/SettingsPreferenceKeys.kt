@@ -40,6 +40,7 @@ object SettingsPreferenceKeys {
     const val USE_BUILT_IN_HOSTS = "use_built_in_hosts"
     const val CUSTOM_HOSTS_DATA = "custom_hosts_data"
     const val USE_DOH = "use_doh"
+    const val USE_ECH = "use_ech"
     const val DOH_PRESET = "doh_preset"
     const val DOH_CUSTOM_URL = "doh_custom_url"
     const val DOH_BOOTSTRAP_IPS = "doh_bootstrap_ips"

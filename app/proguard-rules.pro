@@ -33,3 +33,9 @@
 -keep class androidx.window.extensions.embedding.** { *; }
 -keep class is.xyz.mpv.** { *; }
 -keep class lis.xyz.mpv.** { *; }
+
+# Cronet (cronet-embedded) - keep native bridge classes
+-keep class org.chromium.** { *; }
+-keep interface org.chromium.** { *; }
+-keep class com.google.net.cronet.** { *; }
+-dontwarn org.chromium.**

@@ -231,6 +231,16 @@ object Preferences {
     val useDoH: Boolean
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_DOH, false)
 
+    /**
+     * 是否启用 ECH (Encrypted Client Hello)。
+     * 启用后使用 Cronet 传输层（cronet-embedded，无需 GMS），
+     * 配合 DoH 加密 TLS ClientHello 中的 SNI，防止基于 SNI 的网络屏蔽。
+     * 默认开启。
+     */
+    var useECH: Boolean
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_ECH, true)
+        set(value) = preferenceSp.edit().putBoolean(SettingsPreferenceKeys.USE_ECH, value).apply()
+
     val dohPreset: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_PRESET, "alidns") ?: "alidns"
 

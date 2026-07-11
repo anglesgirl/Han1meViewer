@@ -1,5 +1,5 @@
 permissions:
-  contents: read
+  contents: write
 name: CI
 
 on:
@@ -7,6 +7,7 @@ on:
     branches: [ "main" ]
     paths-ignore:
       - "**.md"
+  workflow_dispatch:
 
 jobs:
   build:
@@ -27,31 +28,55 @@ jobs:
       - name: Load Google Services File
         env:
           DATA: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
-        run: echo $DATA | base64 -di > app/google-services.json
+        run: |
+          if [ -z "$DATA" ]; then
+            echo "GOOGLE_SERVICES_JSON_BASE64 not set, using placeholder"
+            printf '{"project_info":{"project_number":"000000000000","project_id":"placeholder","storage_bucket":"placeholder.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000000000","android_client_info":{"package_name":"com.yenaly.han1meviewer"}},"oauth_client":[],"api_key":[{"current_key":"AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}],"services":{}},{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000000000","android_client_info":{"package_name":"com.yenaly.han1meviewer.debug"}},"oauth_client":[],"api_key":[{"current_key":"AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}],"services":{}}],"configuration_version":"1"}' > app/google-services.json
+          else
+            echo $DATA | base64 -di > app/google-services.json
+          fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decode keystore
-        run: |
-          echo "${{ secrets.YOUR_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
-
-      - name: Set up keystore for signing
-        run: |
-          mkdir -p $HOME/.android
-          mv keystore.jks $HOME/.android/keystore.jks
-
-      - name: Build and sign APK with Gradle
-        run: ./gradlew assembleRelease
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN }}
           HA1_VERSION_SOURCE: 'ci'
 
-      - name: Upload APK Zip
+      - name: Rename APK
+        run: |
+          cd app/build/outputs/apk/debug/
+          ls -la *.apk
+          cp *.apk Han1meViewer-ECH-debug.apk
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-${{ github.sha }}
-          path: app/build/outputs/apk/release/Han1meViewer-v*.apk
+          name: Han1meViewer-ECH-debug
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ECH-v2
+          name: Han1meViewer ECH v2 (cronet-embedded)
+          body: |
+            ## ECH v2 - cronet-embedded 方案
+
+            ### 与 v1 的区别
+            - 使用 `cronet-embedded` 替代 `play-services-cronet`
+            - Cronet 原生库直接打包进 APK，不依赖 Google Play Services
+            - 同步初始化，不会弹出 GMS 解析对话框（修复黑屏）
+            - 默认 DoH: `https://xzam891f5d.cloudflare-gateway.com/dns-query`
+
+            ### 功能
+            - ECH 加密 SNI（默认开启）
+            - DoH 配合 ECH 自动协商
+            - 无需 Google Play Services，所有设备通用
+            - 设置 > 网络中可开关 ECH
+
+            ### 下载
+            直接下载下方 APK 安装即可。
+          files: app/build/outputs/apk/debug/Han1meViewer-ECH-debug.apk
+          prerelease: false

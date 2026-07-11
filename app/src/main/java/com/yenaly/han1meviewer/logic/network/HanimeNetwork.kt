@@ -8,6 +8,7 @@ import com.yenaly.han1meviewer.logic.network.service.HanimeBaseService
 import com.yenaly.han1meviewer.logic.network.service.HanimeCommentService
 import com.yenaly.han1meviewer.logic.network.service.HanimeMyListService
 import com.yenaly.han1meviewer.logic.network.service.HanimeSubscriptionService
+import com.yenaly.han1meviewer.util.HImageMeower
 
 /**
  * @project Hanime1
@@ -52,5 +53,6 @@ object HanimeNetwork {
         getchuService = _getchuService
         commentService = _commentService
         myListService = _myListService
+        HImageMeower.rebuildClient()
     }
 }

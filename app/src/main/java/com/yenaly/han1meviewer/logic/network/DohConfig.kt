@@ -12,6 +12,12 @@ data class DohPreset(
 object DohConfig {
     val presets = listOf(
         DohPreset(
+            key = "cloudflare_ech",
+            title = "Cloudflare ECH (Custom)",
+            url = "https://xzam891f5d.cloudflare-gateway.com/dns-query",
+            bootstrapIps = listOf("1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"),
+        ),
+        DohPreset(
             key = "alidns",
             title = "AliDNS",
             url = "https://dns.alidns.com/dns-query",
