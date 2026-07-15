@@ -680,6 +680,10 @@ private fun PlaylistBottomSheet(
     onDismiss: () -> Unit,
     onOpenVideo: (HanimeInfo) -> Unit,
 ) {
+    val playingIndex = remember(playlist) {
+        playlist.video.indexOfFirst { it.isPlaying }.coerceAtLeast(0)
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         dragHandle = { BottomSheetHandler() },
@@ -715,7 +719,15 @@ private fun PlaylistBottomSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val listState = remember(playlist, playingIndex) {
+                LazyListState(firstVisibleItemIndex = playingIndex)
+            }
+            LaunchedEffect(playingIndex) {
+                listState.scrollToItem(playingIndex)
+            }
+
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
