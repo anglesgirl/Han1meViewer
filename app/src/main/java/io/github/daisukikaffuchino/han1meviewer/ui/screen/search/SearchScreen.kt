@@ -500,7 +500,7 @@ fun SearchAppBar(
             if (query.isNotEmpty()) IconButton(onClick = { onQueryChange("") }) {
                 Icon(
                     Icons.Default.Close,
-                    stringResource(R.string.clear_checkin),
+                    stringResource(R.string.clear),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

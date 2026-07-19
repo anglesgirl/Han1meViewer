@@ -12,7 +12,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.view.video.HJzvdStd
 import io.github.daisukikaffuchino.han1meviewer.ui.view.video.HMediaKernel
 import io.github.daisukikaffuchino.han1meviewer.util.CookieString
 import io.github.daisukikaffuchino.han1meviewer.util.SafFileManager
-import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManagerV2
+import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManager
 import com.yenaly.yenaly_libs.utils.applicationContext
 import com.yenaly.yenaly_libs.utils.getSpValue
 import com.yenaly.yenaly_libs.utils.putSpValue
@@ -269,7 +269,7 @@ object Preferences {
         get() = preferenceSp.getInt(
             SettingsPreferenceKeys.DOWNLOAD_COUNT_LIMIT,
             // HanimeDownloadManager.MAX_CONCURRENT_DOWNLOAD_DEF
-            HanimeDownloadManagerV2.MAX_CONCURRENT_DOWNLOAD_DEF
+            HanimeDownloadManager.MAX_CONCURRENT_DOWNLOAD_DEF
         )
 
     val collapseDownloadedGroup: Boolean

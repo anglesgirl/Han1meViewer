@@ -130,8 +130,6 @@ fun HomeSettingsScreen(
         options = listOf(
             stringResource(R.string.follow_system) to "system",
             stringResource(R.string.simplified_chinese) to "zh-rCN",
-            stringResource(R.string.traditional_chinese) to "zh",
-            stringResource(R.string.japanese_lang) to "ja",
             stringResource(R.string.english_lang) to "en",
         ),
         selectedValue = state.appLanguage,

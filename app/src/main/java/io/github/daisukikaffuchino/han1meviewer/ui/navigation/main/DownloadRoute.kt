@@ -22,7 +22,7 @@ import io.github.daisukikaffuchino.han1meviewer.util.SafFileManager
 import io.github.daisukikaffuchino.han1meviewer.util.SafFileManager.checkSafPermissions
 import io.github.daisukikaffuchino.han1meviewer.util.SafFileManager.scanAndImportHanimeDownloads
 import io.github.daisukikaffuchino.han1meviewer.util.openDownloadedHanimeVideoLocally
-import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManagerV2
+import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManager
 import com.yenaly.yenaly_libs.utils.application
 import com.yenaly.yenaly_libs.utils.showLongToast
 import kotlinx.coroutines.Dispatchers
@@ -47,14 +47,14 @@ fun DownloadRouteScreen(
     val handleEvent: (DownloadEvent) -> Unit = { event ->
         when (event) {
             is DownloadEvent.OnPauseAll -> event.items.forEach { entity ->
-                if (entity.isDownloading) HanimeDownloadManagerV2.stopTask(entity)
+                if (entity.isDownloading) HanimeDownloadManager.stopTask(entity)
             }
             is DownloadEvent.OnResumeAll -> event.items.forEach { entity ->
-                if (!entity.isDownloading) HanimeDownloadManagerV2.resumeTask(entity)
+                if (!entity.isDownloading) HanimeDownloadManager.resumeTask(entity)
             }
-            is DownloadEvent.OnPauseItem -> HanimeDownloadManagerV2.stopTask(event.item)
-            is DownloadEvent.OnResumeItem -> HanimeDownloadManagerV2.resumeTask(event.item)
-            is DownloadEvent.OnDeleteDownloadingItem -> HanimeDownloadManagerV2.deleteTask(event.item)
+            is DownloadEvent.OnPauseItem -> HanimeDownloadManager.stopTask(event.item)
+            is DownloadEvent.OnResumeItem -> HanimeDownloadManager.resumeTask(event.item)
+            is DownloadEvent.OnDeleteDownloadingItem -> HanimeDownloadManager.deleteTask(event.item)
 
             is DownloadEvent.OnImportDownloaded -> {
                 if (!Preferences.safDownloadPath.isNullOrBlank() &&

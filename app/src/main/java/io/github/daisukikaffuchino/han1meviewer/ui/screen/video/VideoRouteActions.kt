@@ -18,7 +18,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.SearchRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.VideoViewModel
 import io.github.daisukikaffuchino.han1meviewer.util.requestPostNotificationPermission
 import io.github.daisukikaffuchino.han1meviewer.util.showAlertDialog
-import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManagerV2
+import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManager
 import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadWorker
 import com.yenaly.yenaly_libs.utils.browse
 import com.yenaly.yenaly_libs.utils.copyToClipboard
@@ -178,7 +178,7 @@ class VideoRouteActions(
         withContext(Dispatchers.IO) {
             HCacheManager.saveHanimeVideoInfo(context, viewModel.videoCode, videoData)
         }
-        HanimeDownloadManagerV2.addTask(
+        HanimeDownloadManager.addTask(
             HanimeDownloadWorker.Args(
                 quality = quality,
                 downloadUrl = videoData.videoUrls[quality]?.link,

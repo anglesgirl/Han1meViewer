@@ -17,6 +17,7 @@
     <string name="alert_cancel_all_tags">确认将会取消你所选的所有标签</string>
     <string name="confirm">确认</string>
     <string name="cancel">取消</string>
+    <string name="clear">清除</string>
     <string name="pair_widely">模糊搜索</string>
     <string name="pair_widely_alert">较多结果，较不精准。配对所有包含任何一个选择的标签的影片，而非全部标签</string>
     <string name="reset">重置</string>
@@ -69,7 +70,7 @@
     <string name="other">其他</string>
     <string name="about">关于</string>
     <string name="current_version">当前版本：%s</string>
-    <string name="search_placeholder">今天想看点什么呢</string>
+    <string name="search_placeholder">请输入关键词</string>
     <string name="downloading">正在下载</string>
     <string name="downloading_s">正在下载：%1$s</string>
     <string name="downloaded">已下载</string>
@@ -90,7 +91,6 @@
     <string name="search_options_tips">Tips:长按某单元可以清除当前你所选单元的所有tag</string>
     <string name="continues">继续</string>
     <string name="jump_to_webpage">转到网页</string>
-    <string name="quick_checkin">快速打卡</string>
     <string name="sure_to_delete_s">确定要删除 %s 吗？</string>
     <string name="sure_to_delete">确定要删除吗？</string>
     <string name="prepare_to_delete_s">你现在正要准备删除\n%s</string>
@@ -173,7 +173,7 @@
     <string name="custom_mirror_api_path_root">使用根域名</string>
     <string name="custom_mirror_api_path_root_summary">例如：https://www.example.com/search。主页始终按上方输入原样请求</string>
     <string name="test_connection">测试连接</string>
-    <string name="custom_mirror_site_testing">正在测试连接...</string>
+    <string name="custom_mirror_site_testing">正在测试连接…</string>
     <string name="custom_mirror_site_test_success">测试成功\n主页：%1$s\n其他接口测试：%2$ssearch</string>
     <string name="custom_mirror_site_test_partial_success">主页测试成功，但其他接口测试失败\n主页：%1$s\n其他接口基址：%2$s\n原因：%3$s</string>
     <string name="custom_mirror_site_test_failed">测试失败：%1$s</string>
@@ -206,8 +206,6 @@
     <string name="login_tips">该方法只能保持登录 2 个小时… 还是推荐使用网页登录，\n但网页是不走 Hosts 的，所以可能需要 VPN</string>
     <string name="update">更新</string>
     <string name="update_failed">更新失败</string>
-    <string name="allow_install_from_unknown_app_sources">准许当前 App 来源安装</string>
-    <string name="reason_for_allow_install_from_unknown_app_sources">别担心，这只是为了更新。\n你如果不放心，可以直接去 Github 上下载</string>
     <string name="go_to_settings">前往设置</string>
     <string name="allow_post_notification">准许发送通知</string>
     <string name="reason_for_download_notification">请同意通知权限，及时收到下载信息！</string>
@@ -246,7 +244,7 @@
     <string name="add_success">添加成功</string>
     <string name="default_">默认</string>
     <string name="alternative">备用</string>
-    <string name="loading">加载中…</string>
+    <string name="loading">加载中...</string>
     <string name="slide_to_choose_list">请从右向左滑动选择列表</string>
     <string name="create_new_playlist">创建新清单</string>
     <string name="delete_watch_later">删除待看</string>
@@ -397,8 +395,7 @@
     <string name="oss_license">本软件使用的开源项目</string>
     <string name="open_source_license">开源许可</string>
     <string name="confirm_to_exit">退出确认</string>
-    <string name="finished_masturbating">确定已经〇完了吗🥵？</string>
-    <string name="do_more">再〇一会！</string>
+    <string name="confirm_exit_message">确定要退出吗？</string>
     <string name="exit">退出</string>
     <string name="use_lock_screen">使用应用锁定屏幕</string>
     <string name="use_lock_screen_sum">开启后，进入应用时需验证屏幕锁，防止别人打开</string>
@@ -454,6 +451,7 @@
     <string name="ext_player">外部播放器</string>
     <string name="app_name_fake_calc">计算器</string>
     <string name="app_name_fake_xxt">学不通</string>
+    <string name="app_name_fake_cornhub">Cornhub</string>
     <string name="fake_app_icon">伪装应用</string>
     <string name="select_fake_icon">选择显示在桌面的图标</string>
     <string name="fake_icon_hint">设置成功，应用可能会关闭，应用图标可能会稍晚些刷新，期间会提示应用未安装。</string>
@@ -462,102 +460,11 @@
     <string name="view_node_latency">查看节点延迟</string>
     <string name="node_latency_sum">启用内置Hosts后可检测延迟情况\n不启用为实际解析地址</string>
     <string name="builtin_dns">内置DNS映射</string>
-    <string name="has_mastur">冲了吗</string>
-    <string name="checkout_exit">打卡退出</string>
-    <string name="has_cum">您冲了吗</string>
-    <string name="checkin_calendar">打卡日历</string>
-    <string name="this_month_checkin">本月打卡</string>
-    <string name="days">%1$d 天</string>
-    <string name="counts">%1$d 次</string>
-    <string name="has_cum_days">共射</string>
-    <string name="today_checked">今天已打卡：</string>
-    <string name="times">次</string>
-    <string name="not_checked_yet">今日尚未打卡</string>
-    <string name="checkin">打卡</string>
-    <string name="clear_checkin">清除</string>
-    <string name="current_streak">连续</string>
-    <string name="best_streak">最高连续</string>
-    <string name="day_unit">天</string>
-    <string name="mon">一</string>
-    <string name="tue">二</string>
-    <string name="wed">三</string>
-    <string name="thu">四</string>
-    <string name="fri">五</string>
-    <string name="sat">六</string>
-    <string name="sun">日</string>
-    <string name="legend_title">传奇</string>
-    <string name="champion_title">冠军</string>
-    <string name="on_fire_title">火力全开</string>
-    <string name="great_title">表现出色</string>
-    <string name="week_streak_title">周连击</string>
-    <string name="keep_going_title">继续加油</string>
-    <string name="achievement_desc_top">本月累计 %1$d 次！你就是传说</string>
-    <string name="achievement_desc_days">本月已打卡 %1$d 天，太厉害了</string>
-    <string name="achievement_desc_streak">最长连续 %1$d 天！保持下去</string>
-    <string name="achievement_desc_keep">坚持就是胜利，继续打卡吧！</string>
-    <string name="checkin_tip">长按日期可清除打卡记录</string>
-    <string name="forgot_title">忘记打卡了吗？</string>
-    <string name="forgot_message">%1$s 的记录似乎是空的…\n你是忘记打卡了吗？🥺</string>
-    <string name="forgot_confirm">补上打卡</string>
-    <string name="forgot_dismiss">不了谢谢</string>
-    <string name="suck_back_title">你要吸回去吗？</string>
-    <string name="suck_back_message">%1$s 已经冲了 %2$d 次\n你真的要吸回去吗？😨</string>
-    <string name="suck_back_confirm">吸回去！</string>
-    <string name="suck_back_dismiss">算了</string>
-    <string name="suck_back_done">已吸回，请重新积累</string>
-    <string name="calendar_title">预约%1$d月%2$d日的首冲</string>
-    <string name="calendar_desc">记得准时手冲，保持健康身心！</string>
-    <string name="calendar_location">你的房间</string>
-    <string name="calendar_dialog_title">预约手冲日？</string>
-    <string name="calendar_dialog_message">要为 %1$s 建立一个「预约手冲」的日历提醒吗？\n到了那天记得准时报到！🫡</string>
-    <string name="calendar_dialog_confirm">建立提醒</string>
-    <string name="calendar_dialog_dismiss">不用了</string>
     <string name="testing">测试中…</string>
     <string name="test_doh">测试 DoH</string>
     <string name="test_doh_summary">检查当前 DoH 配置是否可解析域名</string>
     <string name="doh_test_result">DoH 测试结果</string>
     <string name="doh_conflict_message">DoH 与内建 DNS 映射不能同时启用。开启其中一个时，会自动关闭另一个。</string>
-    <string name="view_checkin">查看</string>
-    <string name="dialog_existing_records">已打卡记录</string>
-    <string name="dialog_max_reached">今日打卡已达上限 (20次)</string>
-    <string name="checkin_type_label">类型</string>
-    <string name="checkin_type_masturbation">自慰</string>
-    <string name="checkin_type_wet_dream">梦遗</string>
-    <string name="checkin_type_sex">做爱</string>
-    <string name="checkin_type_oral">口交</string>
-    <string name="checkin_type_other">其它</string>
-    <string name="dialog_type_label">类型</string>
-    <string name="dialog_sidedish_label">配菜</string>
-    <string name="dialog_sidedish_hint">自定义配菜</string>
-    <string name="dialog_feeling_label">感受</string>
-    <string name="dialog_feeling_hint">贤者时间，贤者贤言</string>
-    <string name="dialog_recent_watched">最近观看</string>
-    <string name="dialog_add_sidedish">+ 配菜</string>
-    <string name="dialog_cancel">取消</string>
-    <string name="dialog_confirm">确认打卡</string>
-    <string name="ach_dish_variety">配菜丰富</string>
-    <string name="ach_top_dish">最爱配菜</string>
-    <string name="ach_multi_type">花样翻新</string>
-    <string name="ach_night_owl">夜猫子</string>
-    <string name="ach_morning">晨练达人</string>
-    <string name="ach_scholar">贤者文豪</string>
-    <string name="no_calendar_app">找不到日历应用</string>
-    <string name="egg_three">3 次！你是魔鬼吗？👹</string>
-    <string name="egg_four">4 次！功力大成！🧘</string>
-    <string name="egg_round">%1$d 次达成！你是传说！👑</string>
-    <string name="nice_title">NICE</string>
-    <string name="streak_title">连续达成</string>
-    <string name="egg_god">%1$d 次…你已经超越人类极限了 🫠</string>
-    <string name="egg_nice">%1$d 次！Nice～ 😏</string>
-    <string name="egg_streak">连续 %1$d 天！手不能停！🫡</string>
-    <string name="egg_singles">光棍节快乐…今天不冲吗？😢</string>
-    <string name="widget_description">手冲打卡小部件，桌面即可签到</string>
-    <string name="widget_checkin">打卡</string>
-    <string name="add_widget">添加桌面小工具</string>
-    <string name="widget_not_supported">你的桌面不支持直接添加小工具</string>
-    <string name="widget_pick_hint">请在手冲打卡小工具上点击添加</string>
-    <string name="widget_today_label">今日已冲</string>
-    <string name="widget_month_label">本月</string>
     <string name="original_comic">原作漫画</string>
     <string name="fault_prompt">出现错误，请联系开发者！</string>
     <string name="read_download_dir_title">读取下载目录</string>
@@ -594,20 +501,6 @@
     <string name="report_reason_hint">请先选择一个举报理由</string>
     <string name="report_failed">举报失败，原因：%s，请联系开发者</string>
     <string name="report_success">举报成功</string>
-    <string name="checkin_report">打卡报表</string>
-    <string name="report_year">年度</string>
-    <string name="report_month">月度</string>
-    <string name="report_total">总次数</string>
-    <string name="report_days">打卡天数</string>
-    <string name="report_max_day">单日最高</string>
-    <string name="report_no_data">暂无打卡记录</string>
-    <string name="report_legend_less">少</string>
-    <string name="report_legend_more">多</string>
-    <string name="report_landscape">横屏</string>
-    <string name="report_portrait">竖屏</string>
-    <string name="report_year_format">%1$d年</string>
-    <string name="report_month_format">%1$d月</string>
-    <string name="report_year_month_format">%1$d年%2$d月</string>
     <string name="comment_too_short">评论内容太短，请至少输入5个字符</string>
     <string name="sort_by_newest">最新</string>
     <string name="sort_by_oldest">最早</string>
@@ -743,11 +636,11 @@
     <string name="disable_predictive_back_title">关闭预测性返回动画</string>
     <string name="disable_predictive_back_summary">开启后，返回手势只有在松手后才会触发返回，避免观看视频时因误触返回手势而暂停播放</string>
     <string name="play_trailer">播放预告</string>
-    <string name="search_video_hint">搜索影片…</string>
+    <string name="search_video_hint">请输入关键词</string>
     <string name="recent_searches">最近搜索</string>
     <string name="search_suggestions">搜索建议</string>
     <string name="no_matching_search_history">暂无匹配的搜索历史</string>
-    <string name="search_enter_keywords">输入关键词搜索影片</string>
+    <string name="search_enter_keywords">请输入关键词</string>
     <string name="search_no_results">没有搜索到结果</string>
     <string name="search_load_failed_with_reason">加载失败：%1$s</string>
     <string name="load_failed_with_reason">加载失败：%1$s</string>
@@ -756,46 +649,12 @@
     <string name="announcement_list">公告列表</string>
     <string name="view_all">查看全部</string>
     <string name="open_menu">打开菜单</string>
-    <string name="widget_pin_not_supported_manual_add">部分 ROM 不支持引导式添加，请手动添加小组件</string>
     <string name="clarity">清晰度</string>
     <string name="success_value">成功：%1$s</string>
-    <string name="previous_year">上一年</string>
-    <string name="next_year">下一年</string>
-    <string name="previous_month">上个月</string>
-    <string name="next_month">下个月</string>
     <string name="network_timeout_text">超时</string>
     <string name="remove">移除</string>
     <string name="add">新增</string>
     <string name="paused">已暂停</string>
-    <string-array name="search_placeholders">
-        <item>探索深处的秘密…</item>
-        <item>晚风轻拂，寻找那份温柔</item>
-        <item>今晚，想看点不一样的？</item>
-        <item>搜一搜，总有你喜欢的</item>
-        <item>别害羞，大方搜搜看</item>
-        <item>听说最近大家都在搜这个…</item>
-        <item>开车请系好安全带</item>
-        <item>借一步说话…</item>
-        <item>输入你不敢说出口的那个词</item>
-        <item>解锁你的隐藏欲望</item>
-        <item>脸红的关键词是什么？</item>
-        <item>深夜好奇点什么…</item>
-        <item>嘘，这是属于我们两个人的秘密…</item>
-        <item>傲娇的你，其实很想搜那个吧？</item>
-        <item>把持住！这里的浓度有点高哦？</item>
-        <item>四海皆兄弟，老哥借一步说话？</item>
-        <item>你、你可别输入什么奇怪的词啊！</item>
-        <item>这里没有监控，偷偷搜吧~</item>
-        <item>夜深了，该满足一下好奇心了~</item>
-        <item>好东西，不打算和本萝莉/看板娘分享吗？</item>
-        <item>通往新世界的大门，输入密码开启！</item>
-        <item>听话，让我看看！</item>
-        <item>搜索框已经洗干净了，请享用！</item>
-        <item>你脑子里在想什么，搜索框都知道哦？</item>
-        <item>滴！学生卡/老司机卡，请刷卡搜索！</item>
-        <item>渴望着什么呢？悄悄告诉我嘛~</item>
-        <item>搜索一下，打开不可以色色的新世界！</item>
-    </string-array>
     <string name="theme_color">主题色</string>
     <string name="theme_color_system">跟随系统</string>
     <string name="theme_color_default">姨妈红</string>
@@ -831,10 +690,10 @@
     <string name="home_error_server_unavailable">服务器暂时不可用，请稍后再试。</string>
     <string name="home_error_generic">页面加载失败，请检查网络连接后重试。</string>
     <string name="backup_export_title">导出数据备份</string>
-    <string name="backup_export_summary">导出设置、观看历史、下载分组与影片信息、H 关键帧与打卡记录，方便换机还原</string>
+    <string name="backup_export_summary">导出设置、观看历史、下载分组与影片信息、H 关键帧，方便换机还原</string>
     <string name="backup_import_title">导入数据备份</string>
-    <string name="backup_import_summary">从备份文件还原设置、观看历史、下载分组与影片信息、H 关键帧与打卡记录</string>
-    <string name="backup_import_confirm_message">导入后将覆盖当前的设置、观看历史、下载分组与影片信息、H 关键帧与打卡记录。备份不包含影片文件本体，确定要继续吗？</string>
+    <string name="backup_import_summary">从备份文件还原设置、观看历史、下载分组与影片信息、H 关键帧</string>
+    <string name="backup_import_confirm_message">导入后将覆盖当前的设置、观看历史、下载分组与影片信息、H 关键帧。备份不包含影片文件本体，确定要继续吗？</string>
     <string name="backup_export_success">数据备份已导出</string>
     <string name="backup_export_failed">数据备份导出失败</string>
     <string name="backup_import_success">数据备份已导入</string>
@@ -843,21 +702,34 @@
     <string name="home_category_layout_summary">当前显示 %1$d / %2$d 个栏目</string>
     <string name="home_category_layout_dialog_summary">长按并拖动栏目可调整顺序，关闭开关即可隐藏栏目。</string>
     <string name="debug">调试</string>
-    <string-array name="loading_hints">
-        <item>哼，才、才没有让你久等呢！只是数据跑得慢了一点点而已！</item>
-        <item>笨蛋！盯着看它也不会变快啦！……好啦，再等我三秒钟！</item>
-        <item>（吧唧吧唧）……啊！被发现了！等我咽下这块饼干就来！</item>
-        <item>呜哇！前面的数据线好像缠在一起了！</item>
-        <item>正在努力搬运快乐中……</item>
-        <item>进度条正在偷吃美味小蛋糕，目前进度：2/3个！</item>
-        <item>隐藏着黑暗力量的进度条啊，在我面前显示你真正的速度吧！</item>
-        <item>正在同步异世界信号……哔哔——电波对接成功率 99%！</item>
-        <item>知道你急，但先别急嘛~ 趁现在眨眨眼，休息一下脖子哦！</item>
-        <item>正在调教不听话的小代码，稍等一下下啦！</item>
-        <item>大哥哥，前面的加载条还很长呢……</item>
-        <item>发动魔法卡：强欲之壶！从卡组抽取更多加载时间！</item>
-        <item>您的加载请求已被勇者小队优先处理，当前排名：第1位！</item>
-        <item>搓手手期待ing……</item>
-        <item>◝(⑅•ᴗ•⑅)◜..°♡ 传送中……</item>
-    </string-array>
+    <string name="traditional_chinese">繁体中文</string>
+    <string name="simplified_chinese">简体中文</string>
+    <string name="english_lang">英语</string>
+    <string name="hanime_app_name" translatable="false">Han1meViewer</string>
+    <string name="appbar_scrolling_view_behavior" translatable="false">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
+    <string name="animation_2_5d" translatable="false">2.5D</string>
+    <string name="mmd" translatable="false">MMD</string>
+    <string name="anime_4k" translatable="false">Anime\n4k</string>
+    <string name="http" translatable="false">HTTP</string>
+    <string name="socks" translatable="false">SOCKS</string>
+    <string name="http_proxy" translatable="false">HTTP %1$s:%2$d</string>
+    <string name="socks_proxy" translatable="false">SOCKS %1$s:%2$d</string>
+    <string name="search_grid_columns_range_compact" translatable="false">≤600dp</string>
+    <string name="search_grid_columns_range_medium" translatable="false">601-900dp</string>
+    <string name="search_grid_columns_range_expanded" translatable="false">901-1200dp</string>
+    <string name="search_grid_columns_range_large" translatable="false">≥1201dp</string>
+    <string name="horizontal_card_count_range_narrow" translatable="false">&lt;350dp</string>
+    <string name="horizontal_card_count_range_compact" translatable="false">350-599dp</string>
+    <string name="horizontal_card_count_range_medium" translatable="false">600-839dp</string>
+    <string name="horizontal_card_count_range_expanded" translatable="false">≥840dp</string>
+    <string name="watch_history_minutes_short" translatable="false">%1$d 分钟</string>
+    <string name="import_progress_format" translatable="false">%d / %d（%d%%）</string>
+    <string name="zero_percent" translatable="false">0%</string>
+    <string name="blank_brackets" translatable="false">( %1$d )</string>
+    <string name="download_progress_percent" translatable="false">%1$d%%</string>
+    <string name="cookies_label" translatable="false">Cookies</string>
+    <string name="invalid_ip_or_port">无效的 IPv4 地址或端口 (0..65535)</string>
+    <string name="click_to_restart">点击重新开始</string>
+    <string name="replay">重播</string>
+    <string name="video_loading_failed">视频加载失败</string>
 </resources>

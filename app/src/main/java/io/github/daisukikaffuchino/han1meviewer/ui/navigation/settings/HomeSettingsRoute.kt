@@ -460,8 +460,6 @@ private fun buildHomeSettingsUiState(
     val appLanguageLabel = when (appLanguageValue) {
         "system" -> context.getString(R.string.follow_system)
         "zh-rCN" -> context.getString(R.string.simplified_chinese)
-        "zh" -> context.getString(R.string.traditional_chinese)
-        "ja" -> context.getString(R.string.japanese_lang)
         "en" -> context.getString(R.string.english_lang)
         else -> appLanguageValue
     }

@@ -28,7 +28,7 @@ import kotlin.coroutines.resume
  * 优化后的下载管理器，利用 Channel 和 Semaphore 限制并发下载数，
  * 同时通过监听 WorkManager 的任务状态实现“等待任务完成后释放许可”的逻辑。
  */
-object HanimeDownloadManagerV2 {
+object HanimeDownloadManager {
 
     private const val TAG = "HanimeDownloadManager"
 

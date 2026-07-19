@@ -3,7 +3,7 @@ package io.github.daisukikaffuchino.han1meviewer.ui.viewmodel
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
-import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManagerV2
+import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManager
 import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadWorker
 import com.yenaly.yenaly_libs.base.YenalyViewModel
 import com.yenaly.yenaly_libs.utils.application
@@ -31,7 +31,7 @@ object AppViewModel : YenalyViewModel(application), IHCsrfToken {
 
         viewModelScope.launch(Dispatchers.IO) {
             // HanimeDownloadManager.init()
-            HanimeDownloadManagerV2.init()
+            HanimeDownloadManager.init()
         }
 
         viewModelScope.launch(Dispatchers.IO) {

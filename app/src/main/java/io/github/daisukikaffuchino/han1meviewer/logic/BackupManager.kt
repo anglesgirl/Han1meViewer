@@ -5,13 +5,10 @@ import android.net.Uri
 import androidx.core.content.edit
 import io.github.daisukikaffuchino.han1meviewer.BuildConfig
 import io.github.daisukikaffuchino.han1meviewer.Preferences
-import io.github.daisukikaffuchino.han1meviewer.logic.dao.CheckInRecordDatabase
 import io.github.daisukikaffuchino.han1meviewer.logic.dao.DownloadDatabase
 import io.github.daisukikaffuchino.han1meviewer.logic.dao.HistoryDatabase
 import io.github.daisukikaffuchino.han1meviewer.logic.dao.MiscellanyDatabase
-import io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInRecordEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.HKeyframeEntity
-import io.github.daisukikaffuchino.han1meviewer.logic.entity.SideDishEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.WatchHistoryEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.download.DownloadCategoryEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.download.DownloadGroupEntity
@@ -38,8 +35,6 @@ object BackupManager {
         val exportedAt: Long = System.currentTimeMillis(),
         val settings: Map<String, PreferenceValue>? = null,
         val hKeyframes: List<HKeyframeEntity>? = null,
-        val checkInRecords: List<CheckInRecordEntity>? = null,
-        val sideDishes: List<SideDishEntity>? = null,
         val watchHistories: List<WatchHistoryEntity>? = null,
         val downloadGroups: List<DownloadGroupEntity>? = null,
         val downloads: List<HanimeDownloadEntity>? = null,
@@ -83,20 +78,6 @@ object BackupManager {
             MiscellanyDatabase.instance.hKeyframeDao.apply {
                 deleteAll()
                 insertAll(hKeyframes)
-            }
-        }
-
-        backup.checkInRecords?.let { checkInRecords ->
-            CheckInRecordDatabase.getDatabase(context).checkInDao().apply {
-                deleteAll()
-                insertAll(checkInRecords.map { it.normalizeSideDishes() })
-            }
-        }
-
-        backup.sideDishes?.let { sideDishes ->
-            CheckInRecordDatabase.getDatabase(context).sideDishDao().apply {
-                deleteAll()
-                insertAll(sideDishes)
             }
         }
 
@@ -162,8 +143,6 @@ object BackupManager {
                 value.toPreferenceValue()
             },
             hKeyframes = MiscellanyDatabase.instance.hKeyframeDao.getAll(),
-            checkInRecords = CheckInRecordDatabase.getDatabase(context).checkInDao().getAllRecords(),
-            sideDishes = CheckInRecordDatabase.getDatabase(context).sideDishDao().getAll(),
             watchHistories = HistoryDatabase.instance.watchHistory.getAll(),
             downloadGroups = DownloadDatabase.instance.downloadGroupDao.getAllGroupsOnce(),
             downloads = DownloadDatabase.instance.hanimeDownloadDao.getAll(),
@@ -194,21 +173,4 @@ object BackupManager {
         }
     }
 
-    private fun CheckInRecordEntity.normalizeSideDishes(): CheckInRecordEntity {
-        if (sideDishes.isBlank()) return this
-        val normalized = sideDishes
-            .replace("\\u001E", "\u001E")
-            .replace("\\u001e", "\u001E")
-            .split(",")
-            .joinToString(",") { item ->
-                if (item.contains("\u001E") || !item.contains("|")) {
-                    item
-                } else {
-                    val title = item.substringBefore("|")
-                    val videoCode = item.substringAfter("|", "")
-                    if (videoCode.isBlank()) title else "$title\u001E$videoCode"
-                }
-            }
-        return copy(sideDishes = normalized)
-    }
 }

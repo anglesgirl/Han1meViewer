@@ -17,7 +17,6 @@ import io.github.daisukikaffuchino.han1meviewer.Preferences.isAlreadyLogin
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.VIDEO_COMMENT_PREFIX
 import io.github.daisukikaffuchino.han1meviewer.getHanimeShareText
-import io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInRecordEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.model.HanimeInfo
 import io.github.daisukikaffuchino.han1meviewer.logic.model.HanimeVideo
 import io.github.daisukikaffuchino.han1meviewer.logic.state.WebsiteState
@@ -44,7 +43,6 @@ fun RenderVideoIntroductionContent(
     onToggleFavorite: (HanimeVideo) -> Unit,
     onRateVideo: (HanimeVideo, Boolean) -> Unit,
     onManageMyList: (HanimeVideo.MyList?, List<Boolean>) -> Unit,
-    onQuickCheckIn: (CheckInRecordEntity) -> Unit,
     onPrepareDownload: (String, HanimeVideo?) -> Unit,
     onConfirmDownloadPrompt: (HanimeVideo?) -> Unit,
     onRequestOpenOfficialDownloadPage: () -> Unit,
@@ -87,7 +85,6 @@ fun RenderVideoIntroductionContent(
             onManageMyList = { _, selectedStates ->
                 onManageMyList(video?.myList, selectedStates)
             },
-            onQuickCheckIn = onQuickCheckIn,
             onPrepareDownload = { quality ->
                 onPrepareDownload(quality, video)
             },

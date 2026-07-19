@@ -147,13 +147,6 @@ fun MainNavHost(
                 onNavigateToVideo = onNavigateToVideo,
             )
         }
-        composable<DailyCheckInRoute> {
-            DailyCheckInRouteScreen(
-                activity = activity,
-                onBack = onBack,
-                onNavigateToVideo = onNavigateToVideo,
-            )
-        }
         composable<DownloadRoute> {
             DownloadRouteScreen(
                 onBack = onBack,

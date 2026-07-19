@@ -17,7 +17,6 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
-import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -48,7 +47,6 @@ import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.getHanimeVideoLink
 import io.github.daisukikaffuchino.han1meviewer.logic.DatabaseRepo
-import io.github.daisukikaffuchino.han1meviewer.logic.dao.CheckInRecordDatabase
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.HKeyframeEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.WatchHistoryEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.exception.ParseException
@@ -76,7 +74,6 @@ import com.yenaly.yenaly_libs.utils.showShortToast
 import com.yenaly.yenaly_libs.utils.startActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
@@ -286,20 +283,6 @@ fun VideoRouteHostScreen(
                 onToggleFavorite = actions::toggleFavorite,
                 onRateVideo = actions::rateVideo,
                 onManageMyList = actions::updateMyListSelection,
-                onQuickCheckIn = { record ->
-                    val normalizedRecord = if (record.sideDishes.contains("\u001E")) {
-                        record
-                    } else {
-                        record.copy(sideDishes = "${record.sideDishes}\u001E${route.videoCode}")
-                    }
-                    scope.launch(Dispatchers.IO) {
-                        CheckInRecordDatabase.getDatabase(activity).checkInDao()
-                            .insert(normalizedRecord)
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(activity, R.string.checkin, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
                 onPrepareDownload = { quality, video ->
                     checkedQuality = quality
                     video?.let(actions::startDownloadFlow)

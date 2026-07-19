@@ -26,7 +26,6 @@ fun NavHostController.navigateDrawerDestination(
     when (destination) {
         MainDrawerDestination.Home -> navigateSafely(HomeRoute)
         MainDrawerDestination.Settings -> navigateSafely(HomeSettingsRoute)
-        MainDrawerDestination.DailyCheckIn -> navigateSafely(DailyCheckInRoute)
         MainDrawerDestination.WatchLater -> navigateSafely(MyWatchLaterRoute)
         MainDrawerDestination.FavVideo -> navigateSafely(MyFavVideoRoute)
         MainDrawerDestination.Playlist -> navigateSafely(MyPlaylistRoute)

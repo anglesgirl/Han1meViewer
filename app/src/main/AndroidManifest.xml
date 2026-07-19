@@ -9,15 +9,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.VIBRATE" />
-
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.INSERT" />
-            <data android:mimeType="vnd.android.cursor.dir/event" />
-        </intent>
-    </queries>
 
     <application
         android:name=".HanimeApplication"
@@ -161,16 +153,5 @@
 
         </activity>
 
-        <receiver
-            android:name=".ui.widget.CheckInWidgetProvider"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="io.github.daisukikaffuchino.han1meviewer.ACTION_WIDGET_CHECK_IN" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/checkin_widget_info" />
-        </receiver>
     </application>
 </manifest>

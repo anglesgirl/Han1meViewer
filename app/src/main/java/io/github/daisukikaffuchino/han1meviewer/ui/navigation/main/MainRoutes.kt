@@ -32,9 +32,6 @@ object MyPlaylistRoute
 object SubscriptionRoute
 
 @Serializable
-object DailyCheckInRoute
-
-@Serializable
 object DownloadRoute
 
 @Serializable
@@ -110,11 +107,6 @@ enum class MainDestinationSpec(
     Subscription(
         drawerDestination = MainDrawerDestination.Subscription,
         routeClass = SubscriptionRoute::class,
-        drawerEnabled = false,
-    ),
-    DailyCheckIn(
-        drawerDestination = MainDrawerDestination.DailyCheckIn,
-        routeClass = DailyCheckInRoute::class,
         drawerEnabled = false,
     ),
     Download(

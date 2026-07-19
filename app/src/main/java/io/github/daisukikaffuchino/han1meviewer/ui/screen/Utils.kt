@@ -14,7 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -113,6 +113,5 @@ fun rememberVideoGridColumns(): Int {
 
 @Composable
 fun rememberRandomLoadingHint(): String {
-    val placeholders = stringArrayResource(R.array.loading_hints)
-    return remember(placeholders) { placeholders.random() }
+    return stringResource(R.string.loading)
 }

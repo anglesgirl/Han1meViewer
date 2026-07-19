@@ -293,7 +293,7 @@ VideoRoute(videoCode = "-1", localUri) -> VideoViewModel.buildLocalPlayInfo -> H
 - `ui/screen/home/download/DownloadingScreen.kt`
 - `ui/screen/home/download/DownloadedScreen.kt`
 - `ui/viewmodel/DownloadViewModel.kt`
-- `worker/HanimeDownloadManagerV2.kt`
+- `worker/HanimeDownloadManager.kt`
 - `worker/HanimeDownloadWorker.kt`
 - `logic/entity/download/HanimeDownloadEntity.kt`
 - `logic/entity/download/DownloadGroupEntity.kt`
@@ -328,7 +328,6 @@ Room 主要用于：
 - 高级搜索历史。
 - 下载任务和下载分组。
 - 共享/自定义关键 H 帧。
-- 健康打卡记录。
 
 关键入口：
 
@@ -336,7 +335,6 @@ Room 主要用于：
 - `logic/dao/HistoryDatabase.kt`
 - `logic/dao/DownloadDatabase.kt`
 - `logic/dao/MiscellanyDatabase.kt`
-- `logic/dao/CheckInRecordDatabase.kt`
 
 约定：
 
@@ -571,7 +569,7 @@ entities
 新增下载相关能力：
 
 - `DownloadViewModel.kt`
-- `HanimeDownloadManagerV2.kt`
+- `HanimeDownloadManager.kt`
 - `HanimeDownloadWorker.kt`
 - `DownloadDatabase` / DAO / Entity
 - 下载设置页和权限/SAF 工具

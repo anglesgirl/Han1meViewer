@@ -7,25 +7,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.getHanimeShareText
 import io.github.daisukikaffuchino.han1meviewer.logic.DatabaseRepo
-import io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInType
 import io.github.daisukikaffuchino.han1meviewer.logic.model.Announcement
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.component.AnnouncementDialog
-import io.github.daisukikaffuchino.han1meviewer.ui.component.TripleButtonDialog
+import io.github.daisukikaffuchino.han1meviewer.ui.component.ConfirmDialog
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomePageScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomeUiEvent
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.LocalSearchHistoryQuery
-import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.CheckInCalendarViewModel
 import com.yenaly.yenaly_libs.utils.copyTextToClipboard
 import com.yenaly.yenaly_libs.utils.showShortToast
 import kotlinx.coroutines.flow.first
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun HomeRouteScreen(
@@ -38,11 +32,9 @@ fun HomeRouteScreen(
     onNavigateToVideo: (String) -> Unit,
 ) {
     val viewModel = activity.viewModel
-    val checkInViewModel: CheckInCalendarViewModel = viewModel()
     val confirmToExit = stringResource(R.string.confirm_to_exit)
-    val finishedMasturbating = stringResource(R.string.finished_masturbating)
-    val doMore = stringResource(R.string.do_more)
-    val checkoutExit = stringResource(R.string.checkout_exit)
+    val confirmExitMessage = stringResource(R.string.confirm_exit_message)
+    val cancel = stringResource(R.string.cancel)
     val exit = stringResource(R.string.exit)
     var showExitDialog by remember { mutableStateOf(false) }
     var announcement by remember { mutableStateOf<Announcement?>(null) }
@@ -73,23 +65,13 @@ fun HomeRouteScreen(
     }
 
     if (showExitDialog) {
-        TripleButtonDialog(
+        ConfirmDialog(
             visible = true,
             title = confirmToExit,
-            message = finishedMasturbating,
-            negativeText = doMore,
-            neutralText = checkoutExit,
-            positiveText = exit,
-            onNegative = { showExitDialog = false },
-            onNeutral = {
-                checkInViewModel.addRecord(
-                    LocalDate.now(),
-                    LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")),
-                    CheckInType.MASTURBATION.storeName, "", "",
-                )
-                activity.finish()
-            },
-            onPositive = { activity.finish() },
+            message = confirmExitMessage,
+            confirmText = exit,
+            dismissText = cancel,
+            onConfirm = { activity.finish() },
             onDismiss = { showExitDialog = false },
         )
     }

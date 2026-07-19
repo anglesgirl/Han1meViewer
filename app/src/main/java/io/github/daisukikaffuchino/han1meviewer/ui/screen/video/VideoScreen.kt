@@ -8,7 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.logic.state.VideoLoadingState
 import io.github.daisukikaffuchino.han1meviewer.ui.component.content.EmptyContent
 import io.github.daisukikaffuchino.han1meviewer.ui.component.content.ErrorContent
@@ -32,7 +34,7 @@ fun VideoScreen(
             when (state) {
                 is VideoLoadingState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        LoadingContent(message = "载入视频页面中…")
+                        LoadingContent(message = stringResource(R.string.loading))
                     }
                 }
 

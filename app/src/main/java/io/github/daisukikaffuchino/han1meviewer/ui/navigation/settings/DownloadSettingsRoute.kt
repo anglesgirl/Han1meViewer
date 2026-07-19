@@ -26,7 +26,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.DownloadSetti
 import io.github.daisukikaffuchino.han1meviewer.util.SafFileManager
 import io.github.daisukikaffuchino.han1meviewer.util.SafFileManager.KEY_TREE_URI
 import io.github.daisukikaffuchino.han1meviewer.util.showToast
-import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManagerV2
+import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManager
 
 private const val DOWNLOAD_COUNT_LIMIT = "download_count_limit"
 private const val DOWNLOAD_SPEED_LIMIT = "download_speed_limit"
@@ -67,7 +67,7 @@ fun DownloadSettingsRouteScreen(
         },
         onDownloadCountLimitChange = { value ->
             Preferences.preferenceSp.edit { putInt(DOWNLOAD_COUNT_LIMIT, value) }
-            HanimeDownloadManagerV2.maxConcurrentDownloadCount = value
+            HanimeDownloadManager.maxConcurrentDownloadCount = value
             refreshKey++
         },
         onDownloadSpeedLimitChange = { value ->

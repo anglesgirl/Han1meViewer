@@ -158,7 +158,6 @@ private fun MainDrawerPrimaryItems(
     val primaryItems = listOf(
         MainDrawerDestination.Home,
         MainDrawerDestination.Settings,
-        MainDrawerDestination.DailyCheckIn,
     )
     Column {
         primaryItems.forEach { item ->
