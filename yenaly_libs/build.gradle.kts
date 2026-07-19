@@ -6,10 +6,10 @@ plugins {
 }
 
 android {
-    compileSdk = property("compile.sdk")?.toString()?.toIntOrNull()
+    compileSdk = 37
 
     defaultConfig {
-        minSdk = property("min.sdk")?.toString()?.toIntOrNull()
+        minSdk = 29
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")

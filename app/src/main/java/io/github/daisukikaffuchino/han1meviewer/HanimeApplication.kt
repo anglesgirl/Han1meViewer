@@ -1,0 +1,92 @@
+package io.github.daisukikaffuchino.han1meviewer
+
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.util.Log
+import androidx.core.app.NotificationChannelCompat
+import androidx.core.app.NotificationManagerCompat
+import com.google.android.material.color.DynamicColors
+import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
+import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders
+import io.github.daisukikaffuchino.han1meviewer.util.ThemeUtils
+import com.yenaly.yenaly_libs.base.YenalyApplication
+import `is`.xyz.mpv.MPVLib
+import java.net.ProxySelector
+
+/**
+ * @project Hanime1
+ * @author Yenaly Liew
+ * @time 2022/06/08 008 17:32
+ */
+class HanimeApplication : YenalyApplication() {
+
+    companion object {
+        const val TAG = "HanimeApplication"
+    }
+
+    /**
+     * 已经在 [HInitializer] 中处理了
+     */
+    override val isDefaultCrashHandlerEnabled: Boolean = false
+
+    override fun onCreate() {
+        super.onCreate()
+        ThemeUtils.applyDarkModeFromPreferences(this)
+        if (Preferences.useDynamicColor){
+            DynamicColors.applyToActivitiesIfAvailable(this)
+        }
+        ProxySelector.setDefault(HProxySelector())
+        HProxySelector.rebuildNetwork()
+        initNotificationChannel()
+        MPVLib.create(applicationContext)
+        MPVLib.init()
+
+        if (AnimeShaders.copyShaderAssets(applicationContext) <= 0) {
+            Log.w(TAG, "Shader 复制失败")
+        }
+        if (AnimeShaders.copyCertAssets(applicationContext) <= 0) {
+            Log.w(TAG, "cert 复制失败")
+        }
+        val selected = Preferences.fakeLauncherIcon
+        switchLauncher(selected)
+    }
+
+    private fun initNotificationChannel() {
+        val nm = NotificationManagerCompat.from(this)
+
+        val hanimeDownloadChannel = NotificationChannelCompat.Builder(
+            DOWNLOAD_NOTIFICATION_CHANNEL,
+            NotificationManagerCompat.IMPORTANCE_HIGH
+        ).setName("Hanime Download").build()
+        nm.createNotificationChannel(hanimeDownloadChannel)
+
+        val appUpdateChannel = NotificationChannelCompat.Builder(
+            UPDATE_NOTIFICATION_CHANNEL,
+            NotificationManagerCompat.IMPORTANCE_HIGH
+        ).setName("App Update").build()
+        nm.createNotificationChannel(appUpdateChannel)
+    }
+    fun switchLauncher(alias: String) {
+        val pm = packageManager
+
+        val allAliases = listOf(
+            "io.github.daisukikaffuchino.han1meviewer.LauncherAliasDefault",
+            "io.github.daisukikaffuchino.han1meviewer.LauncherFakeCalc",
+            "io.github.daisukikaffuchino.han1meviewer.LauncherFakeCornhub",
+            "io.github.daisukikaffuchino.han1meviewer.LauncherFakeXxt"
+        )
+
+        allAliases.forEach { a ->
+            val state = if (a == alias)
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            else
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+
+            pm.setComponentEnabledSetting(
+                ComponentName(this, a),
+                state,
+                PackageManager.DONT_KILL_APP
+            )
+        }
+    }
+}

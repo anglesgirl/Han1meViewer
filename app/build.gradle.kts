@@ -16,15 +16,14 @@ plugins {
 }
 
 android {
-    compileSdk = property("compile.sdk")?.toString()?.toIntOrNull()
+    compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.yenaly.han1meviewer"
-        minSdk = property("min.sdk")?.toString()?.toIntOrNull()
-        targetSdk = property("target.sdk")?.toString()?.toIntOrNull()
-        val (code, name) = createVersion(major = 0, minor = 26, patch = 0)
-        versionCode = code
-        versionName = name
+        applicationId = "io.github.daisukikaffuchino.han1meviewer"
+        minSdk = 29
+        targetSdk = 37
+        versionCode = 260719
+        versionName = "26.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -86,7 +85,7 @@ android {
     lint {
         disable += setOf("EnsureInitializerMetadata")
     }
-    namespace = "com.yenaly.han1meviewer"
+    namespace = "io.github.daisukikaffuchino.han1meviewer"
 }
 
 kotlin {

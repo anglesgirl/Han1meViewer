@@ -33,7 +33,7 @@ Gradle 模块：
 主应用关键目录：
 
 ```text
-app/src/main/java/com/yenaly/han1meviewer/
+app/src/main/java/io/github/daisukikaffuchino/han1meviewer/
 ├── logic/                 数据、网络、解析、数据库、状态
 │   ├── network/           Retrofit Service、OkHttp、DNS、Cookie、更新服务
 │   ├── model/             业务模型和解析后的页面模型

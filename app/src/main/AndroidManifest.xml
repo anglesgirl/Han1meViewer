@@ -62,7 +62,7 @@
             android:initOrder="114514"
             tools:node="merge">
             <meta-data
-                android:name="com.yenaly.han1meviewer.HInitializer"
+                android:name="io.github.daisukikaffuchino.han1meviewer.HInitializer"
                 android:value="androidx.startup" />
         </provider>
 
@@ -172,7 +172,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.yenaly.han1meviewer.ACTION_WIDGET_CHECK_IN" />
+                <action android:name="io.github.daisukikaffuchino.han1meviewer.ACTION_WIDGET_CHECK_IN" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
