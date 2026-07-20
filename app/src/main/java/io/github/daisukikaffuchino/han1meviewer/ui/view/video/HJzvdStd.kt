@@ -65,6 +65,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.getSystemService
+import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColorInt
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
@@ -72,7 +73,6 @@ import androidx.core.view.isVisible
 import androidx.core.view.size
 import androidx.core.view.updatePadding
 import androidx.fragment.app.FragmentActivity
-import androidx.navigation.findNavController
 import androidx.preference.PreferenceManager
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
@@ -84,7 +84,6 @@ import cn.jzvd.JZDataSource
 import cn.jzvd.JZMediaInterface
 import cn.jzvd.JZUtils
 import cn.jzvd.JzvdStd
-import com.google.android.material.color.MaterialColors
 import com.itxca.spannablex.spannable
 import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.R
@@ -92,7 +91,6 @@ import io.github.daisukikaffuchino.han1meviewer.logic.entity.HKeyframeEntity
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.HomeRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.theme.HanimeTheme
-import io.github.daisukikaffuchino.han1meviewer.util.showAlertDialog
 import io.github.daisukikaffuchino.utils.OrientationManager
 import io.github.daisukikaffuchino.utils.appScreenWidth
 import io.github.daisukikaffuchino.utils.findActivityOrNull
@@ -116,9 +114,18 @@ class HJzvdStd @JvmOverloads constructor(
         fun onFullscreenChanged(isFullscreen: Boolean)
     }
     var fullscreenListener: FullscreenListener? = null
+    var onWifiWarningRequested: (() -> Unit)? = null
 
     private val dialogAccentColor: Int
-        get() = MaterialColors.getColor(this, androidx.appcompat.R.attr.colorPrimary)
+        get() = context.obtainStyledAttributes(
+            intArrayOf(androidx.appcompat.R.attr.colorPrimary)
+        ).let { attributes ->
+            try {
+                attributes.getColor(0, Color.RED)
+            } finally {
+                attributes.recycle()
+            }
+        }
 
     companion object {
         // 相當於重寫了
@@ -411,7 +418,7 @@ class HJzvdStd @JvmOverloads constructor(
         val color = dialogAccentColor
         progressBar?.progressTintList = ColorStateList.valueOf(color)
         progressBar?.progressBackgroundTintList = ColorStateList.valueOf(
-            MaterialColors.compositeARGBWithAlpha(color, 96)
+            ColorUtils.setAlphaComponent(color, 96)
         )
     }
 
@@ -674,10 +681,7 @@ class HJzvdStd @JvmOverloads constructor(
 
     override fun clickClarity() {
         this.onCLickUiToggleToClear()
-        val colorPrimary = MaterialColors.getColor(
-            context,
-            androidx.appcompat.R.attr.colorPrimary,
-            Color.RED)
+        val colorPrimary = dialogAccentColor
         val inflater = this.jzvdContext.getSystemService("layout_inflater") as LayoutInflater
         val layout = inflater.inflate(R.layout.layout_jzvd_clarity, null as ViewGroup?) as LinearLayout
         val mQualityListener = OnClickListener { v1: View? ->
@@ -1296,18 +1300,17 @@ class HJzvdStd @JvmOverloads constructor(
     }
 
     override fun showWifiDialog() {
-        jzvdContext.showAlertDialog {
-            setTitle(R.string.warning)
-            setMessage(cn.jzvd.R.string.tips_not_wifi)
-            setPositiveButton(cn.jzvd.R.string.tips_not_wifi_confirm) { _, _ ->
-                WIFI_TIP_DIALOG_SHOWED = true
-                if (state == STATE_PAUSE) startButton.performClick() else startVideo()
-            }
-            setNegativeButton(cn.jzvd.R.string.tips_not_wifi_cancel) { _, _ ->
-                releaseAllVideos()
-                clearFloatScreen()
-            }
-        }
+        onWifiWarningRequested?.invoke()
+    }
+
+    fun confirmWifiPlayback() {
+        WIFI_TIP_DIALOG_SHOWED = true
+        if (state == STATE_PAUSE) startButton.performClick() else startVideo()
+    }
+
+    fun cancelWifiPlayback() {
+        releaseAllVideos()
+        clearFloatScreen()
     }
 
     // 原來是 300 period 我改成了 100 爲了計時準確

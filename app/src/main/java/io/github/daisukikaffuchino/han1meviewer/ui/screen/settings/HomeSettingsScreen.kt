@@ -128,8 +128,9 @@ fun HomeSettingsScreen(
         title = stringResource(R.string.app_lang),
         options = listOf(
             stringResource(R.string.follow_system) to "system",
-            stringResource(R.string.simplified_chinese) to "zh-rCN",
-            stringResource(R.string.english_lang) to "en",
+            "English" to "en",
+            "简体中文" to "zh-CN",
+            "繁體中文" to "zh-TW",
         ),
         selectedValue = state.appLanguage,
         onDismiss = { activeDialog = null },

@@ -119,7 +119,6 @@ dependencies {
     implementation(libs.bundles.android.base)
     implementation(libs.bundles.android.jetpack)
     implementation(libs.palette)
-    implementation(libs.material)
 
     implementation(platform(libs.compose.compose.bom))
     implementation(libs.compose.ui.graphics)
@@ -160,7 +159,6 @@ dependencies {
     implementation(libs.base.recyclerview.adapter.helper4)
     implementation(libs.expandable.textview)
     implementation(libs.spannable.x)
-    implementation(libs.about)
     implementation(libs.drawerlayout)
 
     ksp(libs.room.compiler)

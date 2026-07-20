@@ -7,13 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
-import android.content.res.Resources
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,7 +28,6 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.NavHostController
 import androidx.preference.PreferenceManager
-import com.google.android.material.snackbar.Snackbar
 import io.github.daisukikaffuchino.han1meviewer.HanimeConstants.ANIME_URL
 import io.github.daisukikaffuchino.han1meviewer.HanimeConstants.HANIME_URL
 import io.github.daisukikaffuchino.han1meviewer.Preferences
@@ -43,13 +40,8 @@ import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.VideoRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.SettingsPreferenceKeys
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.main.MainActivityContent
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomePageViewModel
-import io.github.daisukikaffuchino.han1meviewer.util.showAlertDialog
-import io.github.daisukikaffuchino.han1meviewer.videoUrlRegex
 import io.github.daisukikaffuchino.utils.ActivityManager
-import io.github.daisukikaffuchino.utils.showSnackBar
-import io.github.daisukikaffuchino.utils.textFromClipboard
 import kotlinx.coroutines.flow.MutableSharedFlow
-import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -59,6 +51,8 @@ class MainActivity : AppCompatActivity() {
     private var showAuthGuard by mutableStateOf(true)
     private val pendingNavigationRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
     private var currentVideoHost: VideoPageHost? = null
+    private var showSiteSwitchConfirm by mutableStateOf(false)
+    private var logoutDialogCloseCurrentPage by mutableStateOf<Boolean?>(null)
 
     companion object {
         const val ACTION_TOGGLE_PLAY = "io.github.daisukikaffuchino.han1meviewer.ACTION_TOGGLE_PLAY"
@@ -92,9 +86,16 @@ class MainActivity : AppCompatActivity() {
                 pendingNavigationRequests = pendingNavigationRequests,
                 showAuthGuard = showAuthGuard,
                 onOpenAccount = { navController.navigateSafely(AccountRoute) },
+                showSiteSwitchConfirm = showSiteSwitchConfirm,
+                logoutDialogCloseCurrentPage = logoutDialogCloseCurrentPage,
                 onLogoutClick = { showLogoutConfirmDialog() },
                 onRequireLogin = { gotoLoginActivity() },
-                onSwitchSiteClick = { showSiteSwitchDialog() },
+                onSwitchSiteClick = { showSiteSwitchConfirm = true },
+                onDismissSiteSwitch = { showSiteSwitchConfirm = false },
+                onConfirmSiteSwitch = ::confirmSiteSwitch,
+                onDismissLogout = { logoutDialogCloseCurrentPage = null },
+                onConfirmLogout = ::confirmLogout,
+                onOpenClipboardVideo = ::showVideoDetailFragment,
                 onNavigateControllerReady = { controller -> navController = controller },
             )
         }
@@ -130,10 +131,6 @@ class MainActivity : AppCompatActivity() {
             initData()
         }
         pendingNavigationRequests.tryEmit(intent)
-    }
-
-    override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(applyAppLocale(newBase))
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -188,13 +185,6 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         registerPipReceiver()
-        window.decorView.post {
-            textFromClipboard?.let {
-                videoUrlRegex.find(it)?.groupValues?.get(1)?.let { videoCode ->
-                    showFindRelatedLinkSnackBar(videoCode)
-                }
-            }
-        }
     }
 
     private fun registerPipReceiver() {
@@ -217,61 +207,29 @@ class MainActivity : AppCompatActivity() {
         unregisterReceiver(pipActionReceiver)
     }
 
-    private fun applyAppLocale(context: Context): Context {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        val lang = prefs.getString("app_language", "system") ?: "system"
-
-        val newLocale = when (lang) {
-            "zh-rCN" -> Locale.SIMPLIFIED_CHINESE
-            "zh" -> Locale.TRADITIONAL_CHINESE
-            "en" -> Locale.ENGLISH
-            "ja" -> Locale.JAPANESE
-            else -> Resources.getSystem().configuration.locales.get(0)
-        }
-
-        Locale.setDefault(newLocale)
-
-        val config = Configuration(context.resources.configuration)
-        config.setLocale(newLocale)
-        return context.createConfigurationContext(config)
-    }
-
     override fun onSupportNavigateUp(): Boolean {
         return navController.navigateUp() || super.onSupportNavigateUp()
     }
 
-    private fun showFindRelatedLinkSnackBar(videoCode: String) {
-        showSnackBar(R.string.detect_ha1_related_link_in_clipboard, Snackbar.LENGTH_LONG) {
-            setAction(R.string.enter) {
-                showVideoDetailFragment(videoCode)
-            }
-        }
-    }
-
-    private fun showSiteSwitchDialog() {
+    private fun confirmSiteSwitch() {
+        showSiteSwitchConfirm = false
         val currentSite = Preferences.baseUrl
-        showAlertDialog {
-            setTitle(R.string.confirm_switch_site)
-            setPositiveButton(R.string.sure) { _, _ ->
-                val avSite = HANIME_URL[3]
-                val selectedBaseUrl = Preferences.selectedBaseUrl
-                if (currentSite in ANIME_URL) {
-                    Preferences.preferenceSp.edit(true) {
-                        putString(SettingsPreferenceKeys.SELECTED_BASE_URL, currentSite)
-                        putString(SettingsPreferenceKeys.DOMAIN_NAME, avSite)
-                    }
-                } else {
-                    Preferences.preferenceSp.edit(true) {
-                        putString(SettingsPreferenceKeys.SELECTED_BASE_URL, selectedBaseUrl)
-                        putString(SettingsPreferenceKeys.DOMAIN_NAME, selectedBaseUrl)
-                    }
-                }
-                Handler(Looper.getMainLooper()).postDelayed({
-                    ActivityManager.restart(killProcess = true)
-                }, 500)
+        val avSite = HANIME_URL[3]
+        val selectedBaseUrl = Preferences.selectedBaseUrl
+        if (currentSite in ANIME_URL) {
+            Preferences.preferenceSp.edit(true) {
+                putString(SettingsPreferenceKeys.SELECTED_BASE_URL, currentSite)
+                putString(SettingsPreferenceKeys.DOMAIN_NAME, avSite)
             }
-            setNegativeButton(R.string.no, null)
+        } else {
+            Preferences.preferenceSp.edit(true) {
+                putString(SettingsPreferenceKeys.SELECTED_BASE_URL, selectedBaseUrl)
+                putString(SettingsPreferenceKeys.DOMAIN_NAME, selectedBaseUrl)
+            }
         }
+        Handler(Looper.getMainLooper()).postDelayed({
+            ActivityManager.restart(killProcess = true)
+        }, 500)
     }
 
     fun gotoLoginActivity() {
@@ -280,16 +238,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showLogoutConfirmDialog(closeCurrentPageOnConfirm: Boolean = false) {
-        showAlertDialog {
-            setTitle(R.string.sure_to_logout)
-            setPositiveButton(R.string.sure) { _, _ ->
-                if (closeCurrentPageOnConfirm) {
-                    navController.popBackStack()
-                }
-                logoutWithRefresh()
-            }
-            setNegativeButton(R.string.no, null)
+        logoutDialogCloseCurrentPage = closeCurrentPageOnConfirm
+    }
+
+    private fun confirmLogout() {
+        val closeCurrentPage = logoutDialogCloseCurrentPage ?: return
+        logoutDialogCloseCurrentPage = null
+        if (closeCurrentPage) {
+            navController.popBackStack()
         }
+        logoutWithRefresh()
     }
 
     fun logoutWithRefresh() {

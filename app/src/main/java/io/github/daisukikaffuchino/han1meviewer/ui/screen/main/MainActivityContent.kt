@@ -5,6 +5,10 @@ import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -15,7 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
@@ -25,12 +33,14 @@ import io.github.daisukikaffuchino.han1meviewer.logic.exception.CloudFlareBlocke
 import io.github.daisukikaffuchino.han1meviewer.logic.state.PageState
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.component.UsageNoticeDialog
+import io.github.daisukikaffuchino.han1meviewer.ui.component.ConfirmDialog
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.MainDestinationSpec
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.MainNavHost
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.handleMainIntent
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.navigateDrawerDestination
 import io.github.daisukikaffuchino.han1meviewer.ui.theme.HanimeTheme
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomePageViewModel
+import io.github.daisukikaffuchino.han1meviewer.videoUrlRegex
 import io.github.daisukikaffuchino.utils.showShortToast
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -41,16 +51,25 @@ fun MainActivityContent(
     viewModel: HomePageViewModel,
     pendingNavigationRequests: Flow<Intent>,
     showAuthGuard: Boolean,
+    showSiteSwitchConfirm: Boolean,
+    logoutDialogCloseCurrentPage: Boolean?,
     onOpenAccount: () -> Unit,
     onLogoutClick: () -> Unit,
     onRequireLogin: () -> Unit,
     onSwitchSiteClick: () -> Unit,
+    onDismissSiteSwitch: () -> Unit,
+    onConfirmSiteSwitch: () -> Unit,
+    onDismissLogout: () -> Unit,
+    onConfirmLogout: () -> Unit,
+    onOpenClipboardVideo: (String) -> Unit,
     onNavigateControllerReady: (NavHostController) -> Unit,
 ) {
     HanimeTheme {
         val composeNavController = rememberNavController()
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
         val scope = rememberCoroutineScope()
+        val clipboard = LocalClipboard.current
+        val snackbarHostState = remember { SnackbarHostState() }
         var currentMainDestination by remember { mutableStateOf(MainDestinationSpec.Home) }
         var showUsageNotice by remember { mutableStateOf(!Preferences.usageNoticeAccepted) }
         val isDrawerOpen =
@@ -73,6 +92,24 @@ fun MainActivityContent(
 
         LaunchedEffect(composeNavController) {
             onNavigateControllerReady(composeNavController)
+        }
+        LaunchedEffect(Unit) {
+            val clipboardText = clipboard.getClipEntry()
+                ?.clipData
+                ?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)
+                ?.coerceToText(activity)
+            val videoCode = clipboardText?.let { videoUrlRegex.find(it)?.groupValues?.get(1) }
+            if (videoCode != null) {
+                val result = snackbarHostState.showSnackbar(
+                    message = activity.getString(R.string.detect_ha1_related_link_in_clipboard),
+                    actionLabel = activity.getString(R.string.enter),
+                    withDismissAction = true,
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    onOpenClipboardVideo(videoCode)
+                }
+            }
         }
         LaunchedEffect(Unit) {
             pendingNavigationRequests.collect { intent ->
@@ -154,7 +191,31 @@ fun MainActivityContent(
                     },
                     onDeclined = { activity.finish() },
                 )
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                )
             }
         }
+        ConfirmDialog(
+            visible = showSiteSwitchConfirm,
+            title = stringResource(R.string.confirm_switch_site),
+            message = "",
+            confirmText = stringResource(R.string.sure),
+            dismissText = stringResource(R.string.no),
+            onConfirm = onConfirmSiteSwitch,
+            onDismiss = onDismissSiteSwitch,
+        )
+        ConfirmDialog(
+            visible = logoutDialogCloseCurrentPage != null,
+            title = stringResource(R.string.sure_to_logout),
+            message = "",
+            confirmText = stringResource(R.string.sure),
+            dismissText = stringResource(R.string.no),
+            onConfirm = onConfirmLogout,
+            onDismiss = onDismissLogout,
+        )
     }
 }

@@ -6,7 +6,7 @@ import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.getHanimeShareText
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.myplaylist.PlaylistScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.MyPlayListViewModelV2
-import io.github.daisukikaffuchino.utils.copyTextToClipboard
+import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
 import io.github.daisukikaffuchino.utils.showShortToast
 
 @Composable
@@ -15,6 +15,7 @@ fun MyPlaylistRouteScreen(
     onNavigateToVideo: (String) -> Unit,
 ) {
     val viewModel: MyPlayListViewModelV2 = viewModel()
+    val copyTextToClipboard = rememberCopyTextToClipboard()
     PlaylistScreen(
         viewModel = viewModel,
         navigateBack = onBack,

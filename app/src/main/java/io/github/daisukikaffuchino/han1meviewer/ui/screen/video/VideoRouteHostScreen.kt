@@ -3,9 +3,11 @@ package io.github.daisukikaffuchino.han1meviewer.ui.screen.video
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.graphics.drawable.Icon
@@ -17,7 +19,10 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -30,8 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.coordinatorlayout.widget.CoordinatorLayout
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.core.view.isVisible
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -41,14 +47,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.jzvd.JZMediaInterface
 import cn.jzvd.Jzvd
 import coil.load
-import com.google.android.material.appbar.AppBarLayout
-import com.google.android.material.appbar.CollapsingToolbarLayout
 import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.getHanimeVideoLink
 import io.github.daisukikaffuchino.han1meviewer.logic.DatabaseRepo
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.HKeyframeEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.WatchHistoryEntity
+import io.github.daisukikaffuchino.han1meviewer.logic.model.HanimeVideo
 import io.github.daisukikaffuchino.han1meviewer.logic.exception.ParseException
 import io.github.daisukikaffuchino.han1meviewer.logic.model.SearchOption
 import io.github.daisukikaffuchino.han1meviewer.logic.state.VideoLoadingState
@@ -60,16 +65,14 @@ import io.github.daisukikaffuchino.han1meviewer.ui.view.video.ExoMediaKernel
 import io.github.daisukikaffuchino.han1meviewer.ui.view.video.HJzvdStd
 import io.github.daisukikaffuchino.han1meviewer.ui.view.video.HMediaKernel
 import io.github.daisukikaffuchino.han1meviewer.ui.view.video.HanimeDataSource
-import io.github.daisukikaffuchino.han1meviewer.ui.view.video.VideoPlayerAppBarBehavior
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.CommentViewModel
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.VideoViewModel
+import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
+import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberShareText
 import io.github.daisukikaffuchino.han1meviewer.util.checkBadGuy
 import io.github.daisukikaffuchino.han1meviewer.util.loadAssetAs
 import io.github.daisukikaffuchino.utils.OrientationManager
-import io.github.daisukikaffuchino.utils.browse
-import io.github.daisukikaffuchino.utils.copyToClipboard
 import io.github.daisukikaffuchino.utils.dp
-import io.github.daisukikaffuchino.utils.shareText
 import io.github.daisukikaffuchino.utils.showShortToast
 import io.github.daisukikaffuchino.utils.startActivity
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +87,9 @@ fun VideoRouteHostScreen(
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
+    val copyTextToClipboard = rememberCopyTextToClipboard()
+    val shareText = rememberShareText()
     val viewModel: VideoViewModel = viewModel()
     val commentViewModel: CommentViewModel = viewModel()
     val kernel = remember { HMediaKernel.Type.fromString(Preferences.switchPlayerKernel) }
@@ -123,6 +129,14 @@ fun VideoRouteHostScreen(
     var videoTitle by remember(route.videoCode, route.localUri) { mutableStateOf<String?>(null) }
     var isSideRelatedCollapsed by remember { mutableStateOf(false) }
     var showAddHKeyframeDialog by remember { mutableStateOf<Pair<Long, String>?>(null) }
+    var pendingUnsubscribeArtist by remember { mutableStateOf<HanimeVideo.Artist?>(null) }
+    var showNotificationPermissionReason by remember { mutableStateOf(false) }
+    var showWifiWarning by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) showNotificationPermissionReason = true
+    }
 
     val actions = remember(activity, scope, viewModel, genres) {
         VideoRouteActions(
@@ -133,6 +147,19 @@ fun VideoRouteHostScreen(
             onPendingDownloadPromptChange = { pendingDownloadPrompt = it },
             getCheckedQuality = { checkedQuality },
             setCheckedQuality = { checkedQuality = it },
+            onOpenUri = uriHandler::openUri,
+            onCopyText = copyTextToClipboard,
+            onRequestUnsubscribe = { pendingUnsubscribeArtist = it },
+            onRequestNotificationPermission = {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(
+                        activity,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            },
         )
     }
 
@@ -293,9 +320,9 @@ fun VideoRouteHostScreen(
                 onRequestOpenOfficialDownloadPage = actions::openOfficialDownloadPage,
                 onOpenWebPage = actions::openVideoWebPage,
                 onOpenOriginalComic = actions::openOriginalComic,
-                onOpenShare = { content, title -> shareText(content, title) },
+                onOpenShare = shareText,
                 onCopyText = {
-                    it.copyToClipboard()
+                    copyTextToClipboard(it)
                     showShortToast(R.string.copy_to_clipboard)
                 },
                 onIntroductionLinkClick = actions::openIntroductionLink,
@@ -373,21 +400,15 @@ fun VideoRouteHostScreen(
                 showShortToast(R.string.pause_then_long_press)
             }
         }
+        player.onWifiWarningRequested = { showWifiWarning = true }
         player.onVideoStateChanged = { state ->
             when (state) {
                 Jzvd.STATE_PLAYING, Jzvd.STATE_PREPARING -> {
                     viewModel.setScrollDisabled(true)
-                    shell.withBehavior { behavior ->
-                        behavior.disableScroll = true
-                    }
-                    shell.setExpanded(expanded = true, animate = true)
                 }
 
                 Jzvd.STATE_PAUSE, Jzvd.STATE_AUTO_COMPLETE -> {
                     viewModel.setScrollDisabled(false)
-                    shell.withBehavior { behavior ->
-                        behavior.disableScroll = false
-                    }
                 }
             }
         }
@@ -397,11 +418,6 @@ fun VideoRouteHostScreen(
                 Log.i("JZVD screen state", isFullscreen.toString())
             }
         }
-        shell.setOnOffsetChanged { totalScrollRange, verticalOffset ->
-            viewModel.setAppBarBottomInsetPx(totalScrollRange + verticalOffset)
-            viewModel.setAppBarExpanded(route.videoCode, verticalOffset == 0)
-        }
-        shell.setExpanded(expanded = viewModel.isAppBarExpanded(route.videoCode), animate = false)
         val initialHeight = if (Preferences.tabletMode) {
             350.dp
         } else {
@@ -413,6 +429,7 @@ fun VideoRouteHostScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(orientationManager)
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+            player.onWifiWarningRequested = null
         }
     }
 
@@ -448,7 +465,7 @@ fun VideoRouteHostScreen(
                     is VideoLoadingState.Error -> {
                         state.throwable.localizedMessage?.let { showShortToast(it) }
                         if (state.throwable is ParseException) {
-                            activity.browse(getHanimeVideoLink(route.videoCode))
+                            uriHandler.openUri(getHanimeVideoLink(route.videoCode))
                         }
                     }
 
@@ -459,7 +476,7 @@ fun VideoRouteHostScreen(
                         if (state.info.videoUrls.isEmpty()) {
                             player.startButton.setOnClickListener {
                                 showShortToast(R.string.fail_to_get_video_link)
-                                activity.browse(getHanimeVideoLink(route.videoCode))
+                                uriHandler.openUri(getHanimeVideoLink(route.videoCode))
                             }
                         } else {
                             player.setUp(
@@ -560,25 +577,65 @@ fun VideoRouteHostScreen(
             onDismiss = { showAddHKeyframeDialog = null },
         )
     }
+
+    pendingUnsubscribeArtist?.let { artist ->
+        ConfirmDialog(
+            visible = true,
+            title = activity.getString(R.string.unsubscribe_artist),
+            message = activity.getString(R.string.sure_to_unsubscribe),
+            confirmText = activity.getString(R.string.sure),
+            dismissText = activity.getString(R.string.no),
+            onConfirm = {
+                actions.confirmUnsubscribe(artist)
+                pendingUnsubscribeArtist = null
+            },
+            onDismiss = { pendingUnsubscribeArtist = null },
+        )
+    }
+
+    ConfirmDialog(
+        visible = showNotificationPermissionReason,
+        title = activity.getString(R.string.allow_post_notification),
+        message = activity.getString(R.string.reason_for_download_notification),
+        confirmText = activity.getString(R.string.allow),
+        dismissText = activity.getString(R.string.deny),
+        onConfirm = {
+            showNotificationPermissionReason = false
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        },
+        onDismiss = {
+            showNotificationPermissionReason = false
+            showShortToast(R.string.msg_deny_download_notification)
+        },
+    )
+
+    ConfirmDialog(
+        visible = showWifiWarning,
+        title = activity.getString(R.string.warning),
+        message = activity.getString(cn.jzvd.R.string.tips_not_wifi),
+        confirmText = activity.getString(cn.jzvd.R.string.tips_not_wifi_confirm),
+        dismissText = activity.getString(cn.jzvd.R.string.tips_not_wifi_cancel),
+        onConfirm = {
+            showWifiWarning = false
+            player.confirmWifiPlayback()
+        },
+        onDismiss = {
+            showWifiWarning = false
+            player.cancelWifiPlayback()
+        },
+    )
 }
 
 private fun createVideoPlayerView(activity: MainActivity): HJzvdStd {
-    return HJzvdStd(ContextThemeWrapper(activity, activity.theme)).apply {
-        layoutParams = CollapsingToolbarLayout.LayoutParams(
-            MATCH_PARENT,
-            250.dp,
-        ).apply {
-            collapseMode = CollapsingToolbarLayout.LayoutParams.COLLAPSE_MODE_PARALLAX
-            parallaxMultiplier = 0.7f
-        }
-    }
+    return HJzvdStd(ContextThemeWrapper(activity, activity.theme))
 }
 
 private class VideoRouteShell(
     context: Context,
     private val playerView: HJzvdStd,
 ) {
-    private val rootView = CoordinatorLayout(context).apply {
+    private val rootView = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
         fitsSystemWindows = true
         layoutParams = ViewGroup.LayoutParams(
             MATCH_PARENT,
@@ -586,50 +643,25 @@ private class VideoRouteShell(
         )
     }
 
-    private val appBarLayout = AppBarLayout(context).apply {
-        layoutParams = CoordinatorLayout.LayoutParams(
-            MATCH_PARENT,
-            WRAP_CONTENT,
-        ).apply {
-            behavior = VideoPlayerAppBarBehavior(context, null)
-        }
-    }
-
-    private val collapsingToolbarLayout = CollapsingToolbarLayout(context).apply {
-        layoutParams = AppBarLayout.LayoutParams(
-            MATCH_PARENT,
-            WRAP_CONTENT,
-        ).apply {
-            scrollFlags = AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL or
-                    AppBarLayout.LayoutParams.SCROLL_FLAG_EXIT_UNTIL_COLLAPSED
-        }
-    }
-
     private val videoPlayerHost = FrameLayout(context).apply {
-        layoutParams = CollapsingToolbarLayout.LayoutParams(
+        layoutParams = LinearLayout.LayoutParams(
             MATCH_PARENT,
             WRAP_CONTENT,
-        ).apply {
-            collapseMode = CollapsingToolbarLayout.LayoutParams.COLLAPSE_MODE_PARALLAX
-            parallaxMultiplier = 1f
-        }
+        )
     }
 
     private val videoTabsHost = ComposeView(context).apply {
-        layoutParams = CoordinatorLayout.LayoutParams(
+        layoutParams = LinearLayout.LayoutParams(
             MATCH_PARENT,
-            MATCH_PARENT,
-        ).apply {
-            behavior = AppBarLayout.ScrollingViewBehavior()
-        }
+            0,
+            1f,
+        )
     }
 
     init {
         videoPlayerHost.addView(playerView, ViewGroup.LayoutParams(MATCH_PARENT, 250.dp))
-        collapsingToolbarLayout.addView(videoPlayerHost)
-        appBarLayout.addView(collapsingToolbarLayout)
+        rootView.addView(videoPlayerHost)
         rootView.addView(videoTabsHost)
-        rootView.addView(appBarLayout)
     }
 
     val mainHostView: View
@@ -644,24 +676,6 @@ private class VideoRouteShell(
 
     fun setTabsVisible(visible: Boolean) {
         videoTabsHost.isVisible = visible
-    }
-
-    fun setExpanded(expanded: Boolean, animate: Boolean) {
-        appBarLayout.post {
-            appBarLayout.setExpanded(expanded, animate)
-        }
-    }
-
-    fun setOnOffsetChanged(onChanged: (totalScrollRange: Int, verticalOffset: Int) -> Unit) {
-        appBarLayout.addOnOffsetChangedListener { appBar, verticalOffset ->
-            onChanged(appBar.totalScrollRange, verticalOffset)
-        }
-    }
-
-    fun withBehavior(block: (VideoPlayerAppBarBehavior) -> Unit) {
-        val behavior = (appBarLayout.layoutParams as CoordinatorLayout.LayoutParams)
-            .behavior as? VideoPlayerAppBarBehavior ?: return
-        block(behavior)
     }
 
     fun setPlayerHeight(height: Int) {

@@ -55,8 +55,6 @@ class VideoViewModel(application: Application) : ApplicationViewModel(applicatio
 
     data class VideoHostUiState(
         val selectedTabIndex: Int = 0,
-        val isAppBarExpanded: Boolean = true,
-        val appBarBottomInsetPx: Int = 0,
         val commentBadgeCount: Int = 0,
         val isScrollDisabled: Boolean = false,
         val isInPipMode: Boolean = false,
@@ -69,7 +67,6 @@ class VideoViewModel(application: Application) : ApplicationViewModel(applicatio
         val introRestored: Boolean = false,
         val scrollState: IntroScrollState = IntroScrollState(),
         val selectedTabIndex: Int = 0,
-        val isAppBarExpanded: Boolean = true,
     )
 
     companion object {
@@ -136,19 +133,6 @@ class VideoViewModel(application: Application) : ApplicationViewModel(applicatio
     fun setSelectedTabIndex(videoCode: String, selectedTabIndex: Int) {
         _videoHostUiStateFlow.update { it.copy(selectedTabIndex = selectedTabIndex) }
         updateVideoIntroUiState(videoCode) { copy(selectedTabIndex = selectedTabIndex) }
-    }
-
-    fun isAppBarExpanded(videoCode: String): Boolean {
-        return _videoHostUiStateFlow.value.isAppBarExpanded
-    }
-
-    fun setAppBarExpanded(videoCode: String, isExpanded: Boolean) {
-        _videoHostUiStateFlow.update { it.copy(isAppBarExpanded = isExpanded) }
-        updateVideoIntroUiState(videoCode) { copy(isAppBarExpanded = isExpanded) }
-    }
-
-    fun setAppBarBottomInsetPx(appBarBottomInsetPx: Int) {
-        _videoHostUiStateFlow.update { it.copy(appBarBottomInsetPx = appBarBottomInsetPx) }
     }
 
     fun setCommentBadgeCount(commentBadgeCount: Int) {

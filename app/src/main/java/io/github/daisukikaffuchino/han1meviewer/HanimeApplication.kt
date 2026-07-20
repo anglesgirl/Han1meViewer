@@ -8,9 +8,9 @@ import android.app.Application
 import android.os.Bundle
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
-import com.google.android.material.color.DynamicColors
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
 import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders
+import io.github.daisukikaffuchino.han1meviewer.util.AppLanguageManager
 import io.github.daisukikaffuchino.han1meviewer.util.ThemeUtils
 import io.github.daisukikaffuchino.utils.ActivityManager
 import `is`.xyz.mpv.MPVLib
@@ -33,12 +33,10 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
      */
     override fun onCreate() {
         super.onCreate()
+        AppLanguageManager.applyStoredLanguage(this)
         //applicationContext = this
         registerActivityLifecycleCallbacks(this)
         ThemeUtils.applyDarkModeFromPreferences(this)
-        if (Preferences.useDynamicColor){
-            DynamicColors.applyToActivitiesIfAvailable(this)
-        }
         ProxySelector.setDefault(HProxySelector())
         HProxySelector.rebuildNetwork()
         initNotificationChannel()

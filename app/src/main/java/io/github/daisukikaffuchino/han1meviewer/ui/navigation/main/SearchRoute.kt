@@ -12,7 +12,7 @@ import io.github.daisukikaffuchino.han1meviewer.getHanimeShareText
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.search.AdvancedSearchSheet
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.search.SearchScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.SearchViewModel
-import io.github.daisukikaffuchino.utils.copyTextToClipboard
+import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
 import io.github.daisukikaffuchino.utils.showShortToast
 import kotlinx.serialization.json.Json
 
@@ -23,6 +23,7 @@ fun SearchRouteScreen(
     onNavigateToVideo: (String) -> Unit,
 ) {
     val viewModel: SearchViewModel = viewModel()
+    val copyTextToClipboard = rememberCopyTextToClipboard()
     var showAdvancedSearchSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(route.advancedSearchJson) {

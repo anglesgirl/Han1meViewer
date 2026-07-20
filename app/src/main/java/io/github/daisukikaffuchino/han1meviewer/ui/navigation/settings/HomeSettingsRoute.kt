@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -47,6 +48,7 @@ import io.github.daisukikaffuchino.han1meviewer.HanimeApplication
 import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.logic.BackupManager
+import io.github.daisukikaffuchino.han1meviewer.logic.model.AppLanguage
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.component.ConfirmDialog
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.HomeSettingsScreen
@@ -58,9 +60,9 @@ import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.homeCate
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.saveHomeCategoryPreferences
 import io.github.daisukikaffuchino.han1meviewer.ui.theme.ThemeColorPreset
 import io.github.daisukikaffuchino.han1meviewer.util.ThemeUtils
+import io.github.daisukikaffuchino.han1meviewer.util.AppLanguageManager
 import io.github.daisukikaffuchino.han1meviewer.util.showToast
 import io.github.daisukikaffuchino.utils.ActivityManager
-import io.github.daisukikaffuchino.utils.browse
 import io.github.daisukikaffuchino.utils.folderSize
 import io.github.daisukikaffuchino.utils.showShortToast
 import kotlinx.coroutines.Dispatchers
@@ -81,7 +83,6 @@ private const val HOME_DISABLE_PREDICTIVE_BACK = "disable_predictive_back"
 private const val HOME_TABLET_MODE = "tablet_mode"
 private const val HOME_DISABLE_COMMENTS = "disable_comments"
 private const val HOME_USE_LOCK_SCREEN = "use_lock_screen"
-private const val HOME_APP_LANGUAGE = "app_language"
 private const val HOME_THEME_COLOR = "theme_color"
 private const val HOME_SEARCH_GRID_COLUMNS_COMPACT = "search_grid_columns_compact"
 private const val HOME_SEARCH_GRID_COLUMNS_MEDIUM = "search_grid_columns_medium"
@@ -102,6 +103,7 @@ fun HomeSettingsRouteScreen(
     onNavigateToNetworkSettings: () -> Unit,
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val coroutineScope = rememberCoroutineScope()
     var refreshKey by remember { mutableIntStateOf(0) }
     var cacheKey by remember { mutableIntStateOf(0) }
@@ -280,11 +282,10 @@ fun HomeSettingsRouteScreen(
         onOpenDownloadSettings = onNavigateToDownloadSettings,
         onOpenNetworkSettings = onNavigateToNetworkSettings,
         onOpenAppLanguageSettings = { value ->
-            val old = Preferences.preferenceSp.getString(HOME_APP_LANGUAGE, "system") ?: "system"
-            if (old != value) {
-                Preferences.preferenceSp.edit { putString(HOME_APP_LANGUAGE, value) }
+            val language = AppLanguage.fromPreference(value)
+            if (AppLanguageManager.current(context) != language) {
+                AppLanguageManager.select(context, language)
                 refreshKey++
-                activity.recreate()
             }
         },
         onOpenApplyDeepLinks = {
@@ -312,8 +313,8 @@ fun HomeSettingsRouteScreen(
         onImportBackup = {
             importLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
         },
-        onSubmitBug = { context.browse(HA1_GITHUB_ISSUE_URL) },
-        onOpenForum = { context.browse(HA1_GITHUB_FORUM_URL) },
+        onSubmitBug = { uriHandler.openUri(HA1_GITHUB_ISSUE_URL) },
+        onOpenForum = { uriHandler.openUri(HA1_GITHUB_FORUM_URL) },
     )
 
     ConfirmDialog(
@@ -498,13 +499,12 @@ private fun buildHomeSettingsUiState(
         "always_on" -> context.getString(R.string.always_on)
         else -> Preferences.useDarkMode
     }
-    val appLanguageValue =
-        Preferences.preferenceSp.getString(HOME_APP_LANGUAGE, "system") ?: "system"
-    val appLanguageLabel = when (appLanguageValue) {
-        "system" -> context.getString(R.string.follow_system)
-        "zh-rCN" -> context.getString(R.string.simplified_chinese)
-        "en" -> context.getString(R.string.english_lang)
-        else -> appLanguageValue
+    val appLanguage = AppLanguageManager.current(context)
+    val appLanguageLabel = when (appLanguage) {
+        AppLanguage.SYSTEM -> context.getString(R.string.follow_system)
+        AppLanguage.ENGLISH -> "English"
+        AppLanguage.CHINESE_SIMPLIFIED -> "简体中文"
+        AppLanguage.CHINESE_TRADITIONAL -> "繁體中文"
     }
     val searchGridColumnsConfig = Preferences.searchGridColumnsConfig
     val horizontalCardCountConfig = Preferences.horizontalCardCountConfig
@@ -514,7 +514,7 @@ private fun buildHomeSettingsUiState(
         defaultVideoQuality = Preferences.videoQuality,
         darkMode = Preferences.useDarkMode,
         darkModeLabel = darkModeLabel,
-        appLanguage = appLanguageValue,
+        appLanguage = appLanguage.preferenceValue,
         appLanguageLabel = appLanguageLabel,
         allowPipMode = Preferences.preferenceSp.getBoolean(HOME_ALLOW_PIP_MODE, false),
         allowResumePlayback = Preferences.allowResumePlayback,

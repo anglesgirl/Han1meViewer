@@ -35,7 +35,6 @@ import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.DelayResultUi
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.DohTestResultUi
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.NetworkSettingsScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.NetworkSettingsUiState
-import io.github.daisukikaffuchino.han1meviewer.util.showAlertDialog
 import io.github.daisukikaffuchino.utils.ActivityManager
 import io.github.daisukikaffuchino.utils.applicationContext
 import io.github.daisukikaffuchino.utils.showShortToast
@@ -79,6 +78,7 @@ fun NetworkSettingsRouteScreen() {
     var showCustomMirrorValidationError by remember { mutableStateOf(false) }
     var showCustomMirrorWarningConfirm by remember { mutableStateOf(false) }
     var showDohConflictConfirm by remember { mutableStateOf(false) }
+    var showSocksWarning by remember { mutableStateOf(false) }
     var pendingDomainValue by remember { mutableStateOf("") }
     var pendingUseCustomMirrorSite by remember { mutableStateOf(Preferences.useCustomMirrorSite) }
     var pendingCustomMirrorSite by remember { mutableStateOf(Preferences.customMirrorSite) }
@@ -330,11 +330,7 @@ fun NetworkSettingsRouteScreen() {
                 return@NetworkSettingsScreen
             }
             if (type == HProxySelector.TYPE_SOCKS) {
-                context.showAlertDialog {
-                    setTitle(R.string.warning)
-                    setMessage(R.string.mpv_socks5_warning)
-                    setPositiveButton(R.string.confirm) { _, _ -> }
-                }
+                showSocksWarning = true
             }
             Preferences.preferenceSp.edit(commit = true) {
                 putInt(NETWORK_PROXY_TYPE, type)
@@ -463,6 +459,16 @@ fun NetworkSettingsRouteScreen() {
             HanimeNetwork.rebuildNetwork()
         },
         onDismiss = { showDohConflictConfirm = false },
+    )
+
+    ConfirmDialog(
+        visible = showSocksWarning,
+        title = stringResource(R.string.warning),
+        message = stringResource(R.string.mpv_socks5_warning),
+        confirmText = stringResource(R.string.confirm),
+        dismissText = stringResource(R.string.cancel),
+        onConfirm = { showSocksWarning = false },
+        onDismiss = { showSocksWarning = false },
     )
 }
 

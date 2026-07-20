@@ -244,7 +244,7 @@
     <string name="add_success">添加成功</string>
     <string name="default_">默认</string>
     <string name="alternative">备用</string>
-    <string name="loading">加载中...</string>
+    <string name="loading">加载中…</string>
     <string name="slide_to_choose_list">请从右向左滑动选择列表</string>
     <string name="create_new_playlist">创建新清单</string>
     <string name="delete_watch_later">删除待看</string>
@@ -408,9 +408,9 @@
     <string name="usage_notice_decline">不同意并退出</string>
     <string name="app_lang">语言</string>
     <string name="app_lang_sum">选择应用语言</string>
-    <string name="auth_request">请验证身份🥵</string>
+    <string name="auth_request">请验证身份</string>
     <string name="unlock_method">使用指纹、PIN 或图案解锁</string>
-    <string name="unlock_desc">我们需要确认开〇的是你本人🍄💦</string>
+    <string name="unlock_desc">我们需要确认使用 App 的是你本人</string>
     <string name="disable_comments_sum">启用后，视频详情页不再展示评论区</string>
     <string name="disable_comments_title">关闭评论区</string>
     <string name="default_video_quilty">默认分辨率</string>
@@ -704,32 +704,10 @@
     <string name="debug">调试</string>
     <string name="traditional_chinese">繁体中文</string>
     <string name="simplified_chinese">简体中文</string>
-    <string name="english_lang">英语</string>
-    <string name="hanime_app_name" translatable="false">Han1meViewer</string>
-    <string name="appbar_scrolling_view_behavior" translatable="false">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
-    <string name="animation_2_5d" translatable="false">2.5D</string>
-    <string name="mmd" translatable="false">MMD</string>
-    <string name="anime_4k" translatable="false">Anime\n4k</string>
-    <string name="http" translatable="false">HTTP</string>
-    <string name="socks" translatable="false">SOCKS</string>
-    <string name="http_proxy" translatable="false">HTTP %1$s:%2$d</string>
-    <string name="socks_proxy" translatable="false">SOCKS %1$s:%2$d</string>
-    <string name="search_grid_columns_range_compact" translatable="false">≤600dp</string>
-    <string name="search_grid_columns_range_medium" translatable="false">601-900dp</string>
-    <string name="search_grid_columns_range_expanded" translatable="false">901-1200dp</string>
-    <string name="search_grid_columns_range_large" translatable="false">≥1201dp</string>
-    <string name="horizontal_card_count_range_narrow" translatable="false">&lt;350dp</string>
-    <string name="horizontal_card_count_range_compact" translatable="false">350-599dp</string>
-    <string name="horizontal_card_count_range_medium" translatable="false">600-839dp</string>
-    <string name="horizontal_card_count_range_expanded" translatable="false">≥840dp</string>
-    <string name="watch_history_minutes_short" translatable="false">%1$d 分钟</string>
-    <string name="import_progress_format" translatable="false">%d / %d（%d%%）</string>
-    <string name="zero_percent" translatable="false">0%</string>
-    <string name="blank_brackets" translatable="false">( %1$d )</string>
-    <string name="download_progress_percent" translatable="false">%1$d%%</string>
-    <string name="cookies_label" translatable="false">Cookies</string>
+    <string name="watch_history_minutes_short">%1$d 分钟</string>
     <string name="invalid_ip_or_port">无效的 IPv4 地址或端口 (0..65535)</string>
     <string name="click_to_restart">点击重新开始</string>
     <string name="replay">重播</string>
     <string name="video_loading_failed">视频加载失败</string>
+
 </resources>

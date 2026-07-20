@@ -1,21 +1,22 @@
 package io.github.daisukikaffuchino.han1meviewer.ui.component
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.ComponentPreview
+import io.github.daisukikaffuchino.han1meviewer.ui.theme.HanimeDefaults
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChoiceDialog(
     title: String,
@@ -27,32 +28,36 @@ fun ChoiceDialog(
 ) {
     if (!visible) return
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                options.forEach { (label, value) ->
-                    SettingChoiceItem(
-                        title = label,
-                        selected = selectedValue == value,
-                        onClick = { onSelect(value) },
-                    )
-                }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = HanimeDefaults.settingsItemVerticalPadding,
+            ),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(
+                    horizontal = HanimeDefaults.screenVerticalPadding,
+                    vertical = HanimeDefaults.settingsItemPadding,
+                ),
+            )
+            options.forEach { (label, value) ->
+                val selected = selectedValue == value
+                ListItem(
+                    onClick = { onSelect(value) },
+                    selected = selected,
+                    leadingContent = {
+                        RadioButton(selected = selected, onClick = null)
+                    },
+                    content = { Text(label) },
+                    colors = ListItemDefaults.colors(
+                        containerColor = BottomSheetDefaults.ContainerColor,
+                    ),
+                )
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
-        },
-    )
+        }
+    }
 }
 
 @Preview(showBackground = true, showSystemUi = true)
@@ -65,7 +70,6 @@ private fun ChoiceDialogPreview() {
             selectedValue = "exo",
             onDismiss = {},
             onSelect = {},
-            visible = true,
         )
     }
 }

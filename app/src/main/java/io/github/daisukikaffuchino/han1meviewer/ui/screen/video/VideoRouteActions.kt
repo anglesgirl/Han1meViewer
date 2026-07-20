@@ -1,9 +1,6 @@
 package io.github.daisukikaffuchino.han1meviewer.ui.screen.video
 
 import android.content.Context
-import android.content.Intent
-import android.widget.Toast
-import androidx.core.net.toUri
 import io.github.daisukikaffuchino.han1meviewer.HAdvancedSearch
 import io.github.daisukikaffuchino.han1meviewer.HCacheManager
 import io.github.daisukikaffuchino.han1meviewer.Preferences
@@ -16,12 +13,8 @@ import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.navigateSafely
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.SearchRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.VideoViewModel
-import io.github.daisukikaffuchino.han1meviewer.util.requestPostNotificationPermission
-import io.github.daisukikaffuchino.han1meviewer.util.showAlertDialog
 import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManager
 import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadWorker
-import io.github.daisukikaffuchino.utils.browse
-import io.github.daisukikaffuchino.utils.copyToClipboard
 import io.github.daisukikaffuchino.utils.showShortToast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +31,10 @@ class VideoRouteActions(
     private val onPendingDownloadPromptChange: (DownloadPromptState?) -> Unit,
     private val getCheckedQuality: () -> String?,
     private val setCheckedQuality: (String?) -> Unit,
+    private val onOpenUri: (String) -> Unit,
+    private val onCopyText: (String) -> Unit,
+    private val onRequestUnsubscribe: (HanimeVideo.Artist) -> Unit,
+    private val onRequestNotificationPermission: () -> Unit,
 ) {
     fun openArtistSearch(artist: HanimeVideo.Artist) {
         val searchKey = genres.firstOrNull { option ->
@@ -73,17 +70,15 @@ class VideoRouteActions(
             return
         }
         if (artist.isSubscribed) {
-            context.showAlertDialog {
-                setTitle(R.string.unsubscribe_artist)
-                setMessage(R.string.sure_to_unsubscribe)
-                setPositiveButton(R.string.sure) { _, _ ->
-                    viewModel.unsubscribeArtist(post.userId, post.artistId)
-                }
-                setNegativeButton(R.string.no, null)
-            }
+            onRequestUnsubscribe(artist)
         } else {
             viewModel.subscribeArtist(post.userId, post.artistId)
         }
+    }
+
+    fun confirmUnsubscribe(artist: HanimeVideo.Artist) {
+        val post = artist.post ?: return
+        viewModel.unsubscribeArtist(post.userId, post.artistId)
     }
 
     fun toggleFavorite(video: HanimeVideo) {
@@ -129,28 +124,24 @@ class VideoRouteActions(
 
     fun openIntroductionLink(link: String) {
         try {
-            context.browse(link)
+            onOpenUri(link)
         } catch (_: Exception) {
-            link.copyToClipboard()
+            onCopyText(link)
             showShortToast(R.string.copy_to_clipboard)
         }
     }
 
     fun openOriginalComic(comicLink: String) {
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, comicLink.toUri()))
-        } catch (_: Exception) {
-            Toast.makeText(context, context.getString(R.string.fault_prompt), Toast.LENGTH_SHORT)
-                .show()
-        }
+        runCatching { onOpenUri(comicLink) }
+            .onFailure { showShortToast(R.string.fault_prompt) }
     }
 
     fun openVideoWebPage() {
-        context.browse(getHanimeVideoLink(viewModel.videoCode))
+        onOpenUri(getHanimeVideoLink(viewModel.videoCode))
     }
 
     fun openOfficialDownloadPage() {
-        context.browse(getHanimeVideoDownloadLink(viewModel.videoCode))
+        onOpenUri(getHanimeVideoDownloadLink(viewModel.videoCode))
     }
 
     fun startDownloadFlow(videoData: HanimeVideo) {
@@ -173,7 +164,7 @@ class VideoRouteActions(
     }
 
     private suspend fun enqueueDownloadWork(videoData: HanimeVideo, redownload: Boolean = false) {
-        context.requestPostNotificationPermission()
+        onRequestNotificationPermission()
         val quality = getCheckedQuality()
         withContext(Dispatchers.IO) {
             HCacheManager.saveHanimeVideoInfo(context, viewModel.videoCode, videoData)

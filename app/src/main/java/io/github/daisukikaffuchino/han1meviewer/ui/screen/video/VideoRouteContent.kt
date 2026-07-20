@@ -1,12 +1,10 @@
 package io.github.daisukikaffuchino.han1meviewer.ui.screen.video
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.preference.PreferenceManager
 import io.github.daisukikaffuchino.han1meviewer.R
@@ -67,9 +65,7 @@ fun VideoRouteContent(
             tabs = tabs,
             selectedTabIndex = hostUiState.selectedTabIndex,
             onSelectedTabChange = { videoViewModel.setSelectedTabIndex(videoCode, it) },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = with(LocalDensity.current) { hostUiState.appBarBottomInsetPx.toDp() }),
+            modifier = Modifier.fillMaxSize(),
         ) { page ->
             if (page == 0) {
                 RenderVideoIntroductionContent(

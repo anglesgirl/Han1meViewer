@@ -244,7 +244,7 @@ Some mirrors may not support login, may not share cookies, may fail verification
     <string name="add_success">Addition Successful</string>
     <string name="default_">Default</string>
     <string name="alternative">Alternative</string>
-    <string name="loading">Loading...</string>
+    <string name="loading">Loading…</string>
     <string name="slide_to_choose_list">Slide right to choose list</string>
     <string name="create_new_playlist">Create New Playlist</string>
     <string name="delete_watch_later">Delete Watch Later</string>
@@ -402,9 +402,9 @@ Recommendations are as follows:\n
     <string name="usage_notice_decline">Disagree and exit</string>
     <string name="app_lang">Language</string>
     <string name="app_lang_sum">Select the application language</string>
-    <string name="auth_request">Verify Your Identity🥵</string>
+    <string name="auth_request">Verify Your Identity</string>
     <string name="unlock_method">Use fingerprint, PIN, or pattern to unlock</string>
-    <string name="unlock_desc">We need to confirm it\'s really you Mast****tion🍄💦</string>
+    <string name="unlock_desc">We need to confirm that it is you who is using the App</string>
     <string name="disable_comments_title">Disable Comments</string>
     <string name="disable_comments_sum">When enabled, the comment section will be hidden on the video details page</string>
     <string name="default_video_quilty">Default video resolution</string>
@@ -697,21 +697,9 @@ Recommendations are as follows:\n
     <string name="home_category_layout_summary">Showing %1$d / %2$d sections</string>
     <string name="home_category_layout_dialog_summary">Long press and drag a section to reorder it. Turn off the switch to hide a section.</string>
     <string name="debug">Debug</string>
-    <string-array name="lang_display_names">
-        <item>跟随系统</item>
-        <item>简体中文</item>
-        <item>English</item>
-    </string-array>
-    <string-array name="lang_values">
-        <item>system</item>
-        <item>zh-rCN</item>
-        <item>en</item>
-    </string-array>
-    <string name="traditional_chinese">简体中文</string>
-    <string name="simplified_chinese">繁体中文</string>
-    <string name="english_lang">英语</string>
+    <string name="traditional_chinese">Traditional Chinese</string>
+    <string name="simplified_chinese">Simplified Chinese</string>
     <string name="hanime_app_name" translatable="false">Han1meViewer</string>
-    <string name="appbar_scrolling_view_behavior" translatable="false">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
     <string name="animation_2_5d" translatable="false">2.5D</string>
     <string name="mmd" translatable="false">MMD</string>
     <string name="anime_4k" translatable="false">Anime\n4k</string>
@@ -727,7 +715,7 @@ Recommendations are as follows:\n
     <string name="horizontal_card_count_range_compact" translatable="false">350-599dp</string>
     <string name="horizontal_card_count_range_medium" translatable="false">600-839dp</string>
     <string name="horizontal_card_count_range_expanded" translatable="false">≥840dp</string>
-    <string name="watch_history_minutes_short" translatable="false">%1$dm</string>
+    <string name="watch_history_minutes_short">%1$dm</string>
     <string name="import_progress_format" translatable="false">%d / %d（%d%%）</string>
     <string name="zero_percent" translatable="false">0%</string>
     <string name="blank_brackets" translatable="false">( %1$d )</string>

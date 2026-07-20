@@ -46,14 +46,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -75,10 +77,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.component.content.ErrorConten
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.ComponentPreview
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.rememberRandomLoadingHint
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.UserAccountViewModel
-import io.github.daisukikaffuchino.han1meviewer.util.pickVisualMedia
-import io.github.daisukikaffuchino.utils.browse
 import io.github.daisukikaffuchino.utils.showShortToast
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -91,7 +90,12 @@ fun AccountScreen(
     onRefreshHome: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val avatarPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let { onOpenAvatarCrop(it.toString()) }
+    }
     val state by viewModel.accountState.collectAsStateWithLifecycle()
     val submittingState by viewModel.submittingState.collectAsStateWithLifecycle()
     val modifyFailed = stringResource(R.string.modify_failed)
@@ -166,12 +170,14 @@ fun AccountScreen(
                 onUpdateProfile = viewModel::updateProfile,
                 onUpdatePassword = viewModel::updatePassword,
                 onPickAvatar = {
-                    val pickedUri = context.pickVisualMedia(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    if (pickedUri != null) {
-                        onOpenAvatarCrop(pickedUri.toString())
-                    }
+                    avatarPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
                 },
                 onLogout = onLogout,
+                onOpenPasswordReset = {
+                    uriHandler.openUri("${io.github.daisukikaffuchino.han1meviewer.HANIME_BASE_URL}password/reset")
+                },
             )
         }
     }
@@ -185,12 +191,11 @@ private fun AccountContent(
     contentPadding: PaddingValues,
     onUpdateProfile: (String, String) -> Unit,
     onUpdatePassword: (String, String, String) -> Unit,
-    onPickAvatar: suspend () -> Unit,
+    onPickAvatar: () -> Unit,
     onLogout: () -> Unit,
+    onOpenPasswordReset: () -> Unit,
 ) {
-    val context = LocalContext.current
     val scrollState = rememberScrollState()
-    val scope = rememberCoroutineScope()
 
     var name by rememberSaveable(account.username) { mutableStateOf(account.username) }
     var email by rememberSaveable(account.email) { mutableStateOf(account.email) }
@@ -243,7 +248,7 @@ private fun AccountContent(
                     )
 
                     SmallFloatingActionButton(
-                        onClick = { scope.launch { onPickAvatar() } },
+                        onClick = onPickAvatar,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .offset(x = 4.dp, y = 4.dp),
@@ -430,7 +435,7 @@ private fun AccountContent(
                 )
 
                 TextButton(
-                    onClick = { context.browse("${io.github.daisukikaffuchino.han1meviewer.HANIME_BASE_URL}password/reset") },
+                    onClick = onOpenPasswordReset,
                     modifier = Modifier.align(Alignment.Start),
                     contentPadding = PaddingValues(horizontal = 0.dp)
                 ) {
@@ -497,7 +502,7 @@ private fun AccountScreenPreview() {
                 username = "你的名字",
                 email = "username@gmail.com",
                 userId = "987654",
-                joinedLabel = "加入�?1年前",
+                joinedLabel = "加入新1年前",
                 subscriberCount = 0,
                 videoCount = 9,
             ),
@@ -506,6 +511,7 @@ private fun AccountScreenPreview() {
             onUpdatePassword = { _, _, _ -> },
             onPickAvatar = {},
             onLogout = {},
+            onOpenPasswordReset = {},
             submittingState = UserAccountSubmittingState.Idle,
         )
     }

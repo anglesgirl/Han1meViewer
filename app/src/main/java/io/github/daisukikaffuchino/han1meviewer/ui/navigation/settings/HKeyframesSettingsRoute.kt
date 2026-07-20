@@ -29,7 +29,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.HKeyframeSett
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.HKeyframesScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.SharedHKeyframesScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.SettingsViewModel
-import io.github.daisukikaffuchino.utils.copyToClipboard
+import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
 import io.github.daisukikaffuchino.utils.decodeFromStringByBase64
 import io.github.daisukikaffuchino.utils.showShortToast
 import kotlinx.serialization.json.Json
@@ -57,6 +57,7 @@ fun HKeyframesRouteScreen(
     onImportDialogDismiss: () -> Unit,
 ) {
     val viewModel: SettingsViewModel = viewModel()
+    val copyTextToClipboard = rememberCopyTextToClipboard()
     val items by viewModel.loadAllHKeyframes()
         .collectAsStateWithLifecycle(initialValue = emptyList())
     var sharedHKeyframeEntity by remember { mutableStateOf<HKeyframeEntity?>(null) }
@@ -95,7 +96,7 @@ fun HKeyframesRouteScreen(
             showShortToast(R.string.modify_success)
         },
         onCopyShareContent = {
-            it.copyToClipboard()
+            copyTextToClipboard(it)
             showShortToast(R.string.copy_to_clipboard)
         },
     )

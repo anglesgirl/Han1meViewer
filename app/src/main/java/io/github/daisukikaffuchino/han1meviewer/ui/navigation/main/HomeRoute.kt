@@ -17,7 +17,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.component.ConfirmDialog
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomePageScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomeUiEvent
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.LocalSearchHistoryQuery
-import io.github.daisukikaffuchino.utils.copyTextToClipboard
+import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
 import io.github.daisukikaffuchino.utils.showShortToast
 import kotlinx.coroutines.flow.first
 
@@ -32,6 +32,7 @@ fun HomeRouteScreen(
     onNavigateToVideo: (String) -> Unit,
 ) {
     val viewModel = activity.viewModel
+    val copyTextToClipboard = rememberCopyTextToClipboard()
     val confirmToExit = stringResource(R.string.confirm_to_exit)
     val confirmExitMessage = stringResource(R.string.confirm_exit_message)
     val cancel = stringResource(R.string.cancel)

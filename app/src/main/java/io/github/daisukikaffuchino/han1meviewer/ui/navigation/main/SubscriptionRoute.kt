@@ -7,7 +7,7 @@ import io.github.daisukikaffuchino.han1meviewer.getHanimeSearchShareText
 import io.github.daisukikaffuchino.han1meviewer.getHanimeShareText
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.SubscriptionScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.MySubscriptionsViewModel
-import io.github.daisukikaffuchino.utils.copyTextToClipboard
+import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
 import io.github.daisukikaffuchino.utils.showShortToast
 
 @Composable
@@ -17,6 +17,7 @@ fun SubscriptionRouteScreen(
     onNavigateToVideo: (String) -> Unit,
 ) {
     val viewModel: MySubscriptionsViewModel = viewModel()
+    val copyTextToClipboard = rememberCopyTextToClipboard()
     SubscriptionScreen(
         navigateBack = onBack,
         viewModel = viewModel,
