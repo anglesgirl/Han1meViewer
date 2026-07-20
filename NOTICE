@@ -1,0 +1,28 @@
+Han1meViewer Attribution Notice
+
+The combined Han1meViewer project is distributed under the GNU General Public
+License, version 3. See LICENSE.
+
+MomoQR
+------
+This repository contains code derived from MomoQR by daisukiKaffuChino:
+
+    https://github.com/daisukiKaffuChino/MomoQR
+
+The MomoQR-derived code is licensed under the GNU GPLv3. This attribution and
+the applicable GPLv3 terms must be retained when that code is redistributed.
+
+Legacy Han1meViewer attribution
+-------------------------------
+Some historical portions originated from the earlier Han1meViewer project by
+Yenaly. The original declaration was:
+
+    Copyright 2021 Yenaly
+
+Those historical portions were originally released under the Apache License,
+Version 2.0. The original Apache-2.0 license text is preserved in
+LICENSE-APACHE. This is a legacy attribution and does not replace the GPLv3
+terms applicable to the combined work.
+
+Third-party dependencies retain their respective licenses. Their metadata is
+also listed in the application's Open Source Licenses page.

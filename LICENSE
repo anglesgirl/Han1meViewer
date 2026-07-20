@@ -1,37 +1,3 @@
-Han1meViewer License Notice
-
-Han1meViewer is distributed as a combined work under the GNU General Public
-License, version 3 (GPLv3). See the license text below.
-
-Copyright (C) 2026 daisukiKaffuChino and contributors.
-
-MomoQR attribution
-------------------
-This repository contains code derived from MomoQR by daisukiKaffuChino:
-
-    https://github.com/daisukiKaffuChino/MomoQR
-
-The MomoQR-derived code is licensed under the GNU GPLv3. This attribution and
-the GPLv3 terms must be retained when the corresponding code is redistributed.
-
-Legacy attribution
-------------------
-This repository also contains historical portions originating from the
-earlier Han1meViewer project by Yenaly. The original declaration was:
-
-    Copyright 2021 Yenaly
-
-Those historical portions were originally released under the Apache License,
-Version 2.0. The original Apache-2.0 license text is preserved in
-`LICENSE-APACHE` for attribution and reference. This is a legacy attribution;
-it does not replace the GPLv3 terms applicable to this combined work.
-
-Third-party dependencies retain their respective licenses. The in-app Open
-Source Licenses page lists the dependency and license metadata collected for
-the application.
-
-------------------------------------------------------------------------
-
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
@@ -665,8 +631,8 @@ to attach them to the start of each source file to most effectively
 state the exclusion of warranty; and each file should have at least
 the "copyright" line and a pointer to where the full notice is found.
 
-    <one line to give the program's name and a brief idea of what it does.>
-    Copyright (C) <year>  <name of author>
+    Han1meViewer
+    Copyright (C) 2026  daisukiKaffuChino
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -686,7 +652,7 @@ Also add information on how to contact you by electronic and paper mail.
   If the program does terminal interaction, make it output a short
 notice like this when it starts in an interactive mode:
 
-    <program>  Copyright (C) <year>  <name of author>
+    Han1meViewer  Copyright (C) 2026  daisukiKaffuChino
     This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
     This is free software, and you are welcome to redistribute it
     under certain conditions; type `show c' for details.
