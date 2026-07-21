@@ -3,7 +3,6 @@ package io.github.daisukikaffuchino.han1meviewer
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import androidx.preference.PreferenceManager
 import io.github.daisukikaffuchino.han1meviewer.HanimeConstants.HANIME_URL
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
 import io.github.daisukikaffuchino.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
@@ -11,6 +10,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.SettingsP
 import io.github.daisukikaffuchino.han1meviewer.ui.view.video.HJzvdStd
 import io.github.daisukikaffuchino.han1meviewer.ui.view.video.HMediaKernel
 import io.github.daisukikaffuchino.han1meviewer.util.CookieString
+import io.github.daisukikaffuchino.han1meviewer.util.defaultSharedPreferences
 import io.github.daisukikaffuchino.han1meviewer.util.SafFileManager
 import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManager
 import io.github.daisukikaffuchino.utils.applicationContext
@@ -21,13 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 object Preferences {
     private const val USAGE_NOTICE_ACCEPTED = "usage_notice_accepted"
 
-    /**
-     * [Preference][androidx.preference.PreferenceFragmentCompat]自帶的SP
-     */
     val preferenceSp: SharedPreferences
-        get() = PreferenceManager.getDefaultSharedPreferences(
-            applicationContext
-        )
+        get() = applicationContext.defaultSharedPreferences
 
     // app 相關
 

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -22,7 +21,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +41,7 @@ import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.logic.state.PageState
 import io.github.daisukikaffuchino.han1meviewer.logic.state.dataOrNull
 import io.github.daisukikaffuchino.han1meviewer.ui.component.PageContent
+import io.github.daisukikaffuchino.han1meviewer.ui.component.appbar.HanimeTopAppBar
 import io.github.daisukikaffuchino.han1meviewer.ui.component.isFirstPageEmpty
 import io.github.daisukikaffuchino.han1meviewer.ui.component.isFirstPageError
 import io.github.daisukikaffuchino.han1meviewer.ui.component.isFirstPageLoading
@@ -75,7 +74,7 @@ fun GetchuPreviewScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        TopAppBar(
+        HanimeTopAppBar(
             title = {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = { monthMenuExpanded = true }) {
@@ -112,11 +111,7 @@ fun GetchuPreviewScreen(
                     }
                 }
             },
-            navigationIcon = {
-                FilledIconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Default.ArrowBack, stringResource(R.string.back))
-                }
-            },
+            onBack = onBack,
             actions = {
                 FilledIconButton(onClick = { dateCode = shiftGetchuMonthCode(dateCode, -1) }) {
                     Icon(Icons.AutoMirrored.Default.KeyboardArrowLeft, null)

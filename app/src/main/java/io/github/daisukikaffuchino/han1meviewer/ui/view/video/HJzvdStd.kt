@@ -73,7 +73,6 @@ import androidx.core.view.isVisible
 import androidx.core.view.size
 import androidx.core.view.updatePadding
 import androidx.fragment.app.FragmentActivity
-import androidx.preference.PreferenceManager
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -91,6 +90,7 @@ import io.github.daisukikaffuchino.han1meviewer.logic.entity.HKeyframeEntity
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.HomeRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.theme.HanimeTheme
+import io.github.daisukikaffuchino.han1meviewer.util.defaultSharedPreferences
 import io.github.daisukikaffuchino.utils.OrientationManager
 import io.github.daisukikaffuchino.utils.appScreenWidth
 import io.github.daisukikaffuchino.utils.findActivityOrNull
@@ -479,7 +479,7 @@ class HJzvdStd @JvmOverloads constructor(
     }
     override fun setUp(jzDataSource: JZDataSource?, screen: Int, clazz: Class<*>) {
         super.setUp(jzDataSource, screen, clazz)
-        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val prefs = context.defaultSharedPreferences
         val preferredQuality = prefs.getString("default_video_quality", null)
         if (Preferences.disableMobileDataWarning){
             WIFI_TIP_DIALOG_SHOWED = true

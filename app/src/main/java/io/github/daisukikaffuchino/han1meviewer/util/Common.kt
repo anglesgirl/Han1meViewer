@@ -51,15 +51,12 @@ fun getSha(context: Context, res: Int): String {
 fun checkBadGuy(context: Context, res: Int): IntArray {
     try {
         val sha = getSha(context, res)
-        if (!isLegalBuild(context, sha)){
-//            Preferences.preferenceSp.edit {
-//                putString(NetworkSettingsFragment.DOMAIN_NAME,"http://hanime.c0m")
-//            }
-            return intArrayOf(R.string.app_tampered, R.string.app_tampered)
+        return if (!isLegalBuild(context, sha)) {
+            intArrayOf(R.string.app_tampered, R.string.app_tampered)
         } else {
-            return intArrayOf(R.string.introduction, R.string.comment)
+            intArrayOf(R.string.introduction, R.string.comment)
         }
-    } catch (e: java.lang.Exception){
+    } catch (e: java.lang.Exception) {
         showShortToast("${e.message}")
         return intArrayOf(R.string.introduction, R.string.comment)
     }

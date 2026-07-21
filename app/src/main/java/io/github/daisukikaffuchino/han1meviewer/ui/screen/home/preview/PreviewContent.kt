@@ -36,7 +36,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +54,7 @@ import io.github.daisukikaffuchino.han1meviewer.pienization
 import io.github.daisukikaffuchino.han1meviewer.ui.component.content.EmptyContent
 import io.github.daisukikaffuchino.han1meviewer.ui.component.content.ErrorContent
 import io.github.daisukikaffuchino.han1meviewer.ui.component.content.LoadingContent
+import io.github.daisukikaffuchino.han1meviewer.ui.component.appbar.HanimeTopAppBar
 import io.github.daisukikaffuchino.han1meviewer.ui.component.lazy.LazyColumn
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.rememberRandomLoadingHint
 
@@ -69,7 +69,7 @@ fun PreviewContent(
 ) {
     val loadingHint = rememberRandomLoadingHint()
     Column(modifier = modifier.fillMaxSize()) {
-        TopAppBar(
+        HanimeTopAppBar(
             title = {
                 AnimatedContent(
                     targetState = uiState.currentDateLabel,
@@ -97,14 +97,7 @@ fun PreviewContent(
                     Text(stringResource(R.string.latest_hanime_list_monthly, animatedDateLabel))
                 }
             },
-            navigationIcon = {
-                FilledIconButton(onClick = { onEvent(PreviewEvent.OnBack) }) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_baseline_arrow_back_24),
-                        contentDescription = stringResource(R.string.back),
-                    )
-                }
-            },
+            onBack = { onEvent(PreviewEvent.OnBack) },
             actions = {
                 FilledIconButton(onClick = { onEvent(PreviewEvent.OnOpenGetchuPreview) }) {
                     Icon(

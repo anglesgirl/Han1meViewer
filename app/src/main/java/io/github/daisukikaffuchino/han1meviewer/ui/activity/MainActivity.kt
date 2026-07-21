@@ -24,7 +24,6 @@ import androidx.core.content.edit
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.NavHostController
-import androidx.preference.PreferenceManager
 import io.github.daisukikaffuchino.han1meviewer.HanimeConstants.ANIME_URL
 import io.github.daisukikaffuchino.han1meviewer.HanimeConstants.HANIME_URL
 import io.github.daisukikaffuchino.han1meviewer.Preferences
@@ -34,6 +33,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.bridge.VideoPageHost
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.navigateSafely
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.AccountRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.VideoRoute
+import io.github.daisukikaffuchino.han1meviewer.util.defaultSharedPreferences
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.SettingsPreferenceKeys
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.main.MainActivityContent
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomePageViewModel
@@ -107,7 +107,7 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val prefs = defaultSharedPreferences
         val useLock = prefs.getBoolean("use_lock_screen", false)
 
         if (useLock && isDeviceSecureCompat(this)) {
@@ -264,7 +264,7 @@ class MainActivity : BaseActivity() {
         super.onUserLeaveHint()
         val currentFragment = currentVideoHost
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val prefs = defaultSharedPreferences
         val allowPip = prefs.getBoolean("allow_pip_mode", true)
 
         Log.i("pipmode", "enter pip mode?\n$currentFragment\nallowpip:$allowPip\n")

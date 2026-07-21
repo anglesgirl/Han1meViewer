@@ -1,6 +1,7 @@
 package io.github.daisukikaffuchino.han1meviewer.ui.component.appbar
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -28,14 +29,13 @@ fun HanimeScaffold(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
     subtitle: (@Composable () -> Unit)? = null,
-    actions: @Composable () -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {},
     scrollBehavior: TopAppBarScrollBehavior? = null,
     floatingActionButton: @Composable () -> Unit = {},
     snackbarHost: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    Scaffold(
-        modifier = modifier,
+    HanimeScaffold(
         topBar = {
             HanimeTopAppBar(
                 title = title,
@@ -45,6 +45,52 @@ fun HanimeScaffold(
                 scrollBehavior = scrollBehavior,
             )
         },
+        modifier = modifier,
+        floatingActionButton = floatingActionButton,
+        snackbarHost = snackbarHost,
+        content = content,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HanimeScaffold(
+    title: @Composable () -> Unit,
+    onBack: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {},
+    scrollBehavior: TopAppBarScrollBehavior? = null,
+    floatingActionButton: @Composable () -> Unit = {},
+    snackbarHost: @Composable () -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit,
+) {
+    HanimeScaffold(
+        topBar = {
+            HanimeTopAppBar(
+                title = title,
+                onBack = onBack,
+                actions = actions,
+                scrollBehavior = scrollBehavior,
+            )
+        },
+        modifier = modifier,
+        floatingActionButton = floatingActionButton,
+        snackbarHost = snackbarHost,
+        content = content,
+    )
+}
+
+@Composable
+fun HanimeScaffold(
+    topBar: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    floatingActionButton: @Composable () -> Unit = {},
+    snackbarHost: @Composable () -> Unit = {},
+    content: @Composable (PaddingValues) -> Unit,
+) {
+    Scaffold(
+        modifier = modifier,
+        topBar = topBar,
         floatingActionButton = floatingActionButton,
         snackbarHost = snackbarHost,
         containerColor = HanimeDefaults.Colors.Background,
