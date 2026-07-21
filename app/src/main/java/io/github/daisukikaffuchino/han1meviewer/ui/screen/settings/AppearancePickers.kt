@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.SettingsBrightness
 import androidx.compose.material3.ButtonShapes
 import androidx.compose.material3.Icon
@@ -96,7 +97,7 @@ fun DarkModePicker(
         DarkModeOption(
             value = "follow_system",
             title = stringResource(R.string.follow_system),
-            icon = Icons.Outlined.SettingsBrightness,
+            icon = Icons.Outlined.Lightbulb,
             dark = systemDark,
         ),
         DarkModeOption(

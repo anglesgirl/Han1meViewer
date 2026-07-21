@@ -319,7 +319,7 @@ fun HomeSettingsScreen(
                             title = stringResource(R.string.disable_predictive_back_title),
                             summary = stringResource(R.string.temporarily_unavailable),
                             checked = state.disablePredictiveBack,
-                            iconRes = R.drawable.ic_baseline_arrow_back_24,
+                            iconRes = R.drawable.swipe_right_24px,
                             onCheckedChange = onDisablePredictiveBackChange,
                             enabled = false,
                         )

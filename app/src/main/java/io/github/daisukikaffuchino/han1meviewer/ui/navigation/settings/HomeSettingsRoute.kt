@@ -525,7 +525,7 @@ private fun buildHomeSettingsUiState(
         cacheSummary = cacheSummary,
         versionSummary = context.getString(
             R.string.current_version,
-            "v${BuildConfig.VERSION_NAME}"
+            "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})"
         ),
         dynamicColorEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
         themeAccentColorId = Preferences.preferenceSp.getInt(HOME_THEME_ACCENT_COLOR, 0),

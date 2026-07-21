@@ -74,6 +74,12 @@ android {
         disable += setOf("EnsureInitializerMetadata")
     }
     namespace = "io.github.daisukikaffuchino.han1meviewer"
+
+    @Suppress("UnstableApiUsage")
+    androidResources {
+        generateLocaleConfig = true
+    }
+
 }
 
 kotlin {
