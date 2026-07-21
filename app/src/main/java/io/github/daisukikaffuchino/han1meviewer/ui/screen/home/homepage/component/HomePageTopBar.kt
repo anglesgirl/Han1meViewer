@@ -67,7 +67,7 @@ fun HomePageTopBar(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        stringResource(R.string.search_placeholder),
+                        stringResource(R.string.global_search),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyLarge,
                     )
@@ -77,7 +77,7 @@ fun HomePageTopBar(
         navigationIcon = {
             IconButton(onClick = onOpenDrawer) {
                 Icon(
-                    imageVector = Icons.Default.Menu,
+                    painter = painterResource(R.drawable.menu_24px),
                     contentDescription = stringResource(R.string.open_menu),
                 )
             }

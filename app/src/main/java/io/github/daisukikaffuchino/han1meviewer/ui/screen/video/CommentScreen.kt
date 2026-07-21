@@ -213,16 +213,20 @@ fun CommentScreen(
                     enter = fadeIn() + slideInVertically { it / 2 },
                     exit = fadeOut() + slideOutVertically { it / 2 },
                 ) {
-                    ExtendedFloatingActionButton(
-                        text = { Text(stringResource(R.string.comment)) },
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_baseline_reply_24),
-                                contentDescription = null,
-                            )
-                        },
-                        onClick = { showCommentBar = true },
-                    )
+                    Box(
+                        modifier = Modifier.padding(8.dp)
+                    ) {
+                        ExtendedFloatingActionButton(
+                            text = { Text(stringResource(R.string.comment)) },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_baseline_reply_24),
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = { showCommentBar = true },
+                        )
+                    }
                 }
             }
         },

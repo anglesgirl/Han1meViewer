@@ -256,7 +256,8 @@ private fun TagChip(
     AssistChip(
         onClick = { onTagClick?.invoke(tag) ?: Unit },
         label = { Text(tag) },
-        colors = colors,
+        border = null,
+        colors = colors
     )
 }
 

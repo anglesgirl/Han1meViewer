@@ -85,29 +85,6 @@ fun AnimatedLazyListScope.segmentedSection(
     item { Spacer(Modifier.size(HanimeDefaults.settingsItemPadding)) }
 }
 
-fun AnimatedLazyListScope.animatedSegmentedSection(
-    visible: Boolean,
-    @StringRes titleRes: Int? = null,
-    title: String? = null,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    item {
-        SettingsAnimatedVisibility(visible = visible) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .animateContentSize(),
-            ) {
-                if (titleRes != null || title != null) {
-                    SettingsSectionTitle(titleRes = titleRes, title = title)
-                }
-                SettingsSegmentedGroup(content = content)
-                Spacer(Modifier.size(HanimeDefaults.settingsItemPadding))
-            }
-        }
-    }
-}
-
 @Composable
 fun SettingsSectionTitle(
     @StringRes titleRes: Int? = null,

@@ -2,8 +2,6 @@ package io.github.daisukikaffuchino.han1meviewer.ui.screen.account
 
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
-import android.os.Build
-import android.provider.MediaStore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,13 +60,8 @@ fun AvatarCropScreen(
         withContext(Dispatchers.IO) {
             try {
                 val uri = sourceUri.toUri()
-                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val source = ImageDecoder.createSource(context.contentResolver, uri)
-                    ImageDecoder.decodeBitmap(source)
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                }
+                val source = ImageDecoder.createSource(context.contentResolver, uri)
+                val bitmap = ImageDecoder.decodeBitmap(source)
                 originalImageBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true).asImageBitmap()
             } catch (e: Exception) {
                 e.printStackTrace()

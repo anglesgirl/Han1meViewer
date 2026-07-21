@@ -237,7 +237,7 @@ Some mirrors may not support login, may not share cookies, may fail verification
     <string name="watch_history_clear_all">Clear all</string>
     <string name="watch_history_empty_title">No watch history yet</string>
     <string name="watch_history_empty_description">Your records will appear here after you start watching videos.</string>
-    <string name="watch_history_resume_watch">Resume watching</string>
+    <string name="watch_history_resume_watch">Resume</string>
     <string name="watch_history_watched_at">Watched at %1$s</string>
     <string name="watch_history_released_at">Released at %1$s</string>
     <string name="online">Online</string>
@@ -471,6 +471,7 @@ Recommendations are as follows:\n
     <string name="empty_content">Nothing here</string>
     <string name="load_failed_retry">Load failed, please retry</string>
     <string name="video_count">%d videos</string>
+    <string name="comment_count">%d comments</string>
     <string name="load_complete_with_pages">Load complete, %d pages in total</string>
     <string name="mpv_advanced_settings">MPV Playback Engine Settings</string>
     <string name="mpv_settings_disabled_summary">Configurable only when MPV is selected as playback engine</string>
@@ -664,4 +665,5 @@ Recommendations are as follows:\n
     <string name="open_source_license_summary">Libraries and licenses used by this app</string>
     <string name="no_license_items">No items to display</string>
     <string name="no_licenses_found">No items found</string>
+    <string name="global_search">Global Search</string>
 </resources>

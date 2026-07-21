@@ -475,7 +475,8 @@
     <string name="download_progress_size">%1$s / %2$s</string>
     <string name="empty_content">这里什么都没有哦</string>
     <string name="load_failed_retry">加载失败，请重试</string>
-    <string name="video_count">%d部影片</string>
+    <string name="video_count">%d 部影片</string>
+    <string name="comment_count">%d 条评论</string>
     <string name="load_complete_with_pages">加载完毕，共%d页</string>
     <string name="load_complete">加载完毕！</string>
     <string name="mpv_advanced_settings">MPV 播放内核设置</string>
@@ -649,4 +650,5 @@
     <string name="open_source_license_summary">本应用使用的依赖库及其许可证</string>
     <string name="no_license_items">没有可显示的项目</string>
     <string name="no_licenses_found">未搜索到项目</string>
+    <string name="global_search">全站搜索</string>
 </resources>

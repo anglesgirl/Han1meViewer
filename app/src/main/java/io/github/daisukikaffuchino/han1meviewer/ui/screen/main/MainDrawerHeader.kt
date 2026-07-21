@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -27,16 +28,79 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.ComponentPreview
+
+private val robotoFont = FontFamily(
+    Font(R.font.roboto)
+)
+
+@Composable
+private fun Han1meViewerText(
+    modifier: Modifier = Modifier,
+    fontSize: Int = 24,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+) {
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant= MaterialTheme.colorScheme.onSurfaceVariant
+
+    val annotatedString = buildAnnotatedString {
+        withStyle(
+            style = SpanStyle(
+                color = Color(0xFFFA0201), // #FA0201
+                fontFamily = robotoFont,
+                fontWeight = FontWeight.Bold,
+            )
+        ) {
+            append("H")
+        }
+        withStyle(
+            style = SpanStyle(
+                color = onSurface,
+                fontFamily = robotoFont,
+                fontWeight = FontWeight.Bold,
+            )
+        ) {
+            append("an1me")
+        }
+        withStyle(
+            style = SpanStyle(
+                color = onSurfaceVariant,
+                fontFamily = robotoFont,
+                fontWeight = FontWeight.Normal,
+            )
+        ) {
+            append("Viewer")
+        }
+    }
+
+    BasicText(
+        text = annotatedString,
+        modifier = modifier,
+        style = androidx.compose.ui.text.TextStyle(
+            fontSize = fontSize.sp,
+        ),
+        maxLines = maxLines,
+        overflow = overflow,
+    )
+}
 
 @Composable
 fun MainDrawerHeader(
@@ -49,22 +113,30 @@ fun MainDrawerHeader(
     onAvatarLongClick: () -> Unit,
     onSwitchSiteClick: () -> Unit,
 ) {
+Column(
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp)
+        .padding(top = 12.dp),
+){
+    Han1meViewerText(
+        modifier = Modifier.padding(horizontal = 8.dp)
+    )
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
             .padding(top = 12.dp, bottom = 8.dp),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp)
-                .padding(16.dp),
+                .height(132.dp)
+                .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
@@ -112,7 +184,7 @@ fun MainDrawerHeader(
             Column(
                 modifier = Modifier
                     .width(IntrinsicSize.Min)
-                    .align(Alignment.Top)
+                    .align(Alignment.CenterVertically)
                     .padding(top = 6.dp)
                     .clickable(
                         onClick = onSwitchSiteClick,
@@ -141,6 +213,7 @@ fun MainDrawerHeader(
                 )
             }
         }
+    }
     }
 }
 

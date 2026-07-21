@@ -463,6 +463,7 @@
     <string name="empty_content">這裡什麼都沒有哦</string>
     <string name="load_failed_retry">載入失敗，請重試</string>
     <string name="video_count">%d 部影片</string>
+    <string name="comment_count">%d 條評論</string>
     <string name="load_complete_with_pages">載入完成，共 %d 頁</string>
     <string name="load_complete">載入完成！</string>
     <string name="mpv_advanced_settings">MPV 播放核心設定</string>
@@ -635,4 +636,5 @@
     <string name="open_source_license_summary">本應用程式使用的依賴庫及其授權條款</string>
     <string name="no_license_items">沒有可顯示的項目</string>
     <string name="no_licenses_found">找不到項目</string>
+    <string name="global_search">全站搜尋</string>
 </resources>

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -147,6 +146,7 @@ fun AdvancedSearchSheet(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f, fill = false)
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             shape = RoundedCornerShape(28.dp),
         ) {
@@ -338,8 +338,11 @@ private fun AdvancedSearchSingleChoiceDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(state.titleRes)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.options.forEachIndexed { index, option ->
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 360.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                itemsIndexed(state.options) { index, option ->
                     SettingChoiceItem(
                         title = option.value,
                         selected = index == state.selectedIndex,
@@ -425,7 +428,9 @@ private fun AdvancedSearchMultiChoiceDialog(
                 }
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier.height(320.dp),
+                    modifier = Modifier
+                        .heightIn(max = 320.dp)
+                        .weight(1f, fill = false),
                     verticalAlignment = Alignment.Top,
                 ) { page ->
                     val scopeSection = state.scopes[page]
@@ -528,7 +533,9 @@ private fun AdvancedSearchReleaseDateDialog(
                         )
                     }
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         WheelLikeColumn(
@@ -552,7 +559,9 @@ private fun AdvancedSearchReleaseDateDialog(
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.heightIn(max = 300.dp),
+                        modifier = Modifier
+                            .heightIn(max = 300.dp)
+                            .weight(1f, fill = false),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(state.options, key = { it.searchKey.orEmpty() }) { option ->

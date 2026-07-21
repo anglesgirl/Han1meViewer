@@ -91,23 +91,25 @@ fun VideoCardItem(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .animateContentSize()
-            .combinedClickable(
-                enabled = !isPlaying,
-                interactionSource = interactionSource,
-                indication = indication,
-                onClick = { onClickVideosItem(videoItem.videoCode) },
-                onLongClick = { onLongClickVideosItem(videoItem.videoCode, videoItem.title) },
-            ),
+            .animateContentSize(),
         shape = cardShape,
         tonalElevation = tonalElevation,
-        shadowElevation = tonalElevation,
         color = HanimeDefaults.Colors.Container,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    enabled = !isPlaying,
+                    interactionSource = interactionSource,
+                    indication = indication,
+                    onClick = { onClickVideosItem(videoItem.videoCode) },
+                    onLongClick = {
+                        onLongClickVideosItem(videoItem.videoCode, videoItem.title)
+                    },
+                ),
         ) {
             Box(
                 modifier = Modifier
@@ -154,23 +156,23 @@ fun VideoCardItem(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    MaterialTheme.colorScheme.surfaceVariant
+                                    Color(0x9F000000)
                                 ),
                             ),
                         )
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                        .padding(horizontal = 6.dp),
                 ) {
                     videoItem.views?.let {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_baseline_play_circle_outline_24),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = Color.White,
                             modifier = Modifier.size(iconSize),
                         )
                         Text(
-                            modifier = Modifier.padding(horizontal = 2.dp),
+                            modifier = Modifier.padding(horizontal = 1.dp),
                             text = DisplayTextLocalizer.localizeViews(it),
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = Color.White,
                             fontSize = textFontSize,
                         )
                     }
@@ -180,13 +182,13 @@ fun VideoCardItem(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_baseline_access_time_24),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint =Color.White,
                             modifier = Modifier.size(iconSize),
                         )
                         Text(
-                            modifier = Modifier.padding(horizontal = 2.dp),
+                            modifier = Modifier.padding(horizontal = 1.dp),
                             text = it,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = Color.White,
                             fontSize = textFontSize,
                         )
                     }
@@ -195,7 +197,7 @@ fun VideoCardItem(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(Color.Black.copy(alpha = 0.5f)),
+                            .background(Color.Black.copy(alpha = 0.55f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
@@ -236,28 +238,30 @@ fun VideoCardItem(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 12.dp),
             )
-            Text(
-                text = videoItem.currentArtist ?: "作者",
-                maxLines = 1,
-                style = MaterialTheme.typography.labelSmall,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-            )
+            if (!videoItem.currentArtist.isNullOrEmpty()) {
+                Text(
+                    text = videoItem.currentArtist ?: "作者",
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelSmall,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                )
+            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .padding(horizontal = 8.dp)
+                    .padding(horizontal = 12.dp)
                     .fillMaxWidth(),
             ) {
                 videoItem.reviews?.takeIf { it.isNotEmpty() }?.let { reviewsText ->
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_baseline_thumb_up_alt_24),
+                        painter = painterResource(id = R.drawable.ic_baseline_thumb_up_off_alt_24),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(iconSize),

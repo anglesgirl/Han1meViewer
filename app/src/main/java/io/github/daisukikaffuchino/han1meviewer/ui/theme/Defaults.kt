@@ -8,7 +8,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -19,7 +18,6 @@ object HanimeDefaults {
     val settingsItemVerticalPadding = 16.dp
     val settingsItemPadding = 4.dp
     val settingsSegmentedItemPadding = 2.dp
-    val fadedEdgeWidth = 8.dp
 
     val screenContainerShape: Shape
         @Composable get() = MaterialTheme.shapes.largeIncreased
@@ -31,19 +29,6 @@ object HanimeDefaults {
         val Background: Color
             @Composable get() = MaterialTheme.colorScheme.surfaceContainer
 
-        val PrimaryMix: Color
-            @Composable get() = lerp(
-                MaterialTheme.colorScheme.primary,
-                MaterialTheme.colorScheme.surfaceDim,
-                0.25f,
-            )
-
-        val SecondaryMix: Color
-            @Composable get() = lerp(
-                MaterialTheme.colorScheme.secondary,
-                MaterialTheme.colorScheme.surfaceDim,
-                0.25f,
-            )
     }
 
     val defaultShape: CornerBasedShape

@@ -13,10 +13,11 @@ object DisplayTextLocalizer {
         val match = viewsRegex.matchEntire(text.trim()) ?: return text
         val count = match.groupValues[1]
         val unit = match.groupValues[2]
+
         return when (language()) {
             Locale.SIMPLIFIED_CHINESE.language -> when (unit) {
-                "万次", "萬次" -> "${count}万次"
-                else -> "${count}次"
+                "万次", "萬次" -> "${count}万"
+                else -> count
             }
 
             Locale.ENGLISH.language -> when (unit) {
@@ -25,13 +26,13 @@ object DisplayTextLocalizer {
             }
 
             Locale.JAPANESE.language -> when (unit) {
-                "万次", "萬次" -> "${count}万回"
+                "万次", "萬次" -> "${count}万"
                 else -> "${count}回"
             }
 
             else -> when (unit) {
-                "万次", "萬次" -> "${count}萬次"
-                else -> "${count}次"
+                "万次", "萬次" -> "${count}萬"
+                else -> count
             }
         }
     }
@@ -40,6 +41,7 @@ object DisplayTextLocalizer {
         val match = relativeTimeRegex.matchEntire(text.trim()) ?: return text
         val count = match.groupValues[1]
         val unit = match.groupValues[2]
+
         return when (language()) {
             Locale.SIMPLIFIED_CHINESE.language -> "$count${unit.toSimplifiedUnit()}前"
             Locale.ENGLISH.language -> "$count ${unit.toEnglishUnit(count)} ago"
@@ -51,18 +53,22 @@ object DisplayTextLocalizer {
     private fun language(): String = LanguageHelper.preferredLanguage.language
 
     private fun String.toSimplifiedUnit(): String = when (this) {
-        "分鐘", "分钟" -> "分钟"
-        "小時", "小时" -> "小时"
-        "週", "周" -> "周"
-        "個月", "个月" -> "个月"
+        "分钟", "分鐘" -> "分"
+        "小时", "小時" -> "时"
+        "天" -> "天"
+        "周", "週" -> "周"
+        "个月", "個月" -> "月"
+        "年" -> "年"
         else -> this
     }
 
     private fun String.toTraditionalUnit(): String = when (this) {
-        "分钟", "分鐘" -> "分鐘"
-        "小时", "小時" -> "小時"
+        "分钟", "分鐘" -> "分"
+        "小时", "小時" -> "時"
+        "天" -> "天"
         "周", "週" -> "週"
-        "个月", "個月" -> "個月"
+        "个月", "個月" -> "月"
+        "年" -> "年"
         else -> this
     }
 
@@ -91,7 +97,10 @@ object DisplayTextLocalizer {
 
     private fun String.toKViews(): String {
         return runCatching {
-            BigDecimal(this).multiply(BigDecimal.TEN).stripTrailingZeros().toPlainString() + "K"
+            BigDecimal(this)
+                .multiply(BigDecimal.TEN)
+                .stripTrailingZeros()
+                .toPlainString() + "K"
         }.getOrElse { "${this}0K" }
     }
 }

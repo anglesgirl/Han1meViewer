@@ -11,6 +11,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +30,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -41,13 +42,15 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -64,7 +67,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -73,13 +75,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.R
@@ -103,6 +106,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 // ─────────────────────────────────────────────
 // 搜索主屏幕
@@ -249,7 +253,8 @@ fun SearchScreen(
     @OptIn(FlowPreview::class)
     LaunchedEffect(searchQuery) {
         if (searchQuery.isNotBlank()) {
-            delay(300); viewModel.loadAllSearchHistories(searchQuery).collect { histories = it }
+            delay(300.milliseconds)
+            viewModel.loadAllSearchHistories(searchQuery).collect { histories = it }
         } else {
             viewModel.loadAllSearchHistories().collect { histories = it.take(10) }
         }
@@ -452,37 +457,87 @@ fun SearchAppBar(
     val kb = LocalSoftwareKeyboardController.current
     HanimeTopAppBar(
         title = {
-            TextField(
+            BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(48.dp)
                     .focusRequester(focusRequester)
                     .onFocusChanged { onFocusChanged(it.isFocused) },
-                shape = CircleShape,
-                placeholder = { Text(stringResource(R.string.search_video_hint)) },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { kb?.hide(); onSearch() }),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
+                textStyle = LocalTextStyle.current.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 14.sp
                 ),
-                trailingIcon = {
-                    AnimatedVisibility(visible = query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Default.Close, stringResource(R.string.clear))
-                        }
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        kb?.hide()
+                        onSearch()
                     }
-                },
+                ),
+                decorationBox = { innerTextField ->
+                    TextFieldDefaults.DecorationBox(
+                        value = query,
+                        innerTextField = innerTextField,
+                        enabled = true,
+                        singleLine = true,
+                        visualTransformation = VisualTransformation.None,
+                        interactionSource = remember { MutableInteractionSource() },
+                        placeholder = {
+                            Text(stringResource(R.string.search_video_hint))
+                        },
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                IconButton(onClick = { onQueryChange("") }) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = stringResource(R.string.clear)
+                                    )
+                                }
+                            }
+                        },
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(
+                            horizontal = 16.dp,
+                            vertical = 0.dp
+                        ),
+                        colors = TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                            errorIndicatorColor = Color.Transparent
+                        ),
+                        container = {
+                            TextFieldDefaults.Container(
+                                enabled = true,
+                                isError = false,
+                                interactionSource = remember { MutableInteractionSource() },
+                                colors = TextFieldDefaults.colors(),
+                                shape = CircleShape,
+                                focusedIndicatorLineThickness = 0.dp,
+                                unfocusedIndicatorLineThickness = 0.dp,
+                            )
+                        }
+                    )
+                }
             )
         },
         onBack = onBack,
         modifier = modifier,
         actions = {
-            IconButton(onClick = onOpenAdvancedSearch) {
-                Icon(Icons.Default.Tune, stringResource(R.string.advanced))
+            TextButton(
+                onClick = onOpenAdvancedSearch
+            ) {
+                Icon(
+                    Icons.Default.Tune,
+                    contentDescription = stringResource(R.string.advanced)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.advanced))
             }
         },
     )
@@ -576,7 +631,8 @@ fun SearchResultsGrid(
         val simplifiedCardWidth = VideoSimplifiedCardMinWidth
         val useNormalGrid = videos.firstOrNull()?.itemType == NORMAL
         val density = LocalDensity.current
-        val screenWidthDp = with(density) { LocalWindowInfo.current.containerSize.width.toDp().value.toInt() }
+        val screenWidthDp =
+            with(density) { LocalWindowInfo.current.containerSize.width.toDp().value.toInt() }
         val columns = if (Preferences.tabletMode) {
             GridCells.Fixed(Preferences.searchGridColumnsConfig.columnsForWidthDp(screenWidthDp))
         } else {
@@ -599,8 +655,8 @@ fun SearchResultsGrid(
                     videoItem = it,
                     isHorizontalCard = it.itemType == NORMAL,
                     isWatched = showPlayedIndicator && it.watched == true,
-                    onClickVideosItem =  onVideoClick,
-                    onLongClickVideosItem = {_, _ ->}
+                    onClickVideosItem = onVideoClick,
+                    onLongClickVideosItem = { _, _ -> }
                 )
             }
             if (canLoadMore && state is PageLoadingState.Loading) {

@@ -1,6 +1,10 @@
 package io.github.daisukikaffuchino.han1meviewer.ui.screen.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -9,16 +13,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +34,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +48,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,6 +118,8 @@ fun WatchHistoryTabScreen(
 ) {
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { 2 })
+    val localListState = rememberLazyListState()
+    val showClearFab by rememberWatchHistoryFabVisibility(localListState)
     val localHistories by localHistoriesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val currentOnlineItems by onlineItems.collectAsState()
     val currentOnlineState by onlineState.collectAsState()
@@ -156,24 +167,13 @@ fun WatchHistoryTabScreen(
     HanimeScaffold(
         title = stringResource(R.string.watch_history),
         onBack = onBack,
-        actions = {
-            FilledIconButton(onClick = { showHelpDialog = true }) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_baseline_help_24),
-                    contentDescription = stringResource(R.string.help),
-                )
-            }
-            if (pagerState.currentPage == 0) {
-                FilledIconButton(
-                    onClick = { showDeleteAllLocalDialog = true },
-                    enabled = localHistories.isNotEmpty(),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_baseline_delete_24),
-                        contentDescription = stringResource(R.string.watch_history_clear_all),
-                    )
-                }
-            }
+        floatingActionButton = {
+            WatchHistoryClearFab(
+                visible = pagerState.currentPage == 0 &&
+                        localHistories.isNotEmpty() &&
+                        showClearFab,
+                onClick = { showDeleteAllLocalDialog = true },
+            )
         },
     ) { paddingValues ->
         Column(
@@ -206,8 +206,8 @@ fun WatchHistoryTabScreen(
                         onDeleteHistory = onDeleteLocalHistory,
                         onDeleteAllHistories = onDeleteAllLocalHistories,
                         useScaffold = false,
-                        showHelpAction = false,
                         showDeleteAllAction = false,
+                        listState = localListState,
                     )
 
                     else -> OnlineWatchHistoryScreen(
@@ -230,30 +230,6 @@ fun WatchHistoryTabScreen(
 }
 
 @Composable
-fun WatchHistoryScreen(
-    historiesFlow: Flow<List<WatchHistoryEntity>>,
-    onBack: () -> Unit,
-    onOpenVideo: (WatchHistoryEntity) -> Unit,
-    onDeleteHistory: (WatchHistoryEntity) -> Unit,
-    onDeleteAllHistories: () -> Unit,
-    useScaffold: Boolean = true,
-    showHelpAction: Boolean = true,
-    showDeleteAllAction: Boolean = true,
-) {
-    val histories by historiesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
-    WatchHistoryScreen(
-        histories = histories,
-        onBack = onBack,
-        onOpenVideo = onOpenVideo,
-        onDeleteHistory = onDeleteHistory,
-        onDeleteAllHistories = onDeleteAllHistories,
-        useScaffold = useScaffold,
-        showHelpAction = showHelpAction,
-        showDeleteAllAction = showDeleteAllAction,
-    )
-}
-
-@Composable
 private fun WatchHistoryScreen(
     histories: List<WatchHistoryEntity>,
     onBack: () -> Unit,
@@ -261,8 +237,8 @@ private fun WatchHistoryScreen(
     onDeleteHistory: (WatchHistoryEntity) -> Unit,
     onDeleteAllHistories: () -> Unit,
     useScaffold: Boolean,
-    showHelpAction: Boolean,
     showDeleteAllAction: Boolean,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     var pendingDelete by remember { mutableStateOf<WatchHistoryEntity?>(null) }
     var showDeleteAllDialog by rememberSaveable { mutableStateOf(false) }
@@ -319,6 +295,7 @@ private fun WatchHistoryScreen(
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
@@ -337,6 +314,7 @@ private fun WatchHistoryScreen(
     }
 
     if (useScaffold) {
+        val showClearFab by rememberWatchHistoryFabVisibility(listState)
         HanimeScaffold(
             title = stringResource(R.string.watch_history),
             subtitle = {
@@ -347,32 +325,58 @@ private fun WatchHistoryScreen(
                 )
             },
             onBack = onBack,
-            actions = {
-                if (showHelpAction) {
-                    FilledIconButton(onClick = { showHelpDialog = true }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_baseline_help_24),
-                            contentDescription = stringResource(R.string.help),
-                        )
-                    }
-                }
-                if (showDeleteAllAction) {
-                    FilledIconButton(
-                        onClick = { showDeleteAllDialog = true },
-                        enabled = histories.isNotEmpty()
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_baseline_delete_24),
-                            contentDescription = stringResource(R.string.watch_history_clear_all),
-                        )
-                    }
-                }
+            floatingActionButton = {
+                WatchHistoryClearFab(
+                    visible = showDeleteAllAction && histories.isNotEmpty() && showClearFab,
+                    onClick = { showDeleteAllDialog = true },
+                )
             },
         ) { paddingValues ->
             content(paddingValues)
         }
     } else {
         content(PaddingValues())
+    }
+}
+
+@Composable
+private fun WatchHistoryClearFab(
+    visible: Boolean,
+    onClick: () -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + slideInVertically { it / 2 },
+        exit = fadeOut() + slideOutVertically { it / 2 },
+    ) {
+        Box(
+            modifier = Modifier.padding(8.dp)
+        ) {
+            ExtendedFloatingActionButton(
+                text = { Text(stringResource(R.string.watch_history_clear_all)) },
+                icon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_baseline_delete_24),
+                        contentDescription = null,
+                    )
+                },
+                onClick = onClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun rememberWatchHistoryFabVisibility(
+    listState: LazyListState,
+): androidx.compose.runtime.State<Boolean> = remember(listState) {
+    derivedStateOf {
+        when {
+            !listState.canScrollBackward -> true
+            listState.lastScrolledBackward -> true
+            listState.lastScrolledForward -> false
+            else -> true
+        }
     }
 }
 
@@ -633,7 +637,7 @@ private fun WatchHistoryCard(
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
     ) {
         Row(
@@ -691,16 +695,6 @@ private fun WatchHistoryCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    FilledIconButton(
-                        onClick = onLongClick,
-                        modifier = Modifier.size(25.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Delete,
-                            contentDescription = stringResource(R.string.delete_history),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
                 }
                 WatchHistoryMeta(
                     iconRes = R.drawable.ic_baseline_access_time_24,
@@ -737,6 +731,19 @@ private fun WatchHistoryCard(
                         ),
                         modifier = Modifier.height(28.dp)
                     )
+                    Spacer(
+                        modifier = Modifier.width(6.dp)
+                    )
+                    FilledIconButton(
+                        onClick = onLongClick,
+                        modifier = Modifier.size(25.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = stringResource(R.string.delete_history),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }
@@ -790,7 +797,6 @@ private fun WatchHistoryScreenPreview() {
             onDeleteHistory = {},
             onDeleteAllHistories = {},
             useScaffold = true,
-            showHelpAction = true,
             showDeleteAllAction = true,
         )
     }
@@ -807,7 +813,6 @@ private fun WatchHistoryEmptyPreview() {
             onDeleteHistory = {},
             onDeleteAllHistories = {},
             useScaffold = true,
-            showHelpAction = true,
             showDeleteAllAction = true,
         )
     }

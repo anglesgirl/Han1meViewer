@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,6 +54,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.component.lazy.LazyColumn
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.ComponentPreview
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.fakeCommentList
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.rememberRandomLoadingHint
+import io.github.daisukikaffuchino.han1meviewer.ui.theme.HanimeDefaults
 import io.github.daisukikaffuchino.han1meviewer.util.parseTimeStrToMinutes
 import io.github.daisukikaffuchino.han1meviewer.util.safeSortedBy
 import kotlinx.coroutines.flow.Flow
@@ -149,7 +151,8 @@ fun ChildCommentScreen(
     }
 
     Scaffold(
-        modifier = Modifier.widthIn(max = maxScreenWidth),
+        modifier = Modifier.widthIn(max = maxScreenWidth)
+            .background(color = HanimeDefaults.Colors.Background),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             AnimatedVisibility(
@@ -193,7 +196,7 @@ fun ChildCommentScreen(
 
             if (sortedComments.isNotEmpty()) {
                 Text(
-                    text = stringResource(R.string.video_count, sortedComments.size),
+                    text = stringResource(R.string.comment_count, sortedComments.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
