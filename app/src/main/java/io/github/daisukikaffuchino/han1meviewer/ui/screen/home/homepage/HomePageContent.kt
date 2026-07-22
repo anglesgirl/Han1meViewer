@@ -11,6 +11,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.daisukikaffuchino.han1meviewer.logic.AppUpdateInfo
+import io.github.daisukikaffuchino.han1meviewer.logic.model.Announcement
 import io.github.daisukikaffuchino.han1meviewer.ui.component.lazy.LazyColumn
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.ComponentPreview
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.fakeAnnouncements
@@ -32,6 +33,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.componen
 fun HomePageContent(
     data: HomeData,
     updateInfo: AppUpdateInfo?,
+    updateAnnouncement: Announcement?,
     onEvent: (HomeUiEvent) -> Unit,
     onCloseAnnouncement: () -> Unit,
     modifier: Modifier = Modifier
@@ -58,6 +60,18 @@ fun HomePageContent(
                         onEvent(HomeUiEvent.IgnoreUpdate(updateInfo.versionCode))
                     },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
+        }
+        if (updateAnnouncement != null) {
+            item(key = "update_announcement") {
+                AnnouncementCard(
+                    announcements = listOf(updateAnnouncement),
+                    onAnnouncementClick = { announcement ->
+                        onEvent(HomeUiEvent.ShowAnnouncementDialog(announcement))
+                    },
+                    onClose = null,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
         }
@@ -125,6 +139,7 @@ private fun HomePageContentPreview() {
                     updateDescription = "A new version is ready.",
                     forceUpdate = false,
                 ),
+                updateAnnouncement = fakeAnnouncements.first(),
                 onEvent = {},
                 onCloseAnnouncement = {},
             )

@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -26,12 +28,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -41,28 +46,30 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daisukikaffuchino.han1meviewer.R
+import io.github.daisukikaffuchino.han1meviewer.getHanimeShareText
 import io.github.daisukikaffuchino.han1meviewer.logic.model.VideoItemType
+import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
+import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.SearchRoute
+import io.github.daisukikaffuchino.han1meviewer.ui.navigation.navigateSafely
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.ComponentPreview
 import io.github.daisukikaffuchino.han1meviewer.ui.preview.fakeVideosItem
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.RetryableImage
 import io.github.daisukikaffuchino.han1meviewer.ui.theme.HanimeDefaults
 import io.github.daisukikaffuchino.han1meviewer.ui.theme.shapeByInteraction
+import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
 import io.github.daisukikaffuchino.han1meviewer.util.DisplayTextLocalizer
+import io.github.daisukikaffuchino.utils.showShortToast
 
 
 /**
  * 标准视频卡片项组件。
  *
- * 展示视频封面、标题等信息，支持水平和垂直两种布局，支持点击和长按交互。
- * 自适应宽度，由外部布局控制。
- *
- * @param videoItem 视频数据
- * @param isHorizontalCard 是否为水平卡片布局，默认为 true
- * @param onClickVideosItem 点击回调，参数为视频 ID
- * @param onLongClickVideosItem 长按回调，参数为视频 ID 和视频标题
+ * 展示视频封面、标题等信息，支持水平和垂直两种布局。
+ * 长按会弹出上下文菜单。
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun VideoCardItem(
     modifier: Modifier = Modifier,
     videoItem: VideoItemType,
@@ -75,9 +82,13 @@ fun VideoCardItem(
     val textFontSize = dimensionResource(id = R.dimen.video_view_and_time_and_duration).value.sp
     val iconSize = dimensionResource(id = R.dimen.view_view_and_time_icon_size)
     val imageAspectRatio = if (isHorizontalCard) 16f / 9f else 3f / 4f
+    val context = LocalContext.current
+    val copyTextToClipboard = rememberCopyTextToClipboard()
     val interactionSource = remember { MutableInteractionSource() }
     val indication = LocalIndication.current
     val pressed by interactionSource.collectIsPressedAsState()
+    var showContextMenu by remember { mutableStateOf(false) }
+    val currentArtist = videoItem.currentArtist?.takeIf { it.isNotBlank() }
     val cardShape = shapeByInteraction(
         shapes = HanimeDefaults.largerShapes(),
         pressed = pressed,
@@ -97,192 +108,221 @@ fun VideoCardItem(
         color = HanimeDefaults.Colors.Container,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    enabled = !isPlaying,
-                    interactionSource = interactionSource,
-                    indication = indication,
-                    onClick = { onClickVideosItem(videoItem.videoCode) },
-                    onLongClick = {
-                        onLongClickVideosItem(videoItem.videoCode, videoItem.title)
-                    },
-                ),
-        ) {
-            Box(
+        Box {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(imageAspectRatio),
+                    .combinedClickable(
+                        enabled = !isPlaying,
+                        interactionSource = interactionSource,
+                        indication = indication,
+                        onClick = { onClickVideosItem(videoItem.videoCode) },
+                        onLongClick = { showContextMenu = true },
+                    ),
             ) {
-                RetryableImage(
-                    model = videoItem.coverUrl,
-                    contentDescription = videoItem.title,
-                    modifier = Modifier.fillMaxSize(),
-                    placeholder = painterResource(R.drawable.h_chan_loading),
-                    error = painterResource(R.drawable.h_chan_load_failed),
-                    contentScale = ContentScale.FillWidth,
-                )
-
-                if (isWatched) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 6.dp, end = 6.dp)
-                            .background(
-                                color = Color.Black.copy(alpha = 0.65f),
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.played),
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                }
-
-                // 底部半透明遮罩（播放量和时长）
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color(0x9F000000)
-                                ),
-                            ),
-                        )
-                        .padding(horizontal = 6.dp),
+                        .aspectRatio(imageAspectRatio),
                 ) {
-                    videoItem.views?.let {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_baseline_play_circle_outline_24),
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(iconSize),
-                        )
-                        Text(
-                            modifier = Modifier.padding(horizontal = 1.dp),
-                            text = DisplayTextLocalizer.localizeViews(it),
-                            color = Color.White,
-                            fontSize = textFontSize,
-                        )
-                    }
+                    RetryableImage(
+                        model = videoItem.coverUrl,
+                        contentDescription = videoItem.title,
+                        modifier = Modifier.fillMaxSize(),
+                        placeholder = painterResource(R.drawable.h_chan_loading),
+                        error = painterResource(R.drawable.h_chan_load_failed),
+                        contentScale = ContentScale.FillWidth,
+                    )
 
-                    Spacer(modifier = Modifier.weight(1f))
-                    videoItem.duration?.let {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_baseline_access_time_24),
-                            contentDescription = null,
-                            tint =Color.White,
-                            modifier = Modifier.size(iconSize),
-                        )
-                        Text(
-                            modifier = Modifier.padding(horizontal = 1.dp),
-                            text = it,
-                            color = Color.White,
-                            fontSize = textFontSize,
-                        )
-                    }
-                }
-                if (isPlaying) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(Color.Black.copy(alpha = 0.55f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
+                    if (isWatched) {
+                        Box(
                             modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 6.dp, end = 6.dp)
                                 .background(
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                                    shape = RoundedCornerShape(20.dp)
+                                    color = Color.Black.copy(alpha = 0.65f),
+                                    shape = RoundedCornerShape(4.dp)
                                 )
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_baseline_play_circle_outline_24),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = stringResource(R.string.now_playing),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontSize = 12.sp,
+                                text = stringResource(R.string.played),
+                                color = Color.White,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.labelMedium
+                                style = MaterialTheme.typography.labelSmall
                             )
                         }
                     }
-                }
-            }
 
-            Text(
-                text = videoItem.title,
-                maxLines = 2,
-                minLines = 2,
-                style = MaterialTheme.typography.titleSmall,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-            )
-            if (!videoItem.currentArtist.isNullOrEmpty()) {
+                    // 底部半透明遮罩（播放量和时长）
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0x9F000000)
+                                    ),
+                                ),
+                            )
+                            .padding(horizontal = 6.dp),
+                    ) {
+                        videoItem.views?.let {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_baseline_play_circle_outline_24),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(iconSize),
+                            )
+                            Text(
+                                modifier = Modifier.padding(horizontal = 1.dp),
+                                text = DisplayTextLocalizer.localizeViews(it),
+                                color = Color.White,
+                                fontSize = textFontSize,
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+                        videoItem.duration?.let {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_baseline_access_time_24),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(iconSize),
+                            )
+                            Text(
+                                modifier = Modifier.padding(horizontal = 1.dp),
+                                text = it,
+                                color = Color.White,
+                                fontSize = textFontSize,
+                            )
+                        }
+                    }
+                    if (isPlaying) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(Color.Black.copy(alpha = 0.55f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .background(
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                        shape = RoundedCornerShape(20.dp)
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_baseline_play_circle_outline_24),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.now_playing),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Text(
-                    text = videoItem.currentArtist ?: "作者",
-                    maxLines = 1,
-                    style = MaterialTheme.typography.labelSmall,
+                    text = videoItem.title,
+                    maxLines = 2,
+                    minLines = 2,
+                    style = MaterialTheme.typography.titleSmall,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
                 )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .padding(horizontal = 12.dp)
-                    .fillMaxWidth(),
-            ) {
-                videoItem.reviews?.takeIf { it.isNotEmpty() }?.let { reviewsText ->
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_baseline_thumb_up_off_alt_24),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(iconSize),
-                    )
-                    Spacer(modifier = Modifier.width(2.dp))
+                if (currentArtist != null) {
                     Text(
-                        text = reviewsText,
-                        fontSize = 11.sp,
+                        text = currentArtist,
                         maxLines = 1,
+                        style = MaterialTheme.typography.labelSmall,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp),
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
-                if (!videoItem.uploadTime.isNullOrEmpty()) {
-                    Text(
-                        text = DisplayTextLocalizer.localizeRelativeTime(videoItem.uploadTime!!),
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface,
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .fillMaxWidth(),
+                ) {
+                    videoItem.reviews?.takeIf { it.isNotEmpty() }?.let { reviewsText ->
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_baseline_thumb_up_off_alt_24),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(iconSize),
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = reviewsText,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    if (!videoItem.uploadTime.isNullOrEmpty()) {
+                        Text(
+                            text = DisplayTextLocalizer.localizeRelativeTime(videoItem.uploadTime!!),
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+            DropdownMenu(
+                expanded = showContextMenu,
+                onDismissRequest = { showContextMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("复制视频信息") },
+                    onClick = {
+                        showContextMenu = false
+                        copyTextToClipboard(
+                            getHanimeShareText(
+                                videoItem.title,
+                                videoItem.videoCode
+                            )
+                        )
+                        showShortToast(R.string.copy_to_clipboard)
+                    },
+                )
+                if (currentArtist != null) {
+                    DropdownMenuItem(
+                        text = { Text("搜索该作者所有作品") },
+                        onClick = {
+                            showContextMenu = false
+                            (context as? MainActivity)?.navController?.navigateSafely(
+                                SearchRoute(query = currentArtist)
+                            )
+                        },
                     )
                 }
             }

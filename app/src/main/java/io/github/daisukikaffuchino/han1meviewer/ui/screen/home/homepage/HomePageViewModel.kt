@@ -46,6 +46,9 @@ class HomePageViewModel: ViewModel() {
     private val _appUpdateState = MutableStateFlow<AppUpdateState>(AppUpdateState.Checking)
     val appUpdateState = _appUpdateState.asStateFlow()
 
+    private val _updateAnnouncement = MutableStateFlow<Announcement?>(null)
+    val updateAnnouncement = _updateAnnouncement.asStateFlow()
+
     private var homePageJob: Job? = null
     private var initializationJob: Job? = null
 
@@ -59,7 +62,9 @@ class HomePageViewModel: ViewModel() {
     fun initializeHomePage() {
         if (initializationJob != null || _appUpdateState.value !is AppUpdateState.Checking) return
         initializationJob = viewModelScope.launch {
-            val updateInfo = AppUpdateChecker.checkForUpdate()
+            val updateResult = AppUpdateChecker.checkForUpdate()
+            _updateAnnouncement.value = updateResult.announcement
+            val updateInfo = updateResult.updateInfo
             _appUpdateState.value = updateInfo
                 ?.let { AppUpdateState.Available(it) }
                 ?: AppUpdateState.NoUpdate

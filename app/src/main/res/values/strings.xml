@@ -561,6 +561,7 @@ Recommendations are as follows:\n
     <string name="search_load_failed_with_reason">Load failed: %1$s</string>
     <string name="load_failed_with_reason">Load failed: %1$s</string>
     <string name="more">More</string>
+    <string name="update_announcement_title">Announcement</string>
     <string name="announcement_list">Announcement List</string>
     <string name="view_all">View All</string>
     <string name="open_menu">Open menu</string>

@@ -4,6 +4,9 @@ import android.util.Base64
 import android.util.Log
 import androidx.core.content.edit
 import io.github.daisukikaffuchino.han1meviewer.Preferences
+import io.github.daisukikaffuchino.han1meviewer.R
+import io.github.daisukikaffuchino.han1meviewer.logic.model.Announcement
+import io.github.daisukikaffuchino.utils.applicationContext
 import io.github.daisukikaffuchino.utils.decodeFromStringByBase64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -24,23 +27,37 @@ data class AppUpdateInfo(
     val forceUpdate: Boolean,
 )
 
+data class AppUpdateCheckResult(
+    val updateInfo: AppUpdateInfo? = null,
+    val announcement: Announcement? = null,
+)
+
 sealed interface AppUpdateState {
     data object Checking : AppUpdateState
     data object NoUpdate : AppUpdateState
     data class Available(val info: AppUpdateInfo) : AppUpdateState
 }
 
+@Serializable
+private data class AppUpdatePayload(
+    val versionName: String? = null,
+    val versionCode: Int = 0,
+    val downloadUrl: String? = null,
+    val updateDescription: String = "",
+    val forceUpdate: Boolean = false,
+    val isShowAnnouncement: Boolean = false,
+    val announcement: String = "",
+)
+
 @OptIn(ExperimentalSerializationApi::class)
 object AppUpdateChecker {
     private const val TAG = "AppUpdateChecker"
-    private const val UPDATE_URL =
-        "https://hnm-1258664276.cos.ap-shanghai.myqcloud.com/update.json"
-    private const val UPDATE_REFERER = "hnmviewerup.com"
-    private const val ENCODED_CURRENT_VERSION_CODE = "MjYwNzE5"
-    private const val LAST_CHECK_TIME_KEY = "app_update_last_check_time"
+    private const val ENCODED_UPDATE_URL =
+        "aHR0cHM6Ly9obm0tMTI1ODY2NDI3Ni5jb3MuYXAtc2hhbmdoYWkubXlxY2xvdWQuY29tL3VwZGF0ZS5qc29u"
+    private const val ENCODED_UPDATE_REFERER = "aG5tdmlld2VydXAuY29t"
+    private const val ENCODED_CURRENT_VERSION_CODE = "MjYwNzIy"
     private const val CACHED_JSON_KEY = "app_update_cached_json"
     private const val IGNORED_VERSION_CODE_KEY = "app_update_ignored_version_code"
-    private const val CHECK_INTERVAL_MILLIS = 2L * 60L * 60L * 1_000L
 
     private val jsonParser = Json {
         ignoreUnknownKeys = true
@@ -55,25 +72,15 @@ object AppUpdateChecker {
             .build()
     }
 
-    suspend fun checkForUpdate(): AppUpdateInfo? = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdate(): AppUpdateCheckResult = withContext(Dispatchers.IO) {
         val preferences = Preferences.preferenceSp
-        val now = System.currentTimeMillis()
-        val lastCheckTime = preferences.getLong(LAST_CHECK_TIME_KEY, 0L)
         val cachedJson = preferences.getString(CACHED_JSON_KEY, null)
-        val isCacheFresh = lastCheckTime in 1..now &&
-            now - lastCheckTime < CHECK_INTERVAL_MILLIS
-
-        if (isCacheFresh) {
-            cachedJson?.let { Log.d(TAG, "Cached update JSON: $it") }
-            return@withContext cachedJson.toAvailableUpdateOrNull()
-        }
 
         val responseJson = runCatching { requestUpdateJson() }
             .onFailure { Log.e(TAG, "Failed to check for updates", it) }
             .getOrNull()
 
         preferences.edit {
-            putLong(LAST_CHECK_TIME_KEY, now)
             if (responseJson != null) {
                 putString(CACHED_JSON_KEY, responseJson)
             }
@@ -83,7 +90,7 @@ object AppUpdateChecker {
         if (responseJson == null) {
             jsonToUse?.let { Log.d(TAG, "Using stale update JSON: $it") }
         }
-        jsonToUse.toAvailableUpdateOrNull()
+        jsonToUse.toUpdateCheckResult()
     }
 
     fun ignoreUpdate(versionCode: Int) {
@@ -94,8 +101,11 @@ object AppUpdateChecker {
 
     private fun requestUpdateJson(): String {
         val request = Request.Builder()
-            .url(UPDATE_URL)
-            .header("Referer", UPDATE_REFERER)
+            .url(ENCODED_UPDATE_URL.decodeFromStringByBase64(Base64.NO_WRAP))
+            .header(
+                "Referer",
+                ENCODED_UPDATE_REFERER.decodeFromStringByBase64(Base64.NO_WRAP)
+            )
             .get()
             .build()
         return client.newCall(request).execute().use { response ->
@@ -106,27 +116,54 @@ object AppUpdateChecker {
         }
     }
 
-    private fun String?.toAvailableUpdateOrNull(): AppUpdateInfo? {
-        if (this.isNullOrBlank()) return null
+    private fun String?.toUpdateCheckResult(): AppUpdateCheckResult {
+        if (this.isNullOrBlank()) return AppUpdateCheckResult()
         return runCatching {
-            val info = jsonParser.decodeFromString<AppUpdateInfo>(this)
-            require(info.versionName.isNotBlank()) { "versionName is blank" }
-            require(info.versionCode > 0) { "versionCode must be positive" }
-            require(info.downloadUrl.toHttpUrlOrNull() != null) { "downloadUrl is invalid" }
-
-            val currentVersionCode = ENCODED_CURRENT_VERSION_CODE
-                .decodeFromStringByBase64(Base64.NO_WRAP)
-                .toInt()
-            val ignoredVersionCode = Preferences.preferenceSp.getInt(
-                IGNORED_VERSION_CODE_KEY,
-                -1,
+            val payload = jsonParser.decodeFromString<AppUpdatePayload>(this)
+            AppUpdateCheckResult(
+                updateInfo = payload.toAvailableUpdateOrNull(),
+                announcement = payload.toAnnouncementOrNull(),
             )
-            info.takeIf {
-                it.versionCode > currentVersionCode &&
-                    (it.forceUpdate || it.versionCode != ignoredVersionCode)
-            }
         }.onFailure {
             Log.e(TAG, "Invalid update JSON", it)
-        }.getOrNull()
+        }.getOrDefault(AppUpdateCheckResult())
+    }
+
+    private fun AppUpdatePayload.toAvailableUpdateOrNull(): AppUpdateInfo? {
+        val versionName = versionName?.trim().orEmpty()
+        val downloadUrl = downloadUrl?.trim().orEmpty()
+        if (versionName.isBlank() || versionCode <= 0 || downloadUrl.isBlank()) return null
+        if (downloadUrl.toHttpUrlOrNull() == null) {
+            Log.e(TAG, "downloadUrl is invalid")
+            return null
+        }
+
+        val currentVersionCode = ENCODED_CURRENT_VERSION_CODE
+            .decodeFromStringByBase64(Base64.NO_WRAP)
+            .toInt()
+        val ignoredVersionCode = Preferences.preferenceSp.getInt(
+            IGNORED_VERSION_CODE_KEY,
+            -1,
+        )
+        return AppUpdateInfo(
+            versionName = versionName,
+            versionCode = versionCode,
+            downloadUrl = downloadUrl,
+            updateDescription = updateDescription,
+            forceUpdate = forceUpdate,
+        ).takeIf {
+            it.versionCode > currentVersionCode &&
+                (it.forceUpdate || it.versionCode != ignoredVersionCode)
+        }
+    }
+
+    private fun AppUpdatePayload.toAnnouncementOrNull(): Announcement? {
+        val content = announcement.trim()
+        if (!isShowAnnouncement || content.isBlank()) return null
+        return Announcement(
+            title = applicationContext.getString(R.string.update_announcement_title),
+            content = content,
+            isActive = true,
+        )
     }
 }

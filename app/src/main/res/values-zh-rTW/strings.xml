@@ -553,6 +553,7 @@
     <string name="search_load_failed_with_reason">載入失敗：%1$s</string>
     <string name="load_failed_with_reason">載入失敗：%1$s</string>
     <string name="more">更多</string>
+    <string name="update_announcement_title">公告</string>
     <string name="announcement_list">公告列表</string>
     <string name="view_all">查看全部</string>
     <string name="open_menu">開啟選單</string>

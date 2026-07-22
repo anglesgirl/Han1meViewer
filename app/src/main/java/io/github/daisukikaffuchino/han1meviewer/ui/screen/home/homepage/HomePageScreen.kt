@@ -41,6 +41,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.component.isFirstPageError
 import io.github.daisukikaffuchino.han1meviewer.ui.component.isFirstPageLoading
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.component.HomePageTopBar
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.component.AppUpdateCard
+import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.component.AnnouncementCard
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.rememberRandomLoadingHint
 import io.github.daisukikaffuchino.han1meviewer.util.toNetworkErrorMessageRes
 
@@ -62,6 +63,7 @@ fun HomePageScreen(
     val context = LocalContext.current
     val pageState by viewModel.homePageFlow.collectAsStateWithLifecycle()
     val updateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
+    val updateAnnouncement by viewModel.updateAnnouncement.collectAsStateWithLifecycle()
     val refreshState = rememberPullToRefreshState()
     var wasRefreshing by remember { mutableStateOf(false) }
     val loadingHint = rememberRandomLoadingHint()
@@ -106,6 +108,17 @@ fun HomePageScreen(
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.Center,
                 ) {
+                    updateAnnouncement?.let { announcement ->
+                        item(key = "forced_update_announcement") {
+                            AnnouncementCard(
+                                announcements = listOf(announcement),
+                                onAnnouncementClick = { selectedAnnouncement ->
+                                    onEvent(HomeUiEvent.ShowAnnouncementDialog(selectedAnnouncement))
+                                },
+                                onClose = null,
+                            )
+                        }
+                    }
                     item(key = "forced_update_${forcedUpdate.versionCode}") {
                         AppUpdateCard(
                             updateInfo = forcedUpdate,
@@ -157,6 +170,7 @@ fun HomePageScreen(
                                 HomePageContent(
                                     data = data,
                                     updateInfo = availableUpdate,
+                                    updateAnnouncement = updateAnnouncement,
                                     onEvent = onEvent,
                                     onCloseAnnouncement = viewModel::dismissAnnouncements,
                                 )
