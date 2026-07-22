@@ -73,7 +73,6 @@ import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.CommentViewModel
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.VideoViewModel
 import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
 import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberShareText
-import io.github.daisukikaffuchino.han1meviewer.util.checkBadGuy
 import io.github.daisukikaffuchino.han1meviewer.util.loadAssetAs
 import io.github.daisukikaffuchino.utils.OrientationManager
 import io.github.daisukikaffuchino.utils.dp
@@ -497,7 +496,6 @@ fun VideoRouteHostScreen(
         checkedQuality = null
         pendingDownloadPrompt = null
         videoTitle = null
-        checkBadGuy(activity, R.raw.akarin)
         viewModel.videoCode = route.videoCode
         viewModel.getHanimeVideo(route.videoCode, route.localUri)
     }
