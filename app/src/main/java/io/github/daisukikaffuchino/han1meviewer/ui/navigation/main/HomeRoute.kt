@@ -8,19 +8,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
+import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.getHanimeShareText
 import io.github.daisukikaffuchino.han1meviewer.logic.DatabaseRepo
+import io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInType
 import io.github.daisukikaffuchino.han1meviewer.logic.model.Announcement
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.component.AnnouncementDialog
 import io.github.daisukikaffuchino.han1meviewer.ui.component.ConfirmDialog
+import io.github.daisukikaffuchino.han1meviewer.ui.component.TripleButtonDialog
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomePageScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.HomeUiEvent
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.LocalSearchHistoryQuery
 import io.github.daisukikaffuchino.han1meviewer.ui.util.rememberCopyTextToClipboard
+import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.CheckInCalendarViewModel
 import io.github.daisukikaffuchino.utils.showShortToast
 import kotlinx.coroutines.flow.first
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun HomeRouteScreen(
@@ -33,6 +42,8 @@ fun HomeRouteScreen(
     onNavigateToVideo: (String) -> Unit,
 ) {
     val viewModel = activity.viewModel
+    val checkInEnabled by Preferences.checkInEnabledFlow.collectAsStateWithLifecycle()
+    val checkInViewModel: CheckInCalendarViewModel? = if (checkInEnabled) composeViewModel() else null
     val copyTextToClipboard = rememberCopyTextToClipboard()
     val uriHandler = LocalUriHandler.current
     val confirmToExit = stringResource(R.string.confirm_to_exit)
@@ -72,7 +83,28 @@ fun HomeRouteScreen(
         )
     }
 
-    if (showExitDialog) {
+    if (showExitDialog && checkInEnabled) {
+        TripleButtonDialog(
+            visible = true,
+            title = confirmToExit,
+            message = stringResource(R.string.finished_masturbating),
+            negativeText = stringResource(R.string.do_more),
+            neutralText = stringResource(R.string.checkout_exit),
+            positiveText = exit,
+            onNegative = { showExitDialog = false },
+            onNeutral = {
+                checkInViewModel?.addRecord(
+                    LocalDate.now(),
+                    LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")),
+                    CheckInType.MASTURBATION.storeName,
+                    "",
+                )
+                activity.finish()
+            },
+            onPositive = { activity.finish() },
+            onDismiss = { showExitDialog = false },
+        )
+    } else if (showExitDialog) {
         ConfirmDialog(
             visible = true,
             title = confirmToExit,

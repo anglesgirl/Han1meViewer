@@ -583,10 +583,10 @@
     <string name="home_error_server_unavailable">伺服器暫時無法使用，請稍後再試。</string>
     <string name="home_error_generic">頁面載入失敗，請檢查網路連線後重試。</string>
     <string name="backup_export_title">匯出資料備份</string>
-    <string name="backup_export_summary">匯出設定、觀看紀錄、下載分組與影片資訊、H 關鍵幀，方便換機還原</string>
+    <string name="backup_export_summary">匯出設定、觀看紀錄、下載分組與影片資訊、H 關鍵幀和「沖了麼」記錄，方便換機還原</string>
     <string name="backup_import_title">匯入資料備份</string>
-    <string name="backup_import_summary">從備份檔案還原設定、觀看紀錄、下載分組與影片資訊、H 關鍵幀</string>
-    <string name="backup_import_confirm_message">匯入後將覆蓋目前的設定、觀看紀錄、下載分組與影片資訊、H 關鍵幀。備份不包含影片檔案本體，確定要繼續嗎？</string>
+    <string name="backup_import_summary">從備份檔案還原設定、觀看紀錄、下載分組與影片資訊、H 關鍵幀和「沖了麼」記錄</string>
+    <string name="backup_import_confirm_message">匯入後將覆蓋目前的設定、觀看紀錄、下載分組與影片資訊、H 關鍵幀和「沖了麼」記錄。備份不包含影片檔案本體，確定要繼續嗎？</string>
     <string name="backup_export_success">資料備份已匯出</string>
     <string name="backup_export_failed">資料備份匯出失敗</string>
     <string name="backup_import_success">資料備份已匯入</string>

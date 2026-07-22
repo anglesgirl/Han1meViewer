@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="check_in_feature_name">Cum Tracker</string>
+    <string name="enable_check_in_feature">Enable Cum Tracker</string>
+    <string name="enable_check_in_feature_summary">Show the drawer entry and quick check-in action. Existing records are kept when disabled.</string>
+    <string name="quick_checkin">Quick Check-In</string>
+    <string name="checkin_success">Checked in</string>
+    <string name="has_mastur">Cum Tracker</string>
+    <string name="has_cum">Cum Tracker</string>
+    <string name="finished_masturbating">Finished already?</string>
+    <string name="do_more">Not yet</string>
+    <string name="checkout_exit">Check In &amp; Exit</string>
+
+    <string name="checkin_calendar">Check-in calendar</string>
+    <string name="this_month_checkin">This month</string>
+    <string name="days">%1$d days</string>
+    <string name="counts">%1$d times</string>
+    <string name="has_cum_days">Total</string>
+    <string name="today_checked">Checked in today:</string>
+    <string name="times">times</string>
+    <string name="not_checked_yet">Not checked in today</string>
+    <string name="checkin">Check In</string>
+    <string name="clear_checkin">Clear</string>
+    <string name="best_streak">Best streak</string>
+    <string name="day_unit">d</string>
+    <string name="mon">Mon</string>
+    <string name="tue">Tue</string>
+    <string name="wed">Wed</string>
+    <string name="thu">Thu</string>
+    <string name="fri">Fri</string>
+    <string name="sat">Sat</string>
+    <string name="sun">Sun</string>
+
+    <string name="legend_title">Legend</string>
+    <string name="champion_title">Champion</string>
+    <string name="on_fire_title">On Fire</string>
+    <string name="great_title">Great Work</string>
+    <string name="week_streak_title">Weekly Streak</string>
+    <string name="keep_going_title">Keep Going</string>
+    <string name="nice_title">Nice</string>
+    <string name="streak_title">Streak Achieved</string>
+    <string name="achievement_desc_top">%1$d times this month. Legendary.</string>
+    <string name="achievement_desc_days">Checked in on %1$d days this month.</string>
+    <string name="achievement_desc_streak">Best streak: %1$d days.</string>
+    <string name="achievement_desc_keep">Keep the streak going.</string>
+    <string name="ach_multi_type">Mix It Up</string>
+    <string name="ach_night_owl">Night Owl</string>
+    <string name="ach_morning">Early Bird</string>
+    <string name="ach_scholar">Scholar</string>
+    <string name="sex_times">The engine has officially overheated.</string>
+
+    <string name="checkin_tip">Long press a date to clear its records</string>
+    <string name="forgot_title">Forgot to check in?</string>
+    <string name="forgot_message">%1$s has no records. Add one now?</string>
+    <string name="forgot_confirm">Add record</string>
+    <string name="forgot_dismiss">Not now</string>
+    <string name="suck_back_title">Clear these records?</string>
+    <string name="suck_back_message">%1$s has %2$d records. Clear all of them?</string>
+    <string name="suck_back_confirm">Clear</string>
+    <string name="suck_back_dismiss">Cancel</string>
+    <string name="suck_back_done">Records cleared</string>
+    <string name="calendar_title">Check-in reminder for %1$d/%2$d</string>
+    <string name="calendar_desc">Remember your scheduled check-in.</string>
+    <string name="calendar_location">Home</string>
+    <string name="calendar_dialog_title">Create a reminder?</string>
+    <string name="calendar_dialog_message">Create a calendar reminder for %1$s?</string>
+    <string name="calendar_dialog_confirm">Create reminder</string>
+    <string name="no_calendar_app">No calendar app found</string>
+
+    <string name="view_checkin">View</string>
+    <string name="dialog_existing_records">Existing records</string>
+    <string name="dialog_max_reached">Daily limit reached (20)</string>
+    <string name="checkin_type_label">Type</string>
+    <string name="checkin_type_masturbation">Masturbation</string>
+    <string name="checkin_type_wet_dream">Wet Dream</string>
+    <string name="checkin_type_sex">Sex</string>
+    <string name="checkin_type_oral">Oral</string>
+    <string name="checkin_type_other">Other</string>
+    <string name="dialog_type_label">Type</string>
+    <string name="dialog_feeling_label">Notes</string>
+    <string name="dialog_feeling_hint">Add a note</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_confirm">Check In</string>
+
+    <string name="egg_three">Three times today.</string>
+    <string name="egg_four">Four times today.</string>
+    <string name="egg_round">%1$d times today.</string>
+    <string name="egg_god">%1$d times today. A new record.</string>
+    <string name="egg_nice">%1$d times today. Nice.</string>
+    <string name="egg_streak">%1$d day streak.</string>
+    <string name="egg_singles">No check-in today?</string>
+
+    <string name="widget_description">Cum Tracker widget for quick home-screen check-ins</string>
+    <string name="widget_checkin">Check In</string>
+    <string name="add_widget">Add Home Widget</string>
+    <string name="widget_not_supported">Your launcher does not support direct widget pinning</string>
+    <string name="widget_pick_hint">Find Cum Tracker in the widget picker</string>
+    <string name="widget_today_label">Today</string>
+    <string name="widget_month_label">Month</string>
+    <string name="widget_month_stats_format">This month: %1$d days / %2$d times</string>
+    <string name="widget_best_streak_format">Best streak: %1$d days</string>
+    <string name="widget_feature_disabled">Cum Tracker is disabled in settings</string>
+    <string name="widget_pin_not_supported_manual_add">If guided pinning is unavailable, add the widget manually.</string>
+
+    <string name="checkin_report">Check-in Report</string>
+    <string name="report_year">Year</string>
+    <string name="report_month">Month</string>
+    <string name="report_total">Total</string>
+    <string name="report_days">Days</string>
+    <string name="report_max_day">Max/day</string>
+    <string name="report_no_data">No check-in records</string>
+    <string name="report_legend_less">Less</string>
+    <string name="report_legend_more">More</string>
+    <string name="report_landscape">Landscape</string>
+    <string name="report_portrait">Portrait</string>
+    <string name="report_year_format">%1$d</string>
+    <string name="report_month_format">%1$d</string>
+    <string name="report_year_month_format">%2$d/%1$d</string>
+    <string name="previous_year">Previous year</string>
+    <string name="next_year">Next year</string>
+    <string name="previous_month">Previous month</string>
+    <string name="next_month">Next month</string>
+    <string name="checkin_count_format" translatable="false">x%1$d</string>
+</resources>

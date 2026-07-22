@@ -51,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -77,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.ResolutionLinkMap
+import io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInRecordEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.model.HanimeInfo
 import io.github.daisukikaffuchino.han1meviewer.logic.model.HanimeVideo
 import io.github.daisukikaffuchino.han1meviewer.logic.state.VideoLoadingState
@@ -127,6 +129,8 @@ fun VideoIntroductionScreen(
     onToggleFavorite: () -> Unit,
     onRateVideo: (Boolean) -> Unit,
     onManageMyList: (List<String>, List<Boolean>) -> Unit,
+    checkInEnabled: Boolean,
+    onQuickCheckIn: (CheckInRecordEntity) -> Unit,
     onPrepareDownload: (String) -> Unit,
     onDismissDownloadPrompt: () -> Unit,
     onConfirmDownloadPrompt: () -> Unit,
@@ -167,6 +171,8 @@ fun VideoIntroductionScreen(
                 onToggleFavorite = onToggleFavorite,
                 onRateVideo = onRateVideo,
                 onManageMyList = onManageMyList,
+                checkInEnabled = checkInEnabled,
+                onQuickCheckIn = onQuickCheckIn,
                 onPrepareDownload = onPrepareDownload,
                 onDismissDownloadPrompt = onDismissDownloadPrompt,
                 onConfirmDownloadPrompt = onConfirmDownloadPrompt,
@@ -219,6 +225,8 @@ private fun VideoIntroductionContent(
     onToggleFavorite: () -> Unit,
     onRateVideo: (Boolean) -> Unit,
     onManageMyList: (List<String>, List<Boolean>) -> Unit,
+    checkInEnabled: Boolean,
+    onQuickCheckIn: (CheckInRecordEntity) -> Unit,
     onPrepareDownload: (String) -> Unit,
     onDismissDownloadPrompt: () -> Unit,
     onConfirmDownloadPrompt: () -> Unit,
@@ -239,6 +247,7 @@ private fun VideoIntroductionContent(
         initialFirstVisibleItemScrollOffset = introFirstVisibleItemScrollOffset,
     )
     var showPlaylistSheet by remember { mutableStateOf(false) }
+    var showQuickCheckInDialog by remember { mutableStateOf(false) }
     var showMyListDialog by remember { mutableStateOf(false) }
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
 
@@ -277,6 +286,17 @@ private fun VideoIntroductionContent(
             onOpenVideo = {
                 showPlaylistSheet = false
                 onOpenVideo(it)
+            },
+        )
+    }
+
+    if (showQuickCheckInDialog) {
+        QuickCheckInDialog(
+            video = video,
+            onDismiss = { showQuickCheckInDialog = false },
+            onConfirm = {
+                onQuickCheckIn(it)
+                showQuickCheckInDialog = false
             },
         )
     }
@@ -349,6 +369,8 @@ private fun VideoIntroductionContent(
                 ActionSection(
                     isFav = video.isFav,
                     hasOriginalComic = !video.originalComic.isNullOrBlank(),
+                    checkInEnabled = checkInEnabled,
+                    onQuickCheckIn = { showQuickCheckInDialog = true },
                     onOpenOriginalComic = onOpenOriginalComic,
                     onToggleFavorite = onToggleFavorite,
                     onManageMyList = { showMyListDialog = true },
@@ -501,6 +523,60 @@ private fun DownloadConfirmDialog(
                 TextButton(onClick = onDismiss) {
                     Text(stringResource(R.string.no))
                 }
+            }
+        },
+    )
+}
+
+@Composable
+private fun QuickCheckInDialog(
+    video: HanimeVideo,
+    onDismiss: () -> Unit,
+    onConfirm: (CheckInRecordEntity) -> Unit,
+) {
+    var feeling by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.quick_checkin)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = video.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                OutlinedTextField(
+                    value = feeling,
+                    onValueChange = { if (it.length <= 200) feeling = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text(stringResource(R.string.dialog_feeling_hint)) },
+                    minLines = 3,
+                    supportingText = { Text("${feeling.length}/200") },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val time = java.time.LocalTime.now()
+                        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                    onConfirm(
+                        CheckInRecordEntity(
+                            date = java.time.LocalDate.now().toString(),
+                            time = time,
+                            type = io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInType.MASTURBATION.storeName,
+                            feeling = feeling,
+                        )
+                    )
+                },
+            ) {
+                Text(stringResource(R.string.dialog_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
             }
         },
     )
@@ -994,6 +1070,8 @@ private fun ExpandableIntroductionSection(
 private fun ActionSection(
     isFav: Boolean,
     hasOriginalComic: Boolean,
+    checkInEnabled: Boolean,
+    onQuickCheckIn: () -> Unit,
     onOpenOriginalComic: (() -> Unit)?,
     onToggleFavorite: () -> Unit,
     onManageMyList: () -> Unit,
@@ -1009,6 +1087,13 @@ private fun ActionSection(
             .padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (checkInEnabled) {
+            VideoActionButton(
+                iconRes = R.drawable.ic_baseline_check_circle_24,
+                label = stringResource(R.string.quick_checkin),
+                onClick = onQuickCheckIn,
+            )
+        }
         if (hasOriginalComic && onOpenOriginalComic != null) {
             VideoActionButton(
                 iconRes = R.drawable.ic_baseline_book,
@@ -1248,6 +1333,8 @@ private fun VideoIntroductionScreenPreview() {
             onToggleFavorite = {},
             onRateVideo = {},
             onManageMyList = { _, _ -> },
+            checkInEnabled = true,
+            onQuickCheckIn = {},
             onPrepareDownload = {},
             onDismissDownloadPrompt = {},
             onConfirmDownloadPrompt = {},
@@ -1287,6 +1374,8 @@ private fun VideoIntroductionScreenLoadingPreview() {
             onToggleFavorite = {},
             onRateVideo = {},
             onManageMyList = { _, _ -> },
+            checkInEnabled = true,
+            onQuickCheckIn = {},
             onPrepareDownload = {},
             onDismissDownloadPrompt = {},
             onConfirmDownloadPrompt = {},
@@ -1326,6 +1415,8 @@ private fun VideoIntroductionScreenErrorPreview() {
             onToggleFavorite = {},
             onRateVideo = {},
             onManageMyList = { _, _ -> },
+            checkInEnabled = true,
+            onQuickCheckIn = {},
             onPrepareDownload = {},
             onDismissDownloadPrompt = {},
             onConfirmDownloadPrompt = {},

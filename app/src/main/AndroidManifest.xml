@@ -11,6 +11,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.INSERT" />
+            <data android:mimeType="vnd.android.cursor.dir/event" />
+        </intent>
+    </queries>
+
     <application
         android:name=".HanimeApplication"
         android:allowBackup="true"
@@ -156,6 +163,17 @@
             android:exported="true">
 
         </activity>
+
+        <receiver
+            android:name=".ui.widget.CheckInWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/checkin_widget_info" />
+        </receiver>
 
     </application>
 </manifest>

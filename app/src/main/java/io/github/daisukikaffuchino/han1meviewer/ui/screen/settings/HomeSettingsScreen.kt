@@ -71,6 +71,7 @@ fun HomeSettingsScreen(
     onDisableMobileDataWarningChange: (Boolean) -> Unit,
     onDisablePredictiveBackChange: (Boolean) -> Unit,
     onTabletModeChange: (Boolean) -> Unit,
+    onCheckInEnabledChange: (Boolean) -> Unit,
     onDisableCommentsChange: (Boolean) -> Unit,
     onCollapseDownloadedGroupChange: (Boolean) -> Unit,
     onSearchGridColumnsConfigChange: (SearchGridColumnsConfig) -> Unit,
@@ -330,6 +331,13 @@ fun HomeSettingsScreen(
                             iconRes = R.drawable.ic_baseline_tablet_24,
                             onCheckedChange = onTabletModeChange,
                         )
+                        SettingSwitchItem(
+                            title = stringResource(R.string.enable_check_in_feature),
+                            summary = stringResource(R.string.enable_check_in_feature_summary),
+                            checked = state.checkInEnabled,
+                            iconRes = R.drawable.ic_baseline_thumb_up_off_alt_24,
+                            onCheckedChange = onCheckInEnabledChange,
+                        )
                         SettingsAnimatedVisibility(visible = state.tabletMode) {
                             SettingNavigationItem(
                                 title = stringResource(R.string.search_grid_columns_title),
@@ -512,6 +520,7 @@ private fun HomeSettingsScreenPreview() {
             onDisableMobileDataWarningChange = {},
             onDisablePredictiveBackChange = {},
             onTabletModeChange = {},
+            onCheckInEnabledChange = {},
             onDisableCommentsChange = {},
             onCollapseDownloadedGroupChange = {},
             onSearchGridColumnsConfigChange = {},
@@ -562,6 +571,7 @@ private fun previewHomeSettingsState() = HomeSettingsUiState(
     searchGridColumnsConfig = SearchGridColumnsConfig(),
     horizontalCardCountSummary = "1.5 / 2.1 / 4.1 / 5.1",
     horizontalCardCountConfig = HorizontalCardCountConfig(),
+    checkInEnabled = true,
     homeCategoryItems = emptyList(),
     homeCategoryOrder = emptyList(),
     hiddenHomeCategoryKeys = emptySet(),

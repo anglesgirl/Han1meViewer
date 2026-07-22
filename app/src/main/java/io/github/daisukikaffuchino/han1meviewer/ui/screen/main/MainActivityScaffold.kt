@@ -48,6 +48,7 @@ fun MainActivityScaffold(
     isLoggedIn: Boolean,
     isLoading: Boolean,
     currentSite: String,
+    checkInEnabled: Boolean,
     onAvatarClick: () -> Unit,
     onAvatarLongClick: () -> Unit,
     onSwitchSiteClick: () -> Unit,
@@ -83,7 +84,11 @@ fun MainActivityScaffold(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    MainDrawerPrimaryItems(selectedDestination, onDrawerItemSelected)
+                    MainDrawerPrimaryItems(
+                        selectedDestination = selectedDestination,
+                        onDrawerItemSelected = onDrawerItemSelected,
+                        checkInEnabled = checkInEnabled,
+                    )
                     MainDrawerSection(
                         titleRes = R.string.my_list,
                         items = listOf(
@@ -153,11 +158,13 @@ fun MainActivityScaffold(
 private fun MainDrawerPrimaryItems(
     selectedDestination: MainDrawerDestination?,
     onDrawerItemSelected: (MainDrawerDestination) -> Boolean,
+    checkInEnabled: Boolean,
 ) {
-    val primaryItems = listOf(
-        MainDrawerDestination.Home,
-        MainDrawerDestination.Settings,
-    )
+    val primaryItems = buildList {
+        add(MainDrawerDestination.Home)
+        add(MainDrawerDestination.Settings)
+        if (checkInEnabled) add(MainDrawerDestination.DailyCheckIn)
+    }
     Column {
         primaryItems.forEach { item ->
             NavigationDrawerItem(
@@ -226,6 +233,7 @@ private fun MainActivityScaffoldPreview() {
             isLoggedIn = true,
             isLoading = false,
             currentSite = "https://hanime1.me/",
+            checkInEnabled = true,
             onAvatarClick = {},
             onAvatarLongClick = {},
             onSwitchSiteClick = {},

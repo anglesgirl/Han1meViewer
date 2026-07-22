@@ -312,7 +312,7 @@ fun MoveGroupDialog(
                                 colors = ListItemDefaults.colors(
                                     containerColor = Color.Transparent
                                 ),
-                                elevation = ListItemDefaults.elevation(ListItemDefaults.Elevation),
+                                elevation = ListItemDefaults.elevation(),
                                 content = {
                                     Text(
                                         text = group.name,

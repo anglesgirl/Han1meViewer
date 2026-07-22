@@ -3,17 +3,21 @@ package io.github.daisukikaffuchino.han1meviewer.logic
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.edit
+import androidx.glance.appwidget.updateAll
 import io.github.daisukikaffuchino.han1meviewer.BuildConfig
 import io.github.daisukikaffuchino.han1meviewer.Preferences
+import io.github.daisukikaffuchino.han1meviewer.logic.dao.CheckInRecordDatabase
 import io.github.daisukikaffuchino.han1meviewer.logic.dao.DownloadDatabase
 import io.github.daisukikaffuchino.han1meviewer.logic.dao.HistoryDatabase
 import io.github.daisukikaffuchino.han1meviewer.logic.dao.MiscellanyDatabase
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.HKeyframeEntity
+import io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInRecordEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.WatchHistoryEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.download.DownloadCategoryEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.download.DownloadGroupEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.download.HanimeCategoryCrossRef
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.download.HanimeDownloadEntity
+import io.github.daisukikaffuchino.han1meviewer.ui.widget.CheckInWidget
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.OutputStream
@@ -35,6 +39,7 @@ object BackupManager {
         val exportedAt: Long = System.currentTimeMillis(),
         val settings: Map<String, PreferenceValue>? = null,
         val hKeyframes: List<HKeyframeEntity>? = null,
+        val checkInRecords: List<CheckInRecordEntity>? = null,
         val watchHistories: List<WatchHistoryEntity>? = null,
         val downloadGroups: List<DownloadGroupEntity>? = null,
         val downloads: List<HanimeDownloadEntity>? = null,
@@ -78,6 +83,13 @@ object BackupManager {
             MiscellanyDatabase.instance.hKeyframeDao.apply {
                 deleteAll()
                 insertAll(hKeyframes)
+            }
+        }
+
+        backup.checkInRecords?.let { checkInRecords ->
+            CheckInRecordDatabase.getDatabase(context).checkInDao().apply {
+                deleteAll()
+                insertAll(checkInRecords)
             }
         }
 
@@ -135,6 +147,8 @@ object BackupManager {
                 }
             }
         }
+
+        runCatching { CheckInWidget().updateAll(context) }
     }
 
     private suspend fun exportTo(context: Context, outputStream: OutputStream) {
@@ -143,6 +157,7 @@ object BackupManager {
                 value.toPreferenceValue()
             },
             hKeyframes = MiscellanyDatabase.instance.hKeyframeDao.getAll(),
+            checkInRecords = CheckInRecordDatabase.getDatabase(context).checkInDao().getAllRecords(),
             watchHistories = HistoryDatabase.instance.watchHistory.getAll(),
             downloadGroups = DownloadDatabase.instance.downloadGroupDao.getAllGroupsOnce(),
             downloads = DownloadDatabase.instance.hanimeDownloadDao.getAll(),

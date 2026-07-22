@@ -41,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.edit
+import androidx.glance.appwidget.updateAll
 import io.github.daisukikaffuchino.han1meviewer.BuildConfig
 import io.github.daisukikaffuchino.han1meviewer.HanimeConstants
 import io.github.daisukikaffuchino.han1meviewer.HA1_GITHUB_FORUM_URL
@@ -52,13 +53,14 @@ import io.github.daisukikaffuchino.han1meviewer.logic.BackupManager
 import io.github.daisukikaffuchino.han1meviewer.logic.model.AppLanguage
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.component.ConfirmDialog
-import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.HomeSettingsScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.HomeSettingsPage
+import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.HomeSettingsScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.model.HomeSettingsUiState
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.defaultHomeCategoryPreferenceItems
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.hiddenHomeCategoryKeys
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.homeCategoryOrder
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.home.homepage.saveHomeCategoryPreferences
+import io.github.daisukikaffuchino.han1meviewer.ui.widget.CheckInWidget
 import io.github.daisukikaffuchino.han1meviewer.util.AppLanguageManager
 import io.github.daisukikaffuchino.han1meviewer.util.showToast
 import io.github.daisukikaffuchino.utils.ActivityManager
@@ -242,6 +244,11 @@ fun HomeSettingsRouteScreen(
         onTabletModeChange = {
             saveBoolean(HOME_TABLET_MODE, it)
             refreshKey++
+        },
+        onCheckInEnabledChange = {
+            Preferences.isCheckInEnabled = it
+            refreshKey++
+            coroutineScope.launch { CheckInWidget().updateAll(context) }
         },
         onDisableCommentsChange = {
             saveBoolean(HOME_DISABLE_COMMENTS, it)
@@ -539,6 +546,7 @@ private fun buildHomeSettingsUiState(
         searchGridColumnsConfig = searchGridColumnsConfig,
         horizontalCardCountSummary = "${horizontalCardCountConfig.narrowCount}~${horizontalCardCountConfig.expandedCount}",
         horizontalCardCountConfig = horizontalCardCountConfig,
+        checkInEnabled = Preferences.isCheckInEnabled,
         homeCategoryItems = defaultHomeCategoryPreferenceItems,
         homeCategoryOrder = homeCategoryOrder,
         hiddenHomeCategoryKeys = hiddenHomeCategoryKeys,

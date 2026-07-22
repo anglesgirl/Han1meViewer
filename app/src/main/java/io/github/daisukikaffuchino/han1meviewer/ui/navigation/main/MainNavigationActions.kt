@@ -13,6 +13,8 @@ private val loginRequiredDrawerItems = setOf(
     MainDrawerDestination.Subscription,
 )
 
+const val EXTRA_OPEN_DAILY_CHECK_IN = "openDailyCheckIn"
+
 fun NavHostController.navigateDrawerDestination(
     destination: MainDrawerDestination,
     isLoggedIn: Boolean,
@@ -26,6 +28,7 @@ fun NavHostController.navigateDrawerDestination(
     when (destination) {
         MainDrawerDestination.Home -> navigateSafely(HomeRoute)
         MainDrawerDestination.Settings -> navigateSafely(HomeSettingsRoute)
+        MainDrawerDestination.DailyCheckIn -> navigateSafely(DailyCheckInRoute)
         MainDrawerDestination.WatchLater -> navigateSafely(MyWatchLaterRoute)
         MainDrawerDestination.FavVideo -> navigateSafely(MyFavVideoRoute)
         MainDrawerDestination.Playlist -> navigateSafely(MyPlaylistRoute)
@@ -50,6 +53,14 @@ fun NavHostController.handleMainIntent(intent: Intent) {
             "file", "content" -> {
                 navigateSafely(VideoRoute("-1", uri.toString()))
             }
+        }
+        return
+    }
+
+    if (intent.getBooleanExtra(EXTRA_OPEN_DAILY_CHECK_IN, false)) {
+        intent.removeExtra(EXTRA_OPEN_DAILY_CHECK_IN)
+        navigateSafely(DailyCheckInRoute) {
+            launchSingleTop = true
         }
         return
     }

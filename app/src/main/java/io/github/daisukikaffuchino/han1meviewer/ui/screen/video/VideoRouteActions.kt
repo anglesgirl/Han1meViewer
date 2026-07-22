@@ -1,17 +1,21 @@
 package io.github.daisukikaffuchino.han1meviewer.ui.screen.video
 
 import android.content.Context
+import androidx.glance.appwidget.updateAll
 import io.github.daisukikaffuchino.han1meviewer.HAdvancedSearch
 import io.github.daisukikaffuchino.han1meviewer.HCacheManager
 import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.getHanimeVideoDownloadLink
 import io.github.daisukikaffuchino.han1meviewer.getHanimeVideoLink
+import io.github.daisukikaffuchino.han1meviewer.logic.dao.CheckInRecordDatabase
+import io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInRecordEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.model.HanimeVideo
 import io.github.daisukikaffuchino.han1meviewer.logic.model.SearchOption
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.navigateSafely
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.SearchRoute
+import io.github.daisukikaffuchino.han1meviewer.ui.widget.CheckInWidget
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.VideoViewModel
 import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadManager
 import io.github.daisukikaffuchino.han1meviewer.worker.HanimeDownloadWorker
@@ -118,6 +122,16 @@ class VideoRouteActions(
                     isChecked = newChecked,
                     position = index,
                 )
+            }
+        }
+    }
+
+    fun quickCheckIn(record: CheckInRecordEntity) {
+        scope.launch(Dispatchers.IO) {
+            CheckInRecordDatabase.getDatabase(context).checkInDao().insert(record)
+            runCatching { CheckInWidget().updateAll(context) }
+            withContext(Dispatchers.Main) {
+                showShortToast(R.string.checkin_success)
             }
         }
     }

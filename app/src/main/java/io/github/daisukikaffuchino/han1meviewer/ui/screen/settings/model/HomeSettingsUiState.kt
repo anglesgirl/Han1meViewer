@@ -32,6 +32,7 @@ data class HomeSettingsUiState(
     val searchGridColumnsConfig: SearchGridColumnsConfig,
     val horizontalCardCountSummary: String,
     val horizontalCardCountConfig: HorizontalCardCountConfig,
+    val checkInEnabled: Boolean,
     val homeCategoryItems: List<HomeCategoryPreferenceItem>,
     val homeCategoryOrder: List<String>,
     val hiddenHomeCategoryKeys: Set<String>,

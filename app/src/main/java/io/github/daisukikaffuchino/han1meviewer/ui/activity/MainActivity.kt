@@ -46,7 +46,10 @@ class MainActivity : BaseActivity() {
 
     lateinit var navController: NavHostController
     private var showAuthGuard by mutableStateOf(true)
-    private val pendingNavigationRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
+    private val pendingNavigationRequests = MutableSharedFlow<Intent>(
+        replay = 1,
+        extraBufferCapacity = 1,
+    )
     private var currentVideoHost: VideoPageHost? = null
     private var showSiteSwitchConfirm by mutableStateOf(false)
     private var logoutDialogCloseCurrentPage by mutableStateOf<Boolean?>(null)

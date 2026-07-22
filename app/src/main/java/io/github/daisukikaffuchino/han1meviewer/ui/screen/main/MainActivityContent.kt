@@ -77,6 +77,7 @@ fun MainActivityContent(
         val homeState by viewModel.homePageFlow.collectAsStateWithLifecycle()
         val showStorageSwitchNotice by HCacheManager.storageSwitchNotice.collectAsStateWithLifecycle()
         val isLoggedIn by Preferences.loginStateFlow.collectAsStateWithLifecycle()
+        val checkInEnabled by Preferences.checkInEnabledFlow.collectAsStateWithLifecycle()
         val headerAvatarUrl = if (isLoggedIn) {
             (homeState as? PageState.Success)?.info?.page?.avatarUrl
         } else {
@@ -138,6 +139,7 @@ fun MainActivityContent(
             isLoggedIn = isLoggedIn,
             isLoading = headerIsLoading,
             currentSite = Preferences.baseUrl,
+            checkInEnabled = checkInEnabled,
             onAvatarClick = {
                 if (isLoggedIn) {
                     scope.launch { drawerState.close() }

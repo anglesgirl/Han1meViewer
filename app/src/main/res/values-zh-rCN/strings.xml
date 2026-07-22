@@ -596,10 +596,10 @@
     <string name="home_error_server_unavailable">服务器暂时不可用，请稍后再试。</string>
     <string name="home_error_generic">页面加载失败，请检查网络连接后重试。</string>
     <string name="backup_export_title">导出数据备份</string>
-    <string name="backup_export_summary">导出设置、观看历史、下载分组与影片信息、H 关键帧，方便换机还原</string>
+    <string name="backup_export_summary">导出设置、观看历史、下载分组与影片信息、H 关键帧和“冲了么”记录，方便换机还原</string>
     <string name="backup_import_title">导入数据备份</string>
-    <string name="backup_import_summary">从备份文件还原设置、观看历史、下载分组与影片信息、H 关键帧</string>
-    <string name="backup_import_confirm_message">导入后将覆盖当前的设置、观看历史、下载分组与影片信息、H 关键帧。备份不包含影片文件本体，确定要继续吗？</string>
+    <string name="backup_import_summary">从备份文件还原设置、观看历史、下载分组与影片信息、H 关键帧和“冲了么”记录</string>
+    <string name="backup_import_confirm_message">导入后将覆盖当前的设置、观看历史、下载分组与影片信息、H 关键帧和“冲了么”记录。备份不包含影片文件本体，确定要继续吗？</string>
     <string name="backup_export_success">数据备份已导出</string>
     <string name="backup_export_failed">数据备份导出失败</string>
     <string name="backup_import_success">数据备份已导入</string>

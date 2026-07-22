@@ -148,6 +148,15 @@ object Preferences {
             )?.toFloatOrNull() ?: HorizontalCardCountConfig.DEFAULT_EXPANDED_COUNT,
         )
 
+    var isCheckInEnabled: Boolean
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.CHECK_IN_ENABLED, true)
+        set(value) {
+            preferenceSp.edit { putBoolean(SettingsPreferenceKeys.CHECK_IN_ENABLED, value) }
+            checkInEnabledFlow.value = value
+        }
+
+    val checkInEnabledFlow = MutableStateFlow(isCheckInEnabled)
+
     val fakeLauncherIcon: String
         get() = preferenceSp.getString(
             SettingsPreferenceKeys.FAKE_LAUNCHER_ICON,

@@ -10,9 +10,9 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
-import android.os.Build
 import android.graphics.Rect
 import android.graphics.drawable.Icon
+import android.os.Build
 import android.util.Log
 import android.util.Rational
 import android.view.ContextThemeWrapper
@@ -80,11 +80,11 @@ import io.github.daisukikaffuchino.utils.dp
 import io.github.daisukikaffuchino.utils.showShortToast
 import io.github.daisukikaffuchino.utils.startActivity
 import io.github.daisukikaffuchino.utils.statusBarHeight
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
+@Suppress("DEPRECATION")
 @Composable
 fun VideoRouteHostScreen(
     activity: MainActivity,
@@ -128,30 +128,20 @@ fun VideoRouteHostScreen(
         val previousLightStatusBars = controller.isAppearanceLightStatusBars
         val previousLightNavigationBars = controller.isAppearanceLightNavigationBars
         val previousStatusBarContrastEnforced =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                window.isStatusBarContrastEnforced
-            } else {
-                null
-            }
+            window.isStatusBarContrastEnforced
         val previousNavigationBarContrastEnforced =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                window.isNavigationBarContrastEnforced
-            } else {
-                null
-            }
+            window.isNavigationBarContrastEnforced
 
         onDispose {
             window.statusBarColor = previousStatusBarColor
             window.navigationBarColor = previousNavigationBarColor
             controller.isAppearanceLightStatusBars = previousLightStatusBars
             controller.isAppearanceLightNavigationBars = previousLightNavigationBars
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                previousStatusBarContrastEnforced?.let {
-                    window.isStatusBarContrastEnforced = it
-                }
-                previousNavigationBarContrastEnforced?.let {
-                    window.isNavigationBarContrastEnforced = it
-                }
+            previousStatusBarContrastEnforced.let {
+                window.isStatusBarContrastEnforced = it
+            }
+            previousNavigationBarContrastEnforced.let {
+                window.isNavigationBarContrastEnforced = it
             }
         }
     }
@@ -163,10 +153,8 @@ fun VideoRouteHostScreen(
         window.navigationBarColor = Color.TRANSPARENT
         controller.isAppearanceLightStatusBars = false
         controller.isAppearanceLightNavigationBars = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isStatusBarContrastEnforced = false
-            window.isNavigationBarContrastEnforced = false
-        }
+        window.isStatusBarContrastEnforced = false
+        window.isNavigationBarContrastEnforced = false
     }
 
     commentViewModel.code = route.videoCode
@@ -364,6 +352,7 @@ fun VideoRouteHostScreen(
                 onToggleFavorite = actions::toggleFavorite,
                 onRateVideo = actions::rateVideo,
                 onManageMyList = actions::updateMyListSelection,
+                onQuickCheckIn = actions::quickCheckIn,
                 onPrepareDownload = { quality, video ->
                     checkedQuality = quality
                     video?.let(actions::startDownloadFlow)
@@ -428,6 +417,7 @@ fun VideoRouteHostScreen(
                     }
                     Jzvd.goOnPlayOnPause()
                 }
+
                 else -> Unit
             }
         }
@@ -655,7 +645,11 @@ fun VideoRouteHostScreen(
         dismissText = activity.getString(R.string.deny),
         onConfirm = {
             showNotificationPermissionReason = false
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermissionLauncher.launch(
+                    Manifest.permission.POST_NOTIFICATIONS
+                )
+            }
         },
         onDismiss = {
             showNotificationPermissionReason = false
