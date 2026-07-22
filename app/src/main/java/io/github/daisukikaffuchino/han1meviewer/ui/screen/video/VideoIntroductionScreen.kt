@@ -68,7 +68,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -653,6 +652,11 @@ private fun PlaylistBottomSheet(
                             contentScale = ContentScale.Crop,
                         )
                         Column(modifier = Modifier.weight(1f)) {
+                            val metaColor = if (item.isPlaying) {
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                             Text(
                                 text = item.title,
                                 style = MaterialTheme.typography.titleSmall,
@@ -664,17 +668,35 @@ private fun PlaylistBottomSheet(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Text(
-                                text = item.currentArtist.orEmpty(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (item.isPlaying) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            item.currentArtist?.takeIf { it.isNotBlank() }?.let { artist ->
+                                Text(
+                                    text = artist,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = metaColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            item.duration?.takeIf { it.isNotBlank() }?.let { duration ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_baseline_access_time_24),
+                                        contentDescription = null,
+                                        tint = metaColor,
+                                        modifier = Modifier.size(13.dp),
+                                    )
+                                    Text(
+                                        text = duration,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = metaColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                         }
                         if (item.isPlaying) {
                             Text(

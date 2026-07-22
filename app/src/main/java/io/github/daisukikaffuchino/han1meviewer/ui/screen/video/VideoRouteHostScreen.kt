@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Color
+import android.os.Build
 import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.util.Log
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +41,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.core.view.isVisible
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -75,6 +79,7 @@ import io.github.daisukikaffuchino.utils.OrientationManager
 import io.github.daisukikaffuchino.utils.dp
 import io.github.daisukikaffuchino.utils.showShortToast
 import io.github.daisukikaffuchino.utils.startActivity
+import io.github.daisukikaffuchino.utils.statusBarHeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlin.time.ExperimentalTime
@@ -113,6 +118,55 @@ fun VideoRouteHostScreen(
         viewModel.hanimeVideoFlow.collectAsStateWithLifecycle().value?.relatedHanimes.orEmpty()
     val stringLongPressShare = remember(activity) {
         activity.getString(R.string.long_press_share_to_copy)
+    }
+
+    DisposableEffect(activity) {
+        val window = activity.window
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        val previousStatusBarColor = window.statusBarColor
+        val previousNavigationBarColor = window.navigationBarColor
+        val previousLightStatusBars = controller.isAppearanceLightStatusBars
+        val previousLightNavigationBars = controller.isAppearanceLightNavigationBars
+        val previousStatusBarContrastEnforced =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isStatusBarContrastEnforced
+            } else {
+                null
+            }
+        val previousNavigationBarContrastEnforced =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isNavigationBarContrastEnforced
+            } else {
+                null
+            }
+
+        onDispose {
+            window.statusBarColor = previousStatusBarColor
+            window.navigationBarColor = previousNavigationBarColor
+            controller.isAppearanceLightStatusBars = previousLightStatusBars
+            controller.isAppearanceLightNavigationBars = previousLightNavigationBars
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                previousStatusBarContrastEnforced?.let {
+                    window.isStatusBarContrastEnforced = it
+                }
+                previousNavigationBarContrastEnforced?.let {
+                    window.isNavigationBarContrastEnforced = it
+                }
+            }
+        }
+    }
+
+    SideEffect {
+        val window = activity.window
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        window.statusBarColor = Color.BLACK
+        window.navigationBarColor = Color.TRANSPARENT
+        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightNavigationBars = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
     }
 
     commentViewModel.code = route.videoCode
@@ -636,10 +690,18 @@ private class VideoRouteShell(
 ) {
     private val rootView = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        fitsSystemWindows = true
+        fitsSystemWindows = false
         layoutParams = ViewGroup.LayoutParams(
             MATCH_PARENT,
             MATCH_PARENT,
+        )
+    }
+
+    private val statusBarSpacer = View(context).apply {
+        setBackgroundColor(Color.BLACK)
+        layoutParams = LinearLayout.LayoutParams(
+            MATCH_PARENT,
+            statusBarHeight,
         )
     }
 
@@ -660,6 +722,7 @@ private class VideoRouteShell(
 
     init {
         videoPlayerHost.addView(playerView, ViewGroup.LayoutParams(MATCH_PARENT, 250.dp))
+        rootView.addView(statusBarSpacer)
         rootView.addView(videoPlayerHost)
         rootView.addView(videoTabsHost)
     }

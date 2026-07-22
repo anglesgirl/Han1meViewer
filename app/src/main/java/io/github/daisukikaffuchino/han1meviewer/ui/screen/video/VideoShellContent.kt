@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,9 +65,7 @@ fun VideoShellContent(
     if (showSideRelated) {
         val indicatorWidth = 28.dp
         BoxWithConstraints(
-            modifier = modifier
-                .fillMaxSize()
-                .statusBarsPadding()
+            modifier = modifier.fillMaxSize()
         ) {
             val sideWidth by animateDpAsState(
                 targetValue = if (isSideRelatedCollapsed) indicatorWidth else maxWidth * 0.38f,
