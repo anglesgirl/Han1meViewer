@@ -9,7 +9,11 @@ import android.provider.CalendarContract
 import android.view.View
 import android.view.WindowInsetsController
 import android.widget.Toast
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.CheckInType
 import java.time.LocalDate
@@ -18,13 +22,21 @@ import java.time.YearMonth
 /**
  * 热力图颜色梯度（0 → 4+ 次）。
  */
-internal val contributionColors = listOf(
-    Color.Transparent,
-    Color(0xFF9BE9A8),
-    Color(0xFF40C463),
-    Color(0xFF30A14E),
-    Color(0xFF216E39),
-)
+@Composable
+internal fun rememberContributionColors(): List<Color> {
+    val primary = MaterialTheme.colorScheme.primary
+    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+
+    return remember(primary, primaryContainer) {
+        listOf(
+            lerp(primaryContainer, primary, 0.15f),
+            lerp(primaryContainer, primary, 0.35f),
+            lerp(primaryContainer, primary, 0.55f),
+            lerp(primaryContainer, primary, 0.75f),
+            primary
+        )
+    }
+}
 
 /**
  * 根据打卡次数返回热力图颜色等级。

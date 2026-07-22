@@ -132,7 +132,7 @@ fun CalendarGrid(
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                         color = when {
-                            isToday -> MaterialTheme.colorScheme.onTertiary
+                            isToday -> MaterialTheme.colorScheme.onTertiaryContainer
                             count > 0 -> MaterialTheme.colorScheme.onPrimaryContainer
                             else -> MaterialTheme.colorScheme.onSurface
                         }

@@ -18,7 +18,7 @@ enum class MainDrawerDestination(
         titleRes = R.string.settings,
     ),
     DailyCheckIn(
-        iconRes = R.drawable.ic_baseline_thumb_up_alt_24,
+        iconRes = R.drawable.ic_baseline_thumb_up_off_alt_24,
         titleRes = R.string.check_in_feature_name,
     ),
     WatchLater(

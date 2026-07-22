@@ -153,8 +153,6 @@ fun ContributionReportDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
                 val filteredRecords = if (viewMode == "year") {
                     yearRecords.filterKeys { it.year == selectedYear }
                 } else {
@@ -175,7 +173,7 @@ fun ContributionReportDialog(
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             StatItem(
-                                icon = Icons.Filled.DateRange,
+                                icon = R.drawable.calendar_month_24px,
                                 label = stringResource(R.string.report_total),
                                 value = totalCount.toString()
                             )
@@ -185,7 +183,7 @@ fun ContributionReportDialog(
                                     .width(1.dp)
                             )
                             StatItem(
-                                icon = Icons.Filled.Star,
+                                icon = R.drawable.alarm_24px,
                                 label = stringResource(R.string.report_days),
                                 value = totalDays.toString()
                             )
@@ -195,7 +193,7 @@ fun ContributionReportDialog(
                                     .width(1.dp)
                             )
                             StatItem(
-                                icon = Icons.Filled.Favorite,
+                                icon = R.drawable.calendar_view_week_24px,
                                 label = stringResource(R.string.report_max_day),
                                 value = maxDay.toString()
                             )
@@ -284,6 +282,7 @@ fun YearContributionView(
     val columnWidth = cellSize + cellPadding * 2
     val labelColWidth = 24.dp
     val scrollState = rememberScrollState()
+    val contributionColors = rememberContributionColors()
 
     Column {
         Row(
@@ -358,7 +357,7 @@ fun YearContributionView(
                                 .clip(RoundedCornerShape(2.dp))
                                 .background(
                                     if (count > 0) contributionColors[level]
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                                 )
                                 .then(
                                     if (isToday) Modifier.border(
@@ -403,6 +402,7 @@ fun MonthContributionView(
         stringResource(R.string.fri), stringResource(R.string.sat),
         stringResource(R.string.sun)
     )
+    val contributionColors = rememberContributionColors()
 
     Column {
         Row(
@@ -482,7 +482,7 @@ fun MonthContributionView(
                 val level = getContributionLevel(count)
                 val isToday = date == today
                 val cellBg = if (count > 0) contributionColors[level]
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
 
                 Box(
                     modifier = Modifier
@@ -528,6 +528,7 @@ fun MonthContributionView(
  */
 @Composable
 fun ContributionLegend() {
+    val contributionColors = rememberContributionColors()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center,
@@ -547,7 +548,7 @@ fun ContributionLegend() {
                     .clip(RoundedCornerShape(2.dp))
                     .background(
                         if (color == Color.Transparent)
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                         else color
                     )
             )
