@@ -29,6 +29,20 @@ android {
         buildConfigField("String", "VERSION_NAME", "\"${versionName}\"")
         buildConfigField("int", "VERSION_CODE", "$versionCode")
         buildConfigField("int", "SEARCH_YEAR_RANGE_END", "${Config.thisYear}")
+
+        externalNativeBuild {
+            cmake {
+                cppFlags("-std=c++17")
+                abiFilters += "arm64-v8a"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     splits {

@@ -13,6 +13,7 @@ import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.util.Base64
 import android.util.Log
 import android.util.Rational
 import android.view.ContextThemeWrapper
@@ -25,7 +26,12 @@ import android.widget.LinearLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,8 +43,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.Dialog
 import androidx.core.view.isVisible
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -51,6 +60,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.jzvd.JZMediaInterface
 import cn.jzvd.Jzvd
 import coil.load
+import io.github.daisukikaffuchino.han1meviewer.BuildConfig
 import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.getHanimeVideoLink
@@ -118,6 +128,7 @@ fun VideoRouteHostScreen(
     val stringLongPressShare = remember(activity) {
         activity.getString(R.string.long_press_share_to_copy)
     }
+    var showDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(activity) {
         val window = activity.window
@@ -553,6 +564,41 @@ fun VideoRouteHostScreen(
         }
     }
 
+    @Composable
+    fun Base64Dialog(
+        onDismiss: () -> Unit
+    ) {
+        val decodedTitle = remember {
+            String(Base64.decode("562+5ZCN5qCh6aqM5aSx6LSl", Base64.DEFAULT), Charsets.UTF_8)
+        }
+        val decodedContent = remember {
+            String(
+                Base64.decode(
+                    "5L2g5Y+v6IO95bey57uP6KKr6aqX5LqG77yM5LiL6L295Yiw5LqG6KKr56+h5pS555qE5bqU55So44CC5pys5bqU55So5byA5rqQ5YWN6LS55peg5bm/5ZGK77yM5Lil56aB5aKZ5YaF5byV5rWB44CB5pCs6L+Q44CB5YCS5Y2W44CC5Lmf5pyJ5bCP5qaC546H5piv5qCh6aqM562+5ZCN55qE5Luj56CB5Ye66ZSZ5LqG77yM5aaC5p6c5L2g5piv5Zyo5a6Y5pa5R2l0aHVi5LuT5bqT5LiL6L2955qE77yM6K+36IGU57O75byA5Y+R6ICF44CC",
+                    Base64.DEFAULT
+                ), Charsets.UTF_8
+            )
+        }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(text = decodedTitle) },
+            text = { Text(text = decodedContent) },
+            confirmButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(text = stringResource(android.R.string.ok))
+                }
+            }
+        )
+    }
+
+    if (showDialog) {
+        Base64Dialog(onDismiss = { showDialog = false })
+    }
+
+    LaunchedEffect(Unit) {
+        showDialog = !BuildConfig.DEBUG && !svc()
+    }
+
     @OptIn(ExperimentalTime::class)
     LaunchedEffect(route.videoCode, player) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.CREATED) {
@@ -671,6 +717,8 @@ fun VideoRouteHostScreen(
         },
     )
 }
+
+private external fun svc(): Boolean
 
 private fun createVideoPlayerView(activity: MainActivity): HJzvdStd {
     return HJzvdStd(ContextThemeWrapper(activity, activity.theme))

@@ -292,4 +292,8 @@ class MainActivity : BaseActivity() {
     fun togglePlayPause() {
         currentVideoHost?.togglePlayPause()
     }
+
+    init {
+        System.loadLibrary("chino")
+    }
 }

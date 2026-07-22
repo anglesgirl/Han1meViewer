@@ -31,3 +31,7 @@
 -keep class androidx.window.extensions.embedding.** { *; }
 -keep class is.xyz.mpv.** { *; }
 -keep class lis.xyz.mpv.** { *; }
+
+-keepclasseswithmembernames class io.github.daisukikaffuchino.han1meviewer.ui.screen.video.VideoRouteHostScreenKt {
+    native <methods>;
+}
