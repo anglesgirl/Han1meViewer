@@ -66,6 +66,8 @@ import io.github.daisukikaffuchino.han1meviewer.ui.theme.materialSharedAxisXOut
 import io.github.daisukikaffuchino.han1meviewer.ui.viewmodel.UserAccountViewModel
 import kotlinx.serialization.json.Json
 
+private const val PredictiveBackOffsetFactor = 0.10f
+
 @Composable
 fun MainNavHost(
     activity: MainActivity,
@@ -92,8 +94,12 @@ fun MainNavHost(
         startDestination = HomeRoute,
         enterTransition = { materialSharedAxisXIn(initialOffsetX = { it }) },
         exitTransition = { materialSharedAxisXOut(targetOffsetX = { -it }) },
-        popEnterTransition = { materialSharedAxisXIn(initialOffsetX = { -it }) },
-        popExitTransition = { materialSharedAxisXOut(targetOffsetX = { it }) },
+        popEnterTransition = {
+            materialSharedAxisXIn(initialOffsetX = { -(it * PredictiveBackOffsetFactor).toInt() })
+        },
+        popExitTransition = {
+            materialSharedAxisXOut(targetOffsetX = { (it * PredictiveBackOffsetFactor).toInt() })
+        },
     ) {
         composable<HomeRoute> {
             HomeRouteScreen(
