@@ -198,6 +198,10 @@ fun MainNavHost(
                     onOpenPrivacy = { navController.navigateSafely(PrivacySettingsRoute) },
                     onOpenData = { navController.navigateSafely(DataSettingsRoute) },
                     onOpenAbout = { navController.navigateSafely(AboutSettingsRoute) },
+                    onOpenProxyMonitor = {
+                        val intent = android.content.Intent(activity, io.github.daisukikaffuchino.han1meviewer.ui.activity.ProxyMonitorActivity::class.java)
+                        activity.startActivity(intent)
+                    },
                 )
             }
         }

@@ -63,6 +63,8 @@ android {
                 "proguard-rules.pro"
             )
             manifestPlaceholders["appIcon"] = "@mipmap/ic_launcher_new"
+            // 用 debug key 签名 release，使 APK 可直接安装
+            signingConfig = signingConfigs.getByName("debug")
         }
 
         debug {
@@ -92,6 +94,14 @@ android {
     @Suppress("UnstableApiUsage")
     androidResources {
         generateLocaleConfig = true
+    }
+
+    // Force extraction of native libraries (needed for Go ECH proxy binary)
+    @Suppress("UnstableApiUsage")
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
 }

@@ -25,6 +25,7 @@ fun SettingsMainScreen(
     onOpenPrivacy: () -> Unit,
     onOpenData: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenProxyMonitor: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -80,6 +81,15 @@ fun SettingsMainScreen(
         }
         item {
             SettingNavigationItem(
+                title = "ECH 代理监控",
+                summary = "查看 ECH 代理运行状态和日志",
+                iconRes = R.drawable.ic_captive_portal,
+                shapes = HanimeDefaults.largerShapes(),
+                onClick = onOpenProxyMonitor,
+            )
+        }
+        item {
+            SettingNavigationItem(
                 title = stringResource(R.string.settings_data),
                 summary = stringResource(R.string.settings_data_summary),
                 iconRes = R.drawable.data_table_24px,
@@ -103,6 +113,6 @@ fun SettingsMainScreen(
 @Composable
 private fun SettingsMainScreenPreview() {
     ComponentPreview {
-        SettingsMainScreen({}, {}, {}, {}, {}, {}, {})
+        SettingsMainScreen({}, {}, {}, {}, {}, {}, {}, {})
     }
 }

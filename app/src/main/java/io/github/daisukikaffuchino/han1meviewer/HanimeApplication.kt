@@ -9,6 +9,7 @@ import android.os.Bundle
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
+import io.github.daisukikaffuchino.han1meviewer.logic.network.ech.GoProxyManager
 import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders
 import io.github.daisukikaffuchino.han1meviewer.util.AppLanguageManager
 import io.github.daisukikaffuchino.utils.ActivityManager
@@ -49,6 +50,9 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         }
         val selected = Preferences.fakeLauncherIcon
         switchLauncher(selected)
+
+        // Auto-start ECH proxy on app launch
+        GoProxyManager.startAsync()
     }
 
     private fun initNotificationChannel() {

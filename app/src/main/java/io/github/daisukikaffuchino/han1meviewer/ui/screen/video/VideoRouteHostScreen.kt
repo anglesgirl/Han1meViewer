@@ -612,7 +612,9 @@ fun VideoRouteHostScreen(
                 )
             )
         else
-            showDialog = !BuildConfig.DEBUG && !svc()
+            // Fork 版本使用 debug key 签名，无法通过上游硬编码的签名 hash 校验，
+            // 因此直接跳过签名校验对话框。
+            showDialog = false
     }
 
     @OptIn(ExperimentalTime::class)

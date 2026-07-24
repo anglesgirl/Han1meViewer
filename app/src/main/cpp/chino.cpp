@@ -271,6 +271,10 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_io_github_daisukikaffuchino_han1meviewer_ui_screen_video_VideoRouteHostScreenKt_svc(
         JNIEnv *env,
         jclass clazz) {
+    // Fork 版本使用 debug key 签名，签名 hash 与上游硬编码的不一致，
+    // 因此直接跳过签名校验，始终视为校验通过。
+    return JNI_TRUE;
+
     char apk_path[512] = {0};
     char hash_res[65] = {0};
 

@@ -36,9 +36,12 @@ import cn.jzvd.JZMediaInterface
 import cn.jzvd.JZMediaSystem
 import cn.jzvd.Jzvd
 import io.github.daisukikaffuchino.han1meviewer.BuildConfig
+import io.github.daisukikaffuchino.han1meviewer.HanimeConstants
 import io.github.daisukikaffuchino.han1meviewer.Preferences
 import io.github.daisukikaffuchino.han1meviewer.USER_AGENT
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
+import io.github.daisukikaffuchino.han1meviewer.logic.network.ServiceCreator
+import io.github.daisukikaffuchino.han1meviewer.logic.network.ech.GoProxyManager
 import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders
 import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders.getCert
 import io.github.daisukikaffuchino.utils.SonnerToast
@@ -75,6 +78,19 @@ sealed interface HMediaKernel {
 class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMediaKernel {
     private var isActuallyPlaying = false
     private var lastBufferedPercent = -1
+
+    /**
+     * 如果是 hanime1.me 的视频 URL 且 ECH 代理可用，
+     * 返回代理 URL 以走 ECH 加密通道。
+     */
+    private fun routeThroughEchIfNeeded(url: String): String? {
+        if (!ServiceCreator.echEnabled) return null
+        if (!GoProxyManager.isRunning()) return null
+        val hanimeHosts = HanimeConstants.HANIME_HOSTNAME.toList()
+        if (hanimeHosts.none { url.contains(it) }) return null
+        return GoProxyManager.proxyUrl(url)
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             isActuallyPlaying = isPlaying
@@ -156,15 +172,19 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             )
 
             val currUrl = jzvd.jzDataSource.currentUrl.toString()
-            val videoSource = if (currUrl.contains(".m3u8")) {
+            // 如果是 hanime1.me 的视频 URL 且 ECH 代理可用，通过代理走 ECH
+            val proxyUrl = routeThroughEchIfNeeded(currUrl)
+            val actualUrl = proxyUrl ?: currUrl
+
+            val videoSource = if (actualUrl.contains(".m3u8")) {
                 HlsMediaSource.Factory(dataSourceFactory)
-                    .createMediaSource(MediaItem.fromUri(currUrl))
+                    .createMediaSource(MediaItem.fromUri(actualUrl))
             } else {
                 ProgressiveMediaSource.Factory(dataSourceFactory)
-                    .createMediaSource(MediaItem.fromUri(currUrl))
+                    .createMediaSource(MediaItem.fromUri(actualUrl))
             }
 
-            Log.i(TAG, "URL Link = $currUrl")
+            Log.i(TAG, "URL Link = $actualUrl (proxied: ${proxyUrl != null})")
 
             exoPlayer.addListener(this)
 

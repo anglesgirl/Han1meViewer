@@ -24,10 +24,12 @@ import io.github.daisukikaffuchino.han1meviewer.DOWNLOAD_NOTIFICATION_CHANNEL
 import io.github.daisukikaffuchino.han1meviewer.EMPTY_STRING
 import io.github.daisukikaffuchino.han1meviewer.HFileManager
 import io.github.daisukikaffuchino.han1meviewer.HFileManager.createVideoName
+import io.github.daisukikaffuchino.han1meviewer.HanimeConstants
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.logic.DatabaseRepo
 import io.github.daisukikaffuchino.han1meviewer.logic.entity.download.HanimeDownloadEntity
 import io.github.daisukikaffuchino.han1meviewer.logic.network.ServiceCreator
+import io.github.daisukikaffuchino.han1meviewer.logic.network.ech.GoProxyManager
 import io.github.daisukikaffuchino.han1meviewer.logic.state.DownloadState
 import io.github.daisukikaffuchino.han1meviewer.util.HImageMeower
 import io.github.daisukikaffuchino.han1meviewer.util.SafFileManager
@@ -240,8 +242,21 @@ class HanimeDownloadWorker(
         return requestContentLength(useHead = false)
     }
 
+    /**
+     * 如果是 hanime1.me 的下载 URL 且 ECH 代理可用，
+     * 通过代理走 ECH 加密通道。
+     */
+    private fun routeDownloadUrlThroughEch(url: String): String {
+        if (!ServiceCreator.echEnabled) return url
+        if (!GoProxyManager.isRunning()) return url
+        val hanimeHosts = HanimeConstants.HANIME_HOSTNAME.toList()
+        if (hanimeHosts.none { url.contains(it) }) return url
+        return GoProxyManager.proxyUrl(url)
+    }
+
     private suspend fun requestContentLength(useHead: Boolean): Long? {
-        val requestBuilder = Request.Builder().url(downloadUrl)
+        val actualDownloadUrl = routeDownloadUrlThroughEch(downloadUrl)
+        val requestBuilder = Request.Builder().url(actualDownloadUrl)
         val request = if (useHead) {
             requestBuilder.head().build()
         } else {
@@ -368,7 +383,8 @@ class HanimeDownloadWorker(
 
                 while (downloadedLength < entity.length) {
                     val requestNeedRange = downloadedLength > 0
-                    val requestBuilder = Request.Builder().url(downloadUrl).get()
+                    val actualUrl = routeDownloadUrlThroughEch(downloadUrl)
+                    val requestBuilder = Request.Builder().url(actualUrl).get()
                     if (requestNeedRange) requestBuilder.header("Range", "bytes=$downloadedLength-")
                     val request = requestBuilder.build()
                     response = ServiceCreator.downloadClient.newCall(request).await()

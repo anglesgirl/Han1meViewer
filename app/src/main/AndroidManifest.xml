@@ -23,11 +23,13 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
+        android:extractNativeLibs="true"
         android:fullBackupContent="@xml/backup_rules"
         android:hardwareAccelerated="true"
         android:hasFragileUserData="true"
         android:icon="${appIcon}"
         android:label="@string/hanime_app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.Hanime"
         tools:targetApi="34">
@@ -40,6 +42,12 @@
         <activity
             android:name=".ui.activity.CloudflareActivity"
             android:exported="false"
+            android:theme="@style/Theme.Hanime" />
+
+        <activity
+            android:name=".ui.activity.ProxyMonitorActivity"
+            android:exported="false"
+            android:label="ECH 代理监控"
             android:theme="@style/Theme.Hanime" />
 
         <service

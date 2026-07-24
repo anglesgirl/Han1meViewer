@@ -1,6 +1,7 @@
 package io.github.daisukikaffuchino.han1meviewer.logic.network
 
 import io.github.daisukikaffuchino.han1meviewer.Preferences
+import io.github.daisukikaffuchino.han1meviewer.logic.network.ech.EchInterceptor
 import io.github.daisukikaffuchino.han1meviewer.logic.network.interceptor.CloudflareInterceptor
 import io.github.daisukikaffuchino.han1meviewer.logic.network.interceptor.GetchuInterceptor
 import io.github.daisukikaffuchino.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
@@ -22,6 +23,12 @@ import java.util.concurrent.TimeUnit
  * @time 2022/06/08 008 22:35
  */
 object ServiceCreator {
+
+    /**
+     * ECH 代理是否启用。始终为 true — 代理在应用启动时自动运行。
+     * 如果代理未运行，拦截器会自动回退到直连。
+     */
+    val echEnabled = true
 
     private val cache = Cache(
         directory = File(applicationContext.cacheDir, "http_cache"),
@@ -96,6 +103,7 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
+            .addInterceptor(EchInterceptor(HCookieJar()))
             .cache(cache)
             .cookieJar(HCookieJar())
             .proxySelector(HProxySelector())
