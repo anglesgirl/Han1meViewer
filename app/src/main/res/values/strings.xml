@@ -184,6 +184,8 @@ Some mirrors may not support login, may not share cookies, may fail verification
     <string name="custom_hosts_format">Multiple IPs separated by commas, e.g. 1.2.3.4,5.6.7.8</string>
     <string name="custom_hosts_empty_summary">Not set (using built-in mapping)</string>
     <string name="use_doh">Use DoH</string>
+    <string name="use_ech">ECH Proxy</string>
+    <string name="use_ech_summary">Hide SNI via ECH for hanime.tv (anti-DPI). Requires restart to take effect.</string>
     <string name="doh_settings">DoH Settings</string>
     <string name="doh_preset">DoH Preset</string>
     <string name="doh_custom_url">Custom DoH URL</string>

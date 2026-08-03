@@ -67,7 +67,7 @@ internal fun createGetchuImageLoader(context: Context): ImageLoader {
     val imageClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .dns(HDns())
-        .proxySelector(HProxySelector())
+        .proxySelector(HProxySelector.getInstance())
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url

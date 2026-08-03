@@ -186,6 +186,16 @@ fun NetworkSettingsRouteScreen(embedded: Boolean = false) {
         dohCustomUrl = SettingsRepository.dohCustomUrl,
         dohBootstrapIps = SettingsRepository.dohBootstrapIps,
         dohTimeoutSeconds = SettingsRepository.dohTimeoutSeconds,
+        onUseEchChange = { value ->
+            coroutineScope.launch {
+                SettingsRepository.update { it.copy(useEch = value) }
+                if (value) {
+                    io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.startAsync(context.applicationContext)
+                } else {
+                    io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.stopAsync()
+                }
+            }
+        },
         useCustomMirrorSite = SettingsRepository.useCustomMirrorSite,
         customMirrorSite = SettingsRepository.customMirrorSite,
         appendCustomMirrorPath = SettingsRepository.appendCustomMirrorPath,
@@ -471,6 +481,7 @@ private fun buildNetworkSettingsUiState(context: Context): NetworkSettingsUiStat
         customMirrorSite = SettingsRepository.customMirrorSite,
         appendCustomMirrorPath = SettingsRepository.appendCustomMirrorPath,
         useDoH = SettingsRepository.useDoH,
+        useEch = SettingsRepository.useEch,
         dohSummary = buildDohSummary(context),
         delaySummary = context.getString(R.string.node_latency_sum),
     )

@@ -184,6 +184,8 @@
     <string name="custom_hosts_format">多个 IP 以逗号分隔，如 1.2.3.4,5.6.7.8</string>
     <string name="custom_hosts_empty_summary">未设定（使用内置映射）</string>
     <string name="use_doh">使用 DoH</string>
+    <string name="use_ech">使用 ECH 代理</string>
+    <string name="use_ech_summary">通过 ECH 隐藏 hanime.tv 的 SNI（防 DPI 重置）。需要重启应用生效。</string>
     <string name="doh_settings">DoH 设置</string>
     <string name="doh_preset">DoH 预设</string>
     <string name="doh_custom_url">自定义 DoH URL</string>

@@ -116,6 +116,13 @@ androidComponents {
 }
 
 dependencies {
+    // gomobile 编译的 ECH 代理 AAR(由 CI 的 ech-proxy 步骤生成到
+    // app/libs/echproxy.aar)。文件不存在时跳过,普通构建依然成功。
+    val echproxyAar = file("libs/echproxy.aar")
+    if (echproxyAar.exists()) {
+        implementation(files(echproxyAar))
+    }
+
     implementation(libs.aboutlibraries.core)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.core.splashscreen)

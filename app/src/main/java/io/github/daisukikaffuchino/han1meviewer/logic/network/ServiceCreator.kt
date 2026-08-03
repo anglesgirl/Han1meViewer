@@ -72,7 +72,7 @@ object ServiceCreator {
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
-            .proxySelector(HProxySelector())
+            .proxySelector(HProxySelector.getInstance())
             .dns(dns)
             .build()
     }
@@ -98,7 +98,7 @@ object ServiceCreator {
             .addInterceptor(CloudflareInterceptor(applicationContext))
             .cache(cache)
             .cookieJar(HCookieJar())
-            .proxySelector(HProxySelector())
+            .proxySelector(HProxySelector.getInstance())
             .dns(dns)
             .build()
     }

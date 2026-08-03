@@ -44,8 +44,13 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         SettingsRepository.install(DataStoreManager)
         AppLanguageManager.applyStoredLanguage(this)
         registerActivityLifecycleCallbacks(this)
-        ProxySelector.setDefault(HProxySelector())
+        ProxySelector.setDefault(HProxySelector.getInstance())
         HProxySelector.rebuildNetwork()
+        // ECH 代理:用户开启后,后台启动本地 ECH 代理(隐藏 SNI 防重置)。
+        // 代理就绪前网络请求走原有路径,不会阻塞启动。
+        if (SettingsRepository.useEch) {
+            io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.startAsync(this)
+        }
         initNotificationChannel()
         MPVLib.create(applicationContext)
         MPVLib.init()

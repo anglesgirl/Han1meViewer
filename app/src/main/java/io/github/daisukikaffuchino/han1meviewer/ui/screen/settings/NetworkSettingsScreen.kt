@@ -51,6 +51,7 @@ data class NetworkSettingsUiState(
     val customMirrorSite: String,
     val appendCustomMirrorPath: Boolean,
     val useDoH: Boolean,
+    val useEch: Boolean,
     val dohSummary: String,
     val delaySummary: String,
 )
@@ -102,6 +103,7 @@ fun NetworkSettingsScreen(
     onUseBuiltInHostsChange: (Boolean) -> Unit,
     onSaveCustomHosts: (String) -> Unit,
     onSaveDohSettings: (Boolean, String, String, String, Int) -> Unit,
+    onUseEchChange: (Boolean) -> Unit,
     onOpenDelayTest: () -> Unit,
     customHostsData: String,
     onOpenDohTest: () -> Unit,
@@ -246,6 +248,13 @@ fun NetworkSettingsScreen(
                     summary = state.dohSummary,
                     iconRes = R.drawable.ic_dns,
                     onClick = { showDohDialog = true },
+                )
+                SettingSwitchItem(
+                    title = stringResource(R.string.use_ech),
+                    summary = stringResource(R.string.use_ech_summary),
+                    iconRes = R.drawable.ic_shield,
+                    checked = state.useEch,
+                    onCheckedChange = onUseEchChange,
                 )
             }
 
