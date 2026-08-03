@@ -28,7 +28,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build
-        run: ./gradlew buildDebug -x lint
+        run: ./gradlew assembleDebug -x lint
 
       - name: Find APK
         run: find app/build/outputs -name "*.apk" -type f
