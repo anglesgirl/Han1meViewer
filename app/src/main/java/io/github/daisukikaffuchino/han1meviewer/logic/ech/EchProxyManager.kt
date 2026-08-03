@@ -65,6 +65,8 @@ object EchProxyManager {
             )
             port = chosen
             Log.i(TAG, "ECH proxy started on port $chosen")
+            // 让系统代理(HttpURLConnection/WebView)指向本地 ECH 代理。
+            io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector.rebuildNetwork()
             chosen
         } catch (e: Throwable) {
             Log.e(TAG, "ECH proxy start failed", e)
@@ -83,6 +85,8 @@ object EchProxyManager {
             Log.e(TAG, "ECH proxy stop failed", e)
         } finally {
             port = -1
+            // 恢复系统代理到用户原配置。
+            io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector.rebuildNetwork()
         }
     }
 

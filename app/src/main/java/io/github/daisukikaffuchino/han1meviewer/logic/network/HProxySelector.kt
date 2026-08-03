@@ -61,8 +61,18 @@ class HProxySelector private constructor() : ProxySelector() {
         }
 
         // #issue-39: 代理沒有應用到 WebView 上，只能通過此種方式來全局代理。
+        // ECH 开启且本地代理就绪时,系统代理统一指向本地 ECH 代理,
+        // 让 HttpURLConnection(ExoPlayer)/WebView 也走 ECH;Go 代理对
+        // 非 Cloudflare 域名(m3u8/ts CDN)自动降级普通 TLS。
         fun rebuildNetwork() {
             val properties = System.getProperties()
+            val echPort = io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port
+            if (SettingsRepository.useEch && echPort > 0) {
+                properties["proxySet"] = true.toString()
+                properties["proxyHost"] = "127.0.0.1"
+                properties["proxyPort"] = echPort.toString()
+                return
+            }
             when (SettingsRepository.proxyType) {
                 TYPE_HTTP, TYPE_SOCKS -> {
                     properties["proxySet"] = true.toString()
@@ -97,11 +107,13 @@ class HProxySelector private constructor() : ProxySelector() {
     }
 
     override fun select(uri: URI?): MutableList<Proxy> {
-        // ECH 代理:开启且本地代理就绪时,hanime.tv 及其 CDN 走 ECH 代理。
+        // ECH 代理:开启且本地代理就绪时,当前站点域名及其 API 走 ECH 代理。
         // 其他域名(图片 CDN、GitHub 等)保持原有路径。
         if (SettingsRepository.useEch) {
             val echPort = io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port
-            if (echPort > 0 && uri?.host?.let { it.endsWith("hanime.tv") || it.endsWith("hanime1.me") } == true) {
+            if (echPort > 0 && uri?.host?.let { host ->
+                    echDomainMatches(host)
+                } == true) {
                 return mutableListOf(
                     Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", echPort))
                 )
@@ -130,6 +142,22 @@ class HProxySelector private constructor() : ProxySelector() {
         }
 
         return delegation?.select(uri) ?: alternative.select(uri)
+    }
+
+    /** 判断 host 是否属于当前站点(支持切换的官方域名 + 自定义镜像站)。 */
+    private fun echDomainMatches(host: String): Boolean {
+        val h = host.lowercase()
+        // 官方可切换域名
+        io.github.daisukikaffuchino.han1meviewer.Constants.HANIME_HOSTNAME.forEach { d ->
+            if (h == d || h.endsWith(".$d")) return true
+        }
+        // 当前选中的站点/镜像站
+        runCatching {
+            val base = SettingsRepository.baseUrl
+            val domain = base.substringAfter("://").substringBefore("/").lowercase()
+            if (domain.isNotBlank() && (h == domain || h.endsWith(".$domain"))) return true
+        }
+        return false
     }
 
     override fun connectFailed(uri: URI?, sa: SocketAddress?, ioe: IOException?) {

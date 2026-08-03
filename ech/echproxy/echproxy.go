@@ -353,6 +353,13 @@ var hopByHop = map[string]bool{
 }
 
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// 标准 HTTP 代理 CONNECT 隧道:OkHttp/MPV/ExoPlayer 都走这个协议。
+	// 对目标 host 用 ECH(若 AS13335)或普通 TLS(非 CF)握手后双向转发。
+	if r.Method == http.MethodConnect {
+		h.handleConnect(w, r)
+		return
+	}
+
 	// X-Ech-Target lets the app route other hosts (e.g. a translation API)
 	// through the same DoH + ECH path instead of the poisoned system resolver.
 	target := h.target
@@ -362,6 +369,12 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		target = strings.ToLower(t)
+	} else if r.URL.IsAbs() && r.URL.Host != "" {
+		// 标准 HTTP 代理的绝对 URL 形式:GET http://host/path
+		// 目标来自 URL 本身(如 http 明文请求、非 CONNECT 隧道)。
+		if host := r.URL.Hostname(); isTargetHost(host) {
+			target = strings.ToLower(host)
+		}
 	}
 
 	outURL := &url.URL{Scheme: "https", Host: target, Path: r.URL.Path, RawQuery: r.URL.RawQuery}
@@ -425,6 +438,87 @@ func isTargetHost(value string) bool {
 		}
 	}
 	return true
+}
+
+// handleConnect implements the CONNECT method of a standard HTTP proxy.
+// It dials the target host over ECH (when AS13335 / Cloudflare) or plain TLS
+// (non-CF CDNs), then pipes bytes in both directions.
+func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
+	hostport := r.Host
+	if hostport == "" {
+		http.Error(w, "echproxy: missing CONNECT host", http.StatusBadRequest)
+		return
+	}
+	host := hostport
+	if hh, _, err := net.SplitHostPort(hostport); err == nil {
+		host = hh
+	}
+	if !isTargetHost(host) {
+		http.Error(w, "echproxy: invalid CONNECT host", http.StatusBadRequest)
+		return
+	}
+
+	// Build (or reuse) the ECH-aware transport for this host. AS13335 hosts
+	// get ECH; other CDNs (m3u8/ts) get plain TLS over DoH-resolved IPs.
+	t, err := transportFor(host)
+	if err != nil {
+		http.Error(w, "echproxy: transport for "+host+": "+err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	// Dial upstream with ECH (hostDialContext). The addr form is host:port.
+	dialAddr := hostport
+	if _, _, err := net.SplitHostPort(hostport); err != nil {
+		dialAddr = net.JoinHostPort(host, "443")
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), dialTimeout)
+	upstream, err := t.DialTLSContext(ctx, "tcp", dialAddr)
+	cancel()
+	if err != nil {
+		setStatus("CONNECT %s failed: %v", host, err)
+		http.Error(w, "echproxy: CONNECT "+host+": "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer upstream.Close()
+
+	// Hijack the client connection to build a raw tunnel.
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "echproxy: hijacking not supported", http.StatusInternalServerError)
+		return
+	}
+	clientConn, buf, err := hj.Hijack()
+	if err != nil {
+		http.Error(w, "echproxy: hijack failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer clientConn.Close()
+
+	// Confirm the tunnel to the client.
+	if _, err := buf.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
+		return
+	}
+	if err := buf.Flush(); err != nil {
+		return
+	}
+
+	// Bidirectional copy. Closing one side tears down the other.
+	done := make(chan struct{}, 2)
+	go func() {
+		defer func() { done <- struct{}{} }()
+		_, _ = io.Copy(upstream, buf)
+		if tc, ok := upstream.(*net.TCPConn); ok {
+			_ = tc.CloseWrite()
+		}
+	}()
+	go func() {
+		defer func() { done <- struct{}{} }()
+		_, _ = io.Copy(buf, upstream)
+		if tc, ok := clientConn.(*net.TCPConn); ok {
+			_ = tc.CloseWrite()
+		}
+	}()
+	<-done
 }
 
 func rewriteLocation(loc, target string) string {
