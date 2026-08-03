@@ -148,7 +148,7 @@ class HProxySelector private constructor() : ProxySelector() {
     private fun echDomainMatches(host: String): Boolean {
         val h = host.lowercase()
         // 官方可切换域名
-        io.github.daisukikaffuchino.han1meviewer.Constants.HANIME_HOSTNAME.forEach { d ->
+        io.github.daisukikaffuchino.han1meviewer.HanimeConstants.HANIME_HOSTNAME.forEach { d ->
             if (h == d || h.endsWith(".$d")) return true
         }
         // 当前选中的站点/镜像站
