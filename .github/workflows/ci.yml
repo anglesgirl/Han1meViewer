@@ -1,5 +1,5 @@
 permissions:
-  contents: read
+  contents: write
 name: CI
 
 on:
@@ -38,7 +38,6 @@ jobs:
           go install golang.org/x/mobile/cmd/gobind@latest
           export PATH="$PATH:$(go env GOPATH)/bin"
           cd ech
-          # Add x/mobile as a module dependency (required by gomobile bind).
           go get golang.org/x/mobile/bind@latest
           mkdir -p ../app/libs
           gomobile bind -v -target=android/arm64 -androidapi 29 \
@@ -64,3 +63,29 @@ jobs:
           name: han1meviewer-debug
           path: app/build/outputs/apk/debug/
           retention-days: 7
+
+      - name: Publish to GitHub Release
+        if: success() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          APK=$(find app/build/outputs -name "*.apk" -type f | head -1)
+          SIZE_MB=$(du -m "$APK" | cut -f1)
+          echo "Publishing ${SIZE_MB}MB $APK to Releases"
+          # 读取版本号
+          VER=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "Version: $VER"
+          # 固定 tag:同一版本重复构建只更新资产,发布页保持一个入口
+          TAG="v${VER}"
+          # 创建或更新 release(首次 draft,用户确认后公开)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Han1meViewer ${VER} (ECH)" \
+              --notes "arm64-only APK (${SIZE_MB}MB) with ECH proxy. 设置 → 网络 → ECH Proxy 开启后重启生效。" \
+              --draft
+          fi
+          echo "RELEASE_TAG=$TAG"

@@ -47,7 +47,9 @@ android {
 
     splits {
         abi {
-            isEnable = gradle.startParameter.taskRequests.toString().contains("Release")
+            // CI 用 assembleDebug 构建,这里强制启用 splits 只出 arm64-v8a,
+            // 避免产出包含全部 ABI 的 186MB universal APK。
+            isEnable = true
             reset()
             include("arm64-v8a")
             isUniversalApk = false
