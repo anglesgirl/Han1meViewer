@@ -55,6 +55,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.MpvPlayer
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.NetworkDownloadSettingsRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.NetworkSettingsRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.NetworkSettingsRouteScreen
+import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.LogsRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.OpenSourceLicensesRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.PlayerSettingsRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.PlayerSettingsRouteScreen
@@ -66,6 +67,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.VideoPlay
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.account.AccountScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.account.AvatarCropScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.HomeSettingsPage
+import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.LogViewerScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.OpenSourceLicensesScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.screen.settings.SettingsMainScreen
 import io.github.daisukikaffuchino.han1meviewer.ui.theme.fadeScale
@@ -358,6 +360,20 @@ fun TopNavigation(
                     onNavigateToOpenSourceLicenses = {
                         backStack.add(OpenSourceLicensesRoute)
                     },
+                    onOpenLogs = {
+                        backStack.add(LogsRoute)
+                    },
+                )
+            }
+        }
+        entry<LogsRoute>(metadata = pageTransition()) {
+            SettingsScaffold(
+                backStack = backStack,
+                destination = SettingsDestinationSpec.About,
+                fallbackDestination = AboutSettingsRoute,
+            ) {
+                LogViewerScreen(
+                    onBack = { backStack.removeLast() },
                 )
             }
         }

@@ -186,6 +186,10 @@ Some mirrors may not support login, may not share cookies, may fail verification
     <string name="use_doh">Use DoH</string>
     <string name="use_ech">ECH Proxy</string>
     <string name="use_ech_summary">Hide SNI via ECH for hanime.tv (anti-DPI). Requires restart to take effect.</string>
+    <string name="view_logs">View Logs</string>
+    <string name="view_logs_summary">In-app recent logs (network/ECH diagnostics)</string>
+    <string name="clear_logs">Clear logs</string>
+    <string name="logs_empty">No logs yet.</string>
     <string name="doh_settings">DoH Settings</string>
     <string name="doh_preset">DoH Preset</string>
     <string name="doh_custom_url">Custom DoH URL</string>

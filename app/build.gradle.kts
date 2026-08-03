@@ -73,8 +73,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            applicationIdSuffix = ".debug"
-            manifestPlaceholders["appIcon"] = "@mipmap/ic_launcher_debug"
+            // 独立发布的 debug 构建:使用正式图标,不带 .debug 后缀,
+            // 避免和旧版(release)产生"图标变了/两个应用"的观感。
+            manifestPlaceholders["appIcon"] = "@mipmap/ic_launcher_new"
         }
     }
     buildFeatures {

@@ -32,6 +32,9 @@ object AboutSettingsRoute : HanimeScreen
 object OpenSourceLicensesRoute : HanimeScreen
 
 @Serializable
+object LogsRoute : HanimeScreen
+
+@Serializable
 object PlayerSettingsRoute : HanimeScreen
 
 @Serializable

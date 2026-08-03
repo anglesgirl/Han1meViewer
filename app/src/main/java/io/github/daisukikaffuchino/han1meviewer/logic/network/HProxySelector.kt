@@ -108,15 +108,18 @@ class HProxySelector private constructor() : ProxySelector() {
 
     override fun select(uri: URI?): MutableList<Proxy> {
         // ECH 代理:开启且本地代理就绪时,当前站点域名及其 API 走 ECH 代理。
-        // 其他域名(图片 CDN、GitHub 等)保持原有路径。
+        // 其他域名(更新检查 COS、图片 CDN、GitHub 等)保持直连(NO_PROXY),
+        // 避免被 rebuildNetwork 设置的全局系统代理劫持到 ECH 代理。
         if (SettingsRepository.useEch) {
             val echPort = io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port
-            if (echPort > 0 && uri?.host?.let { host ->
-                    echDomainMatches(host)
-                } == true) {
-                return mutableListOf(
-                    Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", echPort))
-                )
+            if (echPort > 0) {
+                if (uri?.host?.let { host -> echDomainMatches(host) } == true) {
+                    return mutableListOf(
+                        Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", echPort))
+                    )
+                }
+                // 非站点域名:直连,不走 ECH 代理(更新检查/其他服务不受影响)。
+                return mutableListOf(Proxy.NO_PROXY)
             }
         }
 

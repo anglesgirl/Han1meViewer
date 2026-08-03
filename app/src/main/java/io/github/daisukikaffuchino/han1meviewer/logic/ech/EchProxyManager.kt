@@ -3,6 +3,7 @@ package io.github.daisukikaffuchino.han1meviewer.logic.ech
 import android.content.Context
 import android.util.Log
 import echproxy.Echproxy
+import io.github.daisukikaffuchino.utils.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -65,11 +66,13 @@ object EchProxyManager {
             )
             port = chosen
             Log.i(TAG, "ECH proxy started on port $chosen")
+            LogUtil.record("I", TAG, "ECH proxy started on 127.0.0.1:$chosen")
             // 让系统代理(HttpURLConnection/WebView)指向本地 ECH 代理。
             io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector.rebuildNetwork()
             chosen
         } catch (e: Throwable) {
             Log.e(TAG, "ECH proxy start failed", e)
+            LogUtil.record("E", TAG, "ECH proxy start failed: ${e.message}")
             port = -1
             -1
         }
@@ -81,8 +84,10 @@ object EchProxyManager {
         try {
             Echproxy.stop()
             Log.i(TAG, "ECH proxy stopped")
+            LogUtil.record("I", TAG, "ECH proxy stopped")
         } catch (e: Throwable) {
             Log.e(TAG, "ECH proxy stop failed", e)
+            LogUtil.record("E", TAG, "ECH proxy stop failed: ${e.message}")
         } finally {
             port = -1
             // 恢复系统代理到用户原配置。

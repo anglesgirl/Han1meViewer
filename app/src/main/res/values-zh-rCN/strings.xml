@@ -185,6 +185,10 @@
     <string name="custom_hosts_empty_summary">未设定（使用内置映射）</string>
     <string name="use_doh">使用 DoH</string>
     <string name="use_ech">使用 ECH 代理</string>
+        <string name="view_logs">查看日志</string>
+    <string name="view_logs_summary">应用内最近日志（网络/ECH 诊断）</string>
+    <string name="clear_logs">清空日志</string>
+    <string name="logs_empty">暂无日志。</string>
     <string name="use_ech_summary">通过 ECH 隐藏 hanime.tv 的 SNI（防 DPI 重置）。需要重启应用生效。</string>
     <string name="doh_settings">DoH 设置</string>
     <string name="doh_preset">DoH 预设</string>

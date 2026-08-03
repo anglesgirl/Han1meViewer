@@ -86,6 +86,7 @@ fun HomeSettingsScreen(
     onAlwaysShowUpdateCardChange: (Boolean) -> Unit,
     onDisplayDensityChange: (Int) -> Unit,
     onTriggerCrash: () -> Unit,
+    onOpenLogs: () -> Unit = {},
     onHomeCategoryPreferencesChange: (List<String>, Set<String>) -> Unit,
     hKeyframeSettingsContent: @Composable () -> Unit,
     networkSettingsContent: @Composable () -> Unit,
@@ -540,6 +541,12 @@ fun HomeSettingsScreen(
                             onClick = onSubmitBug,
                         )
                         SettingNavigationItem(
+                            title = stringResource(R.string.view_logs),
+                            summary = stringResource(R.string.view_logs_summary),
+                            iconRes = R.drawable.ic_shield,
+                            onClick = onOpenLogs,
+                        )
+                        SettingNavigationItem(
                             title = stringResource(R.string.forum),
                             summary = stringResource(R.string.forum_summary),
                             iconRes = R.drawable.ic_forum,
@@ -611,6 +618,7 @@ private fun HomeSettingsScreenPreview() {
             onAlwaysShowUpdateCardChange = {},
             onDisplayDensityChange = {},
             onTriggerCrash = {},
+            onOpenLogs = {},
             onHomeCategoryPreferencesChange = { _, _ -> },
             hKeyframeSettingsContent = {},
             networkSettingsContent = {},
