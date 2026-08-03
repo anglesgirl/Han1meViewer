@@ -565,26 +565,22 @@ func transportFor(host string) (*http.Transport, error) {
 	hc := &hostConf{}
 	if ips, err := resolveViaDoH(host, doh); err == nil {
 		hc.ips = ips
-		hc.as13335 = allCloudflareAS13335(ips)
-		setDNSInfo("%s: %d DoH address(es), AS13335=%v", host, len(ips), hc.as13335)
+		setDNSInfo("%s: %d DoH address(es)", host, len(ips))
 	} else {
 		log.Printf("echproxy: DoH resolve for %s failed: %v", host, err)
 	}
-	// ECH 配置获取顺序(AS13335 主机):
+	// ECH 配置获取顺序(不预判 AS13335——ECH 握手成功与否本身就是最准的判断):
 	//   1. 本地缓存(5h TTL)—— 之前从 cloudflare-ech.com / 目标 ech= / retry 学到的
 	//   2. cloudflare-ech.com 的 HTTPS ech= (Cloudflare 官方 ECH 公钥)
 	//   3. 目标自身 HTTPS 记录的 ech=
 	//   4. operator 下发的 fallback
 	// 拿到后立即落盘,后续连接直接读缓存握手。
-	if hc.as13335 {
-		hc.ech, _ = loadECHConfigWithFallbacks(host, doh)
-		if len(hc.ech) > 0 {
-			setConfigInfo("%d bytes for %s", len(hc.ech), host)
-		} else {
-			setConfigInfo("no ECHConfigList for AS13335 host %s", host)
-		}
+	// 非 Cloudflare 主机拿不到有效 ech= 时,握手会自动降级普通 TLS。
+	hc.ech, _ = loadECHConfigWithFallbacks(host, doh)
+	if len(hc.ech) > 0 {
+		setConfigInfo("%d bytes for %s", len(hc.ech), host)
 	} else {
-		setConfigInfo("%s is not AS13335; ordinary TLS via DoH", host)
+		setConfigInfo("no ECHConfigList for %s; will use plain TLS if handshake is rejected", host)
 	}
 	hc.transport = &http.Transport{
 		DialTLSContext:        hostDialContext(host, hc, insecure),
@@ -647,7 +643,8 @@ func hostDialContext(host string, hc *hostConf, insecure bool) func(ctx context.
 		}
 		// ECH 可用则优先 ECH 握手;失败兜底一次(retry_configs)并缓存;
 		// 再失败降级普通 TLS(保护性降级,至少保证连通性)。
-		if hc.as13335 && len(hc.ech) > 0 {
+		// 不预判 AS13335:有配置就试,服务器支持 ECH 自然接受。
+		if len(hc.ech) > 0 {
 			cfg.EncryptedClientHelloConfigList = hc.ech
 			cfg.MinVersion = tls.VersionTLS13
 		}
@@ -659,7 +656,7 @@ func hostDialContext(host string, hc *hostConf, insecure bool) func(ctx context.
 		if err != nil {
 			var rej *tls.ECHRejectionError
 			// ECH 被拒且服务器给了 retry_configs:兜底一次,并缓存该配置。
-			if hc.as13335 && errors.As(err, &rej) && len(rej.RetryConfigList) > 0 {
+			if len(hc.ech) > 0 && errors.As(err, &rej) && len(rej.RetryConfigList) > 0 {
 				raw.Close()
 				setConfigInfo("%d bytes for %s, source: server retry_configs (cached)", len(rej.RetryConfigList), host)
 				// 缓存兜底配置,下次直接用它握手。
@@ -692,23 +689,23 @@ func hostDialContext(host string, hc *hostConf, insecure bool) func(ctx context.
 				raw.Close()
 				// 兜底也失败 → 降级普通 TLS。
 				setShakeInfo("ECH retry failed for %s; downgrading to plain TLS: %v", host, retryErr)
-				return plainTLSHandshake(ctx, host, d, cands, insecure, hc.as13335 && len(hc.ech) > 0)
+				return plainTLSHandshake(ctx, host, d, cands, insecure, len(hc.ech) > 0)
 			}
 			raw.Close()
 			// ECH 握手失败(非 retry 场景)→ 降级普通 TLS。
-			if hc.as13335 && len(hc.ech) > 0 {
+			if len(hc.ech) > 0 {
 				setShakeInfo("ECH handshake failed for %s; downgrading to plain TLS: %v", host, err)
 				return plainTLSHandshake(ctx, host, d, cands, insecure, true)
 			}
 			return nil, fmt.Errorf("%s handshake failed: %w", host, err)
 		}
-		if hc.as13335 && !tc.ConnectionState().ECHAccepted {
+		if len(hc.ech) > 0 && !tc.ConnectionState().ECHAccepted {
 			raw.Close()
 			// ECH 配置被服务器忽略(未接受)→ 降级普通 TLS。
 			setShakeInfo("ECH not accepted for %s; downgrading to plain TLS", host)
 			return plainTLSHandshake(ctx, host, d, cands, insecure, true)
 		}
-		if hc.as13335 {
+		if len(hc.ech) > 0 {
 			setShakeInfo("ok via DoH ECHAccepted=true source=%s", orNone(configInfo))
 		}
 		return tc, nil
