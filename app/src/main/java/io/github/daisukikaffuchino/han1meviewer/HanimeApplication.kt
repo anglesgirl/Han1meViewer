@@ -46,7 +46,7 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         registerActivityLifecycleCallbacks(this)
         val proxySelector = HProxySelector()
         ProxySelector.setDefault(proxySelector)
-        proxySelector.rebuildNetwork()
+        HProxySelector.rebuildNetwork()
         initNotificationChannel()
         MPVLib.create(applicationContext)
         MPVLib.init()
