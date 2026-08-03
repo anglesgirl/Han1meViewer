@@ -80,24 +80,16 @@ fun MainActivityContent(
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboard.current
     val snackbarHostState = remember { SnackbarHostState() }
-    var showUsageNotice by remember { mutableStateOf(!SettingsRepository.usageNoticeAccepted) }
+    var showUsageNotice by remember { mutableStateOf(false) }
     var showSourceDialog by remember {
-        mutableStateOf(
-            SettingsRepository.usageNoticeAccepted &&
-                    !SettingsRepository.usageSourceVerified &&
-                    !SettingsRepository.usageSourcePending,
-        )
+        mutableStateOf(false)
     }
     var showSourceWarning by rememberSaveable {
-        mutableStateOf(
-            SettingsRepository.usageNoticeAccepted &&
-                    !SettingsRepository.usageSourceVerified &&
-                    SettingsRepository.usageSourcePending,
-        )
+        mutableStateOf(false)
     }
     var sourceLink by rememberSaveable { mutableStateOf("") }
     var appAccessGranted by remember {
-        mutableStateOf(SettingsRepository.usageNoticeAccepted && SettingsRepository.usageSourceVerified)
+        mutableStateOf(true)
     }
     val isDrawerOpen =
         drawerState.currentValue == DrawerValue.Open || drawerState.targetValue == DrawerValue.Open
