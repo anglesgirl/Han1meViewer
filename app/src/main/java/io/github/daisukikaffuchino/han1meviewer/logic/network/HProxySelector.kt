@@ -79,14 +79,19 @@ class HProxySelector : ProxySelector() {
             val ip = SettingsRepository.proxyIp
             val port = SettingsRepository.proxyPort
             if (ip.isNotBlank() && port != -1) {
-                val inetAddress = InetAddress.getByName(ip)
-                val socketAddress = InetSocketAddress(inetAddress, port)
-                return mutableListOf(
-                    Proxy(
-                        if (type == TYPE_HTTP) Proxy.Type.HTTP else Proxy.Type.SOCKS,
-                        socketAddress
+                return try {
+                    val inetAddress = InetAddress.getByName(ip)
+                    val socketAddress = InetSocketAddress(inetAddress, port)
+                    mutableListOf(
+                        Proxy(
+                            if (type == TYPE_HTTP) Proxy.Type.HTTP else Proxy.Type.SOCKS,
+                            socketAddress
+                        )
                     )
-                )
+                } catch (e: Exception) {
+                    // 代理地址无效，回退到系统代理
+                    delegation?.select(uri) ?: alternative.select(uri)
+                }
             }
         }
 
@@ -94,6 +99,6 @@ class HProxySelector : ProxySelector() {
     }
 
     override fun connectFailed(uri: URI?, sa: SocketAddress?, ioe: IOException?) {
-        delegation?.select(uri)
+        delegation?.connectFailed(uri, sa, ioe)
     }
 }
