@@ -30,10 +30,13 @@ jobs:
       - name: Build
         run: ./gradlew buildDebug -x lint
 
+      - name: Find APK
+        run: find app/build/outputs -name "*.apk" -type f
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: han1meviewer-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/
           retention-days: 7
