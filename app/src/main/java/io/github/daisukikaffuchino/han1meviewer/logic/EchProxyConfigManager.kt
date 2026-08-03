@@ -9,8 +9,16 @@ import java.io.File
 /**
  * ECH 代理配置和缓存管理器
  *
+ * 缓存策略（与 CF 密钥轮换同步）：
+ * - CF 密钥：1 小时轮换，旧密钥保留 5 小时（双 key 宽限期）
+ * - DNS TTL：固定 5 分钟（300s）
+ * - ECH 配置缓存：300s（与 DNS TTL 同步，不超过 300s）
+ *   理由：CF 密钥 1h 轮换 + 5h 旧密钥保留 = 6h 有效期
+ *        但 ECH 配置应与 DNS TTL 同步（300s）以快速响应密钥更新
+ *        现代 ECH 双 key 宽限期降低握手失败风险
+ *
  * 优化策略：
- * 1. 从公共域名获取共享 ECH 公钥，缓存本地
+ * 1. 从公共域名获取共享 ECH 公钥，缓存本地（300s）
  * 2. 所有域名连接复用此公钥，避免重复获取
  * 3. 公钥匹配失败时重试一次（使用 DNS 返回的最新公钥）
  * 4. 再次失败则降级为普通 TLS 连接（不使用 ECH）
@@ -21,6 +29,17 @@ class EchProxyConfigManager(private val context: Context) {
     private val configDir = context.filesDir
     private val cacheFile = File(configDir, "ech_proxy_config.yaml")
     private val cacheLockFile = File(configDir, ".ech_cache_lock")
+    
+    companion object {
+        // ECH 配置缓存 TTL：300 秒（与 DNS TTL 同步）
+        const val CACHE_TTL_SECONDS = 300L
+        
+        // CF 密钥轮换周期：1 小时
+        const val CF_KEY_ROTATION_HOURS = 1
+        
+        // CF 旧密钥保留期：5 小时
+        const val CF_OLD_KEY_RETENTION_HOURS = 5
+    }
     
     // 公共域名（用于获取共享 ECH 公钥）
     private var publicDomain = ""
