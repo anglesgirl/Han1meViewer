@@ -482,6 +482,7 @@ private fun buildNetworkSettingsUiState(context: Context): NetworkSettingsUiStat
         appendCustomMirrorPath = SettingsRepository.appendCustomMirrorPath,
         useDoH = SettingsRepository.useDoH,
         useEch = SettingsRepository.useEch,
+        echDohSummary = buildEchDohSummary(context),
         dohSummary = buildDohSummary(context),
         delaySummary = context.getString(R.string.node_latency_sum),
     )
@@ -589,4 +590,14 @@ private fun buildDohSummary(context: Context): String {
     }
     val bootstrap = DohConfig.bootstrapIps().takeIf { it.isNotEmpty() }?.joinToString()
     return if (bootstrap != null) "$core\nBootstrap: $bootstrap" else core
+}
+
+/** ECH 代理实际使用的 DoH(始终取当前预设,不依赖 useDoH 开关)。 */
+private fun buildEchDohSummary(context: Context): String {
+    val core = if (SettingsRepository.dohPreset == "custom") {
+        SettingsRepository.dohCustomUrl.ifBlank { context.getString(R.string.custom) }
+    } else {
+        DohConfig.selectedPreset().title
+    }
+    return context.getString(R.string.ech_doh_summary_format, core)
 }

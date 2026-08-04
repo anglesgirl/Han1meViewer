@@ -52,6 +52,7 @@ data class NetworkSettingsUiState(
     val appendCustomMirrorPath: Boolean,
     val useDoH: Boolean,
     val useEch: Boolean,
+    val echDohSummary: String,
     val dohSummary: String,
     val delaySummary: String,
 )
@@ -255,6 +256,12 @@ fun NetworkSettingsScreen(
                     iconRes = R.drawable.ic_shield,
                     checked = state.useEch,
                     onCheckedChange = onUseEchChange,
+                )
+                SettingNavigationItem(
+                    title = stringResource(R.string.ech_doh),
+                    summary = state.echDohSummary,
+                    iconRes = R.drawable.ic_dns,
+                    onClick = { showDohDialog = true },
                 )
             }
 
@@ -782,6 +789,7 @@ private fun NetworkSettingsScreenPreview() {
                 appendCustomMirrorPath = true,
                 useDoH = false,
                 useEch = false,
+                echDohSummary = "AliDNS",
                 dohSummary = "关闭",
                 delaySummary = "启用内建Hosts后可侦测延迟状况\n不启用为实际解析位址",
             ),

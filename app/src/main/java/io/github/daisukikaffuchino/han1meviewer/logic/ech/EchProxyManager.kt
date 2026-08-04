@@ -3,6 +3,7 @@ package io.github.daisukikaffuchino.han1meviewer.logic.ech
 import android.content.Context
 import android.util.Log
 import echproxy.Echproxy
+import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository
 import io.github.daisukikaffuchino.utils.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,10 +56,15 @@ object EchProxyManager {
         try {
             cachePath = File(context.filesDir, "ech-public-config.json").absolutePath
             val chosen = freePort()
-            // 优先用用户配置的 DoH(网络设置里可选 alidns/dnspod/cloudflare),
-            // Cloudflare Gateway 在部分网络被墙,会导致代理解析失败 → 全网不通。
+            // ECH 用当前 DoH 预设(与网络设置联动,可切换 alidns/dnspod/
+            // cloudflare/自定义)。不依赖 useDoH 开关——ECH 代理自身需要
+            // 一个可用的 DoH 解析域名,Cloudflare Gateway 在部分网络被墙。
             val dohArg = doh ?: runCatching {
-                io.github.daisukikaffuchino.han1meviewer.logic.network.DohConfig.resolveUrl()
+                val cfg = io.github.daisukikaffuchino.han1meviewer.logic.network.DohConfig
+                when (SettingsRepository.dohPreset) {
+                    "custom" -> cfg.customUrl().takeIf { it.isNotBlank() }
+                    else -> cfg.selectedPreset().url
+                }
             }.getOrNull() ?: DEFAULT_DOH
             Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")
             LogUtil.record("I", TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")

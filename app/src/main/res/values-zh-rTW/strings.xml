@@ -187,6 +187,8 @@
     <string name="view_logs_summary">应用内最近日志（网络/ECH 诊断）</string>
     <string name="clear_logs">清空日志</string>
     <string name="logs_empty">暂无日志。</string>
+    <string name="ech_doh">ECH DoH</string>
+    <string name="ech_doh_summary_format">ECH 代理使用：%1$s（点击切换）</string>
     <string name="use_ech_summary">通过 ECH 隐藏 hanime.tv 的 SNI（防 DPI 重置）。需要重启应用生效。</string>
     <string name="doh_settings">DoH 設定</string>
     <string name="doh_preset">DoH 預設</string>
