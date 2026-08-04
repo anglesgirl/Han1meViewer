@@ -37,7 +37,7 @@ object EchWebViewClient {
         return try {
             val okRequest = okhttp3.Request.Builder()
                 .url(url.toString())
-                .method(request.method, null)
+                .method(request.method ?: "GET", null)
                 .build()
             val resp = client.newCall(okRequest).execute()
 
@@ -49,17 +49,20 @@ object EchWebViewClient {
 
             val body = resp.body?.bytes() ?: ByteArray(0)
             val contentType = resp.header("Content-Type") ?: "text/html"
-            // 分块返回需要 content-encoding 兼容;这里用单块 + 完整长度
+            // 透传部分重要响应头
+            val headers = HashMap<String, String>().apply {
+                resp.header("Set-Cookie")?.let { put("Set-Cookie", it) }
+                resp.header("Cache-Control")?.let { put("Cache-Control", it) }
+                resp.header("Content-Type")?.let { put("Content-Type", it) }
+            }
             WebResourceResponse(
                 contentType,
                 charsetFrom(contentType),
+                resp.code,
+                resp.message,
+                headers,
                 ByteArrayInputStream(body),
-            ).also {
-                it.setStatusCodeAndReasonPhrase(resp.code, resp.message)
-                // 透传部分重要响应头
-                resp.header("Set-Cookie")?.let { h -> it.setResponseHeader("Set-Cookie", h) }
-                resp.header("Cache-Control")?.let { h -> it.setResponseHeader("Cache-Control", h) }
-            }
+            )
         } catch (e: Exception) {
             LogUtil.record("W", "EchProxy", "WebView ECH intercept failed: ${e.message}")
             null
