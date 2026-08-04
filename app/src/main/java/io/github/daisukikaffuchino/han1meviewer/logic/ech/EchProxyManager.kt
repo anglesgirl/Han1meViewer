@@ -247,10 +247,12 @@ object EchProxyManager {
                     val l = rdata[p].toInt() and 0xFF
                     p++
                     if (p + l > rdata.size) break
-                    parts.add("\"" + String(rdata, p, l, Charsets.UTF_8) + "\"")
+                    parts.add(String(rdata, p, l, Charsets.UTF_8))
                     p += l
                 }
-                if (parts.isNotEmpty()) lines.add(parts.joinToString(" "))
+                // 直接拼接 chunk 原文,不加引号:parseRemoteConfig 按 `;`/`=`
+                // 解析 key,若带引号包裹会导致首字段 key 变 `"ip` 匹配失败。
+                if (parts.isNotEmpty()) lines.add(parts.joinToString(""))
             }
         }
         if (lines.isEmpty()) throw Exception("no TXT records in DoH response")
