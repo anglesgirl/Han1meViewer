@@ -78,10 +78,11 @@ jobs:
           echo "Version: $VER"
           # 固定 tag:同一版本重复构建只更新资产,发布页保持一个入口
           TAG="v${VER}"
+          APK_NAME=$(basename "$APK")
           # 加速下载直链(大陆用户下载快)
-          ACCEL1="https://gh-proxy.com/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}"
-          ACCEL2="https://ghfast.top/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}"
-          DIRECT="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}"
+          ACCEL1="https://gh-proxy.com/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          ACCEL2="https://ghfast.top/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          DIRECT="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
           printf '%s\n' "arm64-only APK (${SIZE_MB}MB) with ECH proxy. Settings > Network > ECH Proxy." > /tmp/release_notes.md
           printf '%s\n' "" >> /tmp/release_notes.md
           printf '%s\n' "## Download acceleration (mainland China)" >> /tmp/release_notes.md
