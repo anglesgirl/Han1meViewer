@@ -85,6 +85,8 @@ object ServiceCreator {
             .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
+            // 所有流量统一走 ECH 代理
+            .addInterceptor(EchInterceptor())
             .dns(dns)
             .build()
     }

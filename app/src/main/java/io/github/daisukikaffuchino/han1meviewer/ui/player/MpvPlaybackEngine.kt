@@ -302,14 +302,11 @@ class MpvPlaybackEngine(
                 put("http-proxy", "http://$ip:${SettingsRepository.proxyPort}")
             }
         }
-        // ECH 代理:开启时,m3u8 主文件走本地 ECH 代理(隐藏 SNI)。
-        // 注意:ts 片段若在非 Cloudflare CDN 上,Go 代理会自动降级普通 TLS,
-        // 相对路径的 ts 会基于 m3u8 的站点 URL 解析,同样经过代理。
-        if (SettingsRepository.useEch) {
-            val echPort = io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port
-            if (echPort > 0) {
-                put("http-proxy", "http://127.0.0.1:$echPort")
-            }
+        // ECH 代理:始终开启,m3u8/ts 走本地 ECH 代理(隐藏 SNI;ts 在
+        // 非 CF CDN 上时 Go 代理自动降级普通 TLS)。
+        val echPort = io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port
+        if (echPort > 0) {
+            put("http-proxy", "http://127.0.0.1:$echPort")
         }
         if (SettingsRepository.mpvInterpolation) {
             put("interpolation", "yes")

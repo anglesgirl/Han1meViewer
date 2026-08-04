@@ -28,7 +28,6 @@ object EchWebViewClient {
      * 拦截站点请求走 ECH。非站点域名或 ECH 未开启返回 null(走 WebView 默认)。
      */
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
-        if (!SettingsRepository.useEch) return null
         if (EchProxyManager.port <= 0) return null
         val url = request.url ?: return null
         // 仅站点域名(拦截器内部也判断,这里提前过滤避免额外开销)

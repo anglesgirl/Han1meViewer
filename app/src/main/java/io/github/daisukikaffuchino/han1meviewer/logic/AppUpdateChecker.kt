@@ -77,6 +77,8 @@ object AppUpdateChecker {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            // 更新检查也走 ECH 代理(COS/GitHub API 不支持 ECH → 自动降级 TLS)
+            .addInterceptor(io.github.daisukikaffuchino.han1meviewer.logic.network.EchInterceptor())
             .build()
     }
 

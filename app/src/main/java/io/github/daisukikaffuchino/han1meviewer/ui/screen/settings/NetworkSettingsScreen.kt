@@ -252,10 +252,10 @@ fun NetworkSettingsScreen(
                 )
                 SettingSwitchItem(
                     title = stringResource(R.string.use_ech),
-                    summary = stringResource(R.string.use_ech_summary),
+                    summary = stringResource(R.string.use_ech_always_on),
                     iconRes = R.drawable.ic_shield,
-                    checked = state.useEch,
-                    onCheckedChange = onUseEchChange,
+                    checked = true,
+                    onCheckedChange = {},
                 )
                 SettingNavigationItem(
                     title = stringResource(R.string.ech_doh),

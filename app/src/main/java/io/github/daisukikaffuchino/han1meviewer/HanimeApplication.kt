@@ -46,11 +46,10 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         registerActivityLifecycleCallbacks(this)
         ProxySelector.setDefault(HProxySelector.getInstance())
         HProxySelector.rebuildNetwork()
-        // ECH 代理:用户开启后,后台启动本地 ECH 代理(隐藏 SNI 防重置)。
-        // 代理就绪前网络请求走原有路径,不会阻塞启动。
-        if (SettingsRepository.useEch) {
-            io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.startAsync(this)
-        }
+        // ECH 代理:始终开启(所有流量统一走 ECH 代理,支持 ECH 的目标
+        // 用 ECH 隐藏 SNI,不支持的自动降级普通 TLS)。代理就绪前网络
+        // 请求走原有路径,不会阻塞启动。
+        io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.startAsync(this)
         initNotificationChannel()
         MPVLib.create(applicationContext)
         MPVLib.init()

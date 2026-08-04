@@ -191,6 +191,7 @@
     <string name="logs_empty">暂无日志。</string>
     <string name="ech_doh">ECH DoH</string>
     <string name="ech_doh_summary_format">ECH 代理使用：%1$s（点击切换）</string>
+        <string name="use_ech_always_on">所有流量统一走 ECH 代理（自动 ECH / TLS 降级），始终开启</string>
     <string name="use_ech_summary">通过 ECH 隐藏 hanime.tv 的 SNI（防 DPI 重置）。需要重启应用生效。</string>
     <string name="doh_settings">DoH 設定</string>
     <string name="doh_preset">DoH 預設</string>

@@ -67,7 +67,7 @@ class HProxySelector private constructor() : ProxySelector() {
         fun rebuildNetwork() {
             val properties = System.getProperties()
             val echPort = io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port
-            if (SettingsRepository.useEch && echPort > 0) {
+            if (echPort > 0) {
                 properties["proxySet"] = true.toString()
                 properties["proxyHost"] = "127.0.0.1"
                 properties["proxyPort"] = echPort.toString()
@@ -111,7 +111,7 @@ class HProxySelector private constructor() : ProxySelector() {
         // (X-Ech-Target 模式,Go 内部 ECH 隐藏 SNI,封锁站点可通)。
         // 这里一律直连——绝不能让 OkHttp 走 CONNECT 隧道:
         // CONNECT 无法隐藏 SNI(GFW 会重置 javchu.com 等封锁站点)。
-        if (SettingsRepository.useEch && io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port > 0) {
+        if (io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port > 0) {
             return mutableListOf(Proxy.NO_PROXY)
         }
 
