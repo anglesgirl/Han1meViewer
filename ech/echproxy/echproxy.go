@@ -13,10 +13,12 @@
 package echproxy
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,6 +32,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -889,28 +892,32 @@ type dohResp struct {
 	} `json:"Answer"`
 }
 
-// dohQuery performs a DoH JSON query and returns the answer records.
-// endpoint may be a comma-separated list of DoH endpoints, tried in order.
+// dohQuery performs a DoH query (RFC 8484 binary POST) and returns the answer
+// records. endpoint may be a comma-separated list of DoH endpoints, tried in
+// order. Binary POST is required: some providers (e.g. dns.alidns.com) only
+// accept application/dns-message and reject the JSON GET form.
 func dohQuery(endpoint, name, qtype string) (*dohResp, error) {
+	qtypeNum, ok := map[string]uint16{"A": 1, "AAAA": 28, "TXT": 16, "HTTPS": 65}[qtype]
+	if !ok {
+		return nil, fmt.Errorf("unsupported DoH qtype %q", qtype)
+	}
+	query, err := buildDNSQuery(name, qtypeNum)
+	if err != nil {
+		return nil, err
+	}
 	var lastErr error
 	for _, base := range strings.Split(endpoint, ",") {
 		base = strings.TrimSpace(base)
 		if base == "" {
 			continue
 		}
-		q := base
-		if strings.Contains(q, "?") {
-			q += "&"
-		} else {
-			q += "?"
-		}
-		q += "name=" + url.QueryEscape(name) + "&type=" + qtype
-		req, err := http.NewRequest("GET", q, nil)
+		req, err := http.NewRequest("POST", base, bytes.NewReader(query))
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		req.Header.Set("accept", "application/dns-json")
+		req.Header.Set("content-type", "application/dns-message")
+		req.Header.Set("accept", "application/dns-message")
 		transport := &http.Transport{}
 		if pool := loadAndroidCertPool(); pool != nil { transport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12} }
 		resp, err := (&http.Client{Timeout: dialTimeout, Transport: transport}).Do(req)
@@ -918,28 +925,148 @@ func dohQuery(endpoint, name, qtype string) (*dohResp, error) {
 			lastErr = err
 			continue
 		}
-		if resp.StatusCode != 200 {
-			lastErr = fmt.Errorf("DoH HTTP %d via %s", resp.StatusCode, base)
-			resp.Body.Close()
-			continue
-		}
-		var dr dohResp
-		err = json.NewDecoder(resp.Body).Decode(&dr)
+		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
 			lastErr = err
+			continue
+		}
+		if resp.StatusCode != 200 {
+			lastErr = fmt.Errorf("DoH HTTP %d via %s", resp.StatusCode, base)
+			continue
+		}
+		dr, err := parseDNSResponse(body)
+		if err != nil {
+			lastErr = fmt.Errorf("DoH parse %s via %s: %w", name, base, err)
 			continue
 		}
 		if dr.Status != 0 {
 			lastErr = fmt.Errorf("DoH DNS status %d via %s", dr.Status, base)
 			continue
 		}
-		return &dr, nil
+		return dr, nil
 	}
 	if lastErr == nil {
 		lastErr = errors.New("no DoH endpoint configured")
 	}
 	return nil, lastErr
+}
+
+// buildDNSQuery encodes a single-question DNS query in RFC 8484 wire format.
+func buildDNSQuery(name string, qtype uint16) ([]byte, error) {
+	var buf bytes.Buffer
+	// Header: ID(2) Flags(2)=0x0100(RD) QDCOUNT(2)=1 AN/NS/AR(2)=0
+	binary.Write(&buf, binary.BigEndian, uint16(0x1234))
+	binary.Write(&buf, binary.BigEndian, uint16(0x0100))
+	binary.Write(&buf, binary.BigEndian, uint16(1))
+	binary.Write(&buf, binary.BigEndian, uint16(0))
+	binary.Write(&buf, binary.BigEndian, uint16(0))
+	binary.Write(&buf, binary.BigEndian, uint16(0))
+	// QNAME: labels, each 1-byte length + bytes, terminated by 0.
+	for _, label := range strings.Split(strings.TrimSuffix(name, "."), ".") {
+		if label == "" {
+			continue
+		}
+		if len(label) > 63 {
+			return nil, fmt.Errorf("DNS label too long: %s", label)
+		}
+		buf.WriteByte(byte(len(label)))
+		buf.WriteString(label)
+	}
+	buf.WriteByte(0)
+	binary.Write(&buf, binary.BigEndian, qtype)
+	binary.Write(&buf, binary.BigEndian, uint16(1)) // QCLASS IN
+	return buf.Bytes(), nil
+}
+
+// parseDNSResponse decodes an RFC 8484 DNS response into dohResp. Answer Data
+// fields are rendered to match the JSON API shapes the callers expect:
+// A/AAAA as IP strings, TXT as `"chunk" "chunk"` quoted form, HTTPS as
+// RFC 3597 `\# <len> <hex>` wire form.
+func parseDNSResponse(msg []byte) (*dohResp, error) {
+	if len(msg) < 12 {
+		return nil, errors.New("truncated DNS header")
+	}
+	rcode := int(msg[3] & 0x0F)
+	anCount := int(binary.BigEndian.Uint16(msg[6:8]))
+	dr := &dohResp{Status: rcode}
+	pos := 12
+	var skipName func(int) (int, error)
+	skipName = func(p int) (int, error) {
+		for {
+			if p >= len(msg) {
+				return 0, errors.New("truncated DNS name")
+			}
+			b := msg[p]
+			if b == 0 {
+				return p + 1, nil
+			}
+			if b&0xC0 == 0xC0 { // compression pointer
+				return p + 2, nil
+			}
+			p += 1 + int(b)
+		}
+	}
+	// Skip the question section (QDCOUNT is 1 for our queries).
+	pos, err := skipName(pos)
+	if err != nil {
+		return nil, err
+	}
+	if pos+4 > len(msg) {
+		return nil, errors.New("truncated DNS question")
+	}
+	pos += 4 // QTYPE + QCLASS
+	for i := 0; i < anCount; i++ {
+		pos, err = skipName(pos)
+		if err != nil {
+			return nil, err
+		}
+		if pos+10 > len(msg) {
+			return nil, errors.New("truncated DNS answer header")
+		}
+		atype := int(binary.BigEndian.Uint16(msg[pos : pos+2]))
+		rdLen := int(binary.BigEndian.Uint16(msg[pos+8 : pos+10]))
+		pos += 10
+		if pos+rdLen > len(msg) {
+			return nil, errors.New("truncated DNS rdata")
+		}
+		rdata := msg[pos : pos+rdLen]
+		pos += rdLen
+		data := renderRData(atype, rdata)
+		if data != "" {
+			dr.Answer = append(dr.Answer, struct {
+				Type int    `json:"type"`
+				Data string `json:"data"`
+			}{Type: atype, Data: data})
+		}
+	}
+	return dr, nil
+}
+
+// renderRData converts raw DNS rdata into the string form the JSON API used.
+func renderRData(atype int, rdata []byte) string {
+	switch atype {
+	case 1, 28: // A, AAAA
+		if ip := net.IP(rdata); ip != nil && ip.String() != "<nil>" {
+			return ip.String()
+		}
+		return ""
+	case 16: // TXT: length-prefixed chunks -> `"a" "b"` quoted form
+		var parts []string
+		for p := 0; p < len(rdata); {
+			l := int(rdata[p])
+			p++
+			if p+l > len(rdata) {
+				break
+			}
+			parts = append(parts, strconv.Quote(string(rdata[p:p+l])))
+			p += l
+		}
+		return strings.Join(parts, " ")
+	case 65: // HTTPS/SVCB: RFC 3597 wire form
+		return fmt.Sprintf(`\# %d %s`, len(rdata), hex.EncodeToString(rdata))
+	}
+	return ""
 }
 
 // resolveViaDoH returns the upstream IPs (IPv4 first) for host, using DoH so the
