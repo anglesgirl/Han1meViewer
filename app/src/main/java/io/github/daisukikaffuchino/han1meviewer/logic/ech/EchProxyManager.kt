@@ -10,8 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.Proxy
 import java.net.ServerSocket
 import java.net.URL
@@ -171,26 +172,101 @@ object EchProxyManager {
     }
 
     private fun dohQuery(doh: String, name: String, type: String): String {
-        val url = URL("$doh?name=$name&type=$type")
+        val qtype = when (type) {
+            "TXT" -> 16
+            "A" -> 1
+            "AAAA" -> 28
+            "HTTPS" -> 65
+            else -> throw IllegalArgumentException("unsupported qtype $type")
+        }
+        val query = buildDnsQuery(name, qtype)
         // 必须显式 NO_PROXY:ECH 开启时 rebuildNetwork 会把系统代理设为
         // 本地 ECH 代理,HttpURLConnection 默认读系统属性 → 请求走 CONNECT
         // 隧道 → 递归/失败。远程配置查询应直连 DoH 服务器。
-        val conn = url.openConnection(Proxy.NO_PROXY)
-        conn.setRequestProperty("accept", "application/dns-json")
+        val conn = URL(doh).openConnection(Proxy.NO_PROXY) as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("content-type", "application/dns-message")
+        conn.setRequestProperty("accept", "application/dns-message")
         conn.setRequestProperty("User-Agent", "Han1meViewer")
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
-        val body = conn.getInputStream().bufferedReader().use { it.readText() }
-        val json = JSONObject(body)
-        val answer = json.optJSONArray("Answer") ?: return ""
-        val sb = StringBuilder()
-        for (i in 0 until answer.length()) {
-            val rec = answer.optJSONObject(i) ?: continue
-            if (rec.optInt("type") == 16) {
-                sb.append(rec.optString("data")).append('\n')
+        conn.doOutput = true
+        conn.outputStream.use { it.write(query) }
+        val code = conn.responseCode
+        if (code != 200) throw Exception("DoH HTTP $code via $doh")
+        val body = conn.inputStream.use { it.readBytes() }
+        return parseDnsResponse(body)
+    }
+
+    /** 构造 RFC 8484 二进制 DNS 查询报文(单问题,无 EDNS)。 */
+    private fun buildDnsQuery(name: String, qtype: Int): ByteArray {
+        val buf = ByteArrayOutputStream()
+        // Header: ID=0x1234, Flags=0x0100(RD), QDCOUNT=1, AN/NS/AR=0
+        buf.write(byteArrayOf(0x12, 0x34, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00))
+        // QNAME
+        name.trimEnd('.').split(".").filter { it.isNotEmpty() }.forEach { label ->
+            buf.write(label.length)
+            buf.write(label.toByteArray(Charsets.UTF_8))
+        }
+        buf.write(0)
+        // QTYPE + QCLASS(IN)
+        buf.write((qtype shr 8) and 0xFF)
+        buf.write(qtype and 0xFF)
+        buf.write(0)
+        buf.write(1)
+        return buf.toByteArray()
+    }
+
+    /** 解析 RFC 8484 响应,返回 TXT 记录(每条一行,chunk 用引号包裹)。 */
+    private fun parseDnsResponse(msg: ByteArray): String {
+        if (msg.size < 12) throw Exception("truncated DNS header")
+        val rcode = msg[3].toInt() and 0x0F
+        if (rcode != 0) throw Exception("DoH DNS status $rcode")
+        val qdCount = ((msg[4].toInt() and 0xFF) shl 8) or (msg[5].toInt() and 0xFF)
+        val anCount = ((msg[6].toInt() and 0xFF) shl 8) or (msg[7].toInt() and 0xFF)
+        var pos = 12
+        // 跳过 question 区
+        repeat(qdCount) {
+            pos = skipDnsName(msg, pos)
+            pos += 4 // QTYPE + QCLASS
+        }
+        val lines = mutableListOf<String>()
+        repeat(anCount) {
+            pos = skipDnsName(msg, pos)
+            if (pos + 10 > msg.size) throw Exception("truncated answer header")
+            val atype = ((msg[pos].toInt() and 0xFF) shl 8) or (msg[pos + 1].toInt() and 0xFF)
+            val rdLen = ((msg[pos + 8].toInt() and 0xFF) shl 8) or (msg[pos + 9].toInt() and 0xFF)
+            pos += 10
+            if (pos + rdLen > msg.size) throw Exception("truncated rdata")
+            val rdata = msg.copyOfRange(pos, pos + rdLen)
+            pos += rdLen
+            if (atype == 16) { // TXT
+                val parts = mutableListOf<String>()
+                var p = 0
+                while (p < rdata.size) {
+                    val l = rdata[p].toInt() and 0xFF
+                    p++
+                    if (p + l > rdata.size) break
+                    parts.add("\"" + String(rdata, p, l, Charsets.UTF_8) + "\"")
+                    p += l
+                }
+                if (parts.isNotEmpty()) lines.add(parts.joinToString(" "))
             }
         }
-        return sb.toString()
+        if (lines.isEmpty()) throw Exception("no TXT records in DoH response")
+        return lines.joinToString("\n")
+    }
+
+    /** 跳过 DNS name(支持压缩指针),返回下一个字段的偏移。 */
+    private fun skipDnsName(msg: ByteArray, start: Int): Int {
+        var p = start
+        while (true) {
+            if (p >= msg.size) throw Exception("truncated DNS name")
+            val b = msg[p].toInt() and 0xFF
+            if (b == 0) return p + 1
+            if (b and 0xC0 == 0xC0) return p + 2 // 压缩指针
+            p += 1 + b
+        }
     }
 
     private fun parseRemoteConfig(txt: String): RemoteEchConfig {
