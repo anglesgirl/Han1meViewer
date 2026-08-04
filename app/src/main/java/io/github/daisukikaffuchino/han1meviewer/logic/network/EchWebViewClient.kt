@@ -69,7 +69,8 @@ object EchWebViewClient {
         }
     }
 
-    private fun isSiteHost(host: String): Boolean {
+    private fun isSiteHost(host: String?): Boolean {
+        if (host.isNullOrBlank()) return false
         val h = host.lowercase()
         io.github.daisukikaffuchino.han1meviewer.HanimeConstants.HANIME_HOSTNAME.forEach { d ->
             if (h == d || h.endsWith(".$d")) return true
