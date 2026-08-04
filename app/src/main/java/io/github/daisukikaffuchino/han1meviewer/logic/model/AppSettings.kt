@@ -119,7 +119,7 @@ data class AppSettings(
     val useBuiltInHosts: Boolean = false,
     val customHostsData: String = "",
     val useDoH: Boolean = false,
-    val useEch: Boolean = false,
+    val useEch: Boolean = true,
     val dohPreset: String = "alidns",
     val dohCustomUrl: String = "",
     val dohBootstrapIps: String = "",

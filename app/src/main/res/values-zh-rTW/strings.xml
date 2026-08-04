@@ -185,6 +185,8 @@
     <string name="use_ech">使用 ECH 代理</string>
         <string name="view_logs">查看日志</string>
     <string name="view_logs_summary">应用内最近日志（网络/ECH 诊断）</string>
+        <string name="copy_logs">复制全部</string>
+    <string name="logs_copied">日志已复制到剪贴板</string>
     <string name="clear_logs">清空日志</string>
     <string name="logs_empty">暂无日志。</string>
     <string name="ech_doh">ECH DoH</string>

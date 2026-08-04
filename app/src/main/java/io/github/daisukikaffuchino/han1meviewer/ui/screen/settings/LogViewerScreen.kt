@@ -1,7 +1,11 @@
 package io.github.daisukikaffuchino.han1meviewer.ui.screen.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,16 +22,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.utils.LogUtil
+import io.github.daisukikaffuchino.utils.SonnerToast
 import kotlinx.coroutines.delay
 
 /**
  * 应用内日志查看器:显示 LogUtil 内存缓冲的最近日志,
- * 实时刷新,支持复制/清空。用于诊断网络/ECH 问题。
+ * 实时刷新,支持复制全部/清空。用于诊断网络/ECH 问题。
  */
 @Composable
 fun LogViewerScreen(
@@ -35,6 +41,7 @@ fun LogViewerScreen(
 ) {
     var logs by remember { mutableStateOf(LogUtil.dumpLogs()) }
     var refreshTick by remember { mutableStateOf(0L) }
+    val context = LocalContext.current
 
     // 实时刷新:监听 LogUtil + 每 1s 兜底轮询。
     LaunchedEffect(Unit) {
@@ -50,8 +57,17 @@ fun LogViewerScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // 顶部操作栏:清空 + 返回
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+        // 顶部操作栏:复制全部 + 清空 + 返回
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+            TextButton(onClick = {
+                val all = logs.joinToString("\n")
+                if (all.isNotBlank()) {
+                    copyToClipboard(context, all)
+                    SonnerToast.success(R.string.logs_copied)
+                }
+            }) {
+                Text(stringResource(R.string.copy_logs))
+            }
             TextButton(onClick = {
                 LogUtil.clearLogs()
                 logs = LogUtil.dumpLogs()
@@ -82,4 +98,9 @@ fun LogViewerScreen(
             )
         }
     }
+}
+
+private fun copyToClipboard(context: Context, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("logs", text))
 }

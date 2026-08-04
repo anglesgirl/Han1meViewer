@@ -190,6 +190,8 @@ Some mirrors may not support login, may not share cookies, may fail verification
     <string name="ech_doh_summary_format">ECH proxy uses: %1$s (tap to change)</string>
     <string name="view_logs">View Logs</string>
     <string name="view_logs_summary">In-app recent logs (network/ECH diagnostics)</string>
+    <string name="copy_logs">Copy all</string>
+    <string name="logs_copied">Logs copied to clipboard</string>
     <string name="clear_logs">Clear logs</string>
     <string name="logs_empty">No logs yet.</string>
     <string name="doh_settings">DoH Settings</string>
