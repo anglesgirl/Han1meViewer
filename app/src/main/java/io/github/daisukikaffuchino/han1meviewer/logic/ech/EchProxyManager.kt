@@ -10,8 +10,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.net.ServerSocket
+import java.net.URL
 
 /**
  * ECH 代理管理器:负责启动/停止 Go ECH 代理(gomobile 编译的 echproxy AAR)。
@@ -19,6 +21,10 @@ import java.net.ServerSocket
  * 代理监听 127.0.0.1:<port>,把 Hanime.tv 的请求通过 ECH TLS 握手转发,
  * 隐藏 SNI 防止被 GFW 重置。ECH 公钥配置来自 cloudflare-ech.com(缓存5h),
  * 握手失败自动兜底一次,再失败降级普通 TLS。
+ *
+ * 远程配置:启动时从 ech-config.anglesgirl.eu.org 的 DNS TXT 记录拉取
+ * doh/doh2/doh3/ip(多 DoH 依次尝试 + 自定义边缘 IP),失败则回退到
+ * 本地设置的 DoH 预设(alidns/dnspod/cloudflare),再兜底 alidns。
  *
  * 用法:
  *   EchProxyManager.start(context)   // 启动,返回本地代理端口
@@ -39,8 +45,11 @@ object EchProxyManager {
 
     private var cachePath: String? = null
 
-    /** 兜底 DoH 端点(仅当用户 DoH 未配置时使用)。 */
+    /** 兜底 DoH 端点(仅当远程配置和本地预设都不可用时)。 */
     const val DEFAULT_DOH = "https://dns.alidns.com/dns-query"
+
+    /** 远程配置域名(DNS TXT 下发 doh/doh2/doh3/ip)。 */
+    const val REMOTE_CONFIG_DOMAIN = "ech-config.anglesgirl.eu.org"
 
     /** 状态轮询任务。 */
     private var statusJob: kotlinx.coroutines.Job? = null
@@ -48,7 +57,7 @@ object EchProxyManager {
     /**
      * 启动 ECH 代理。
      * @param context 用于定位缓存目录
-     * @param doh DoH JSON 端点(可空,默认用用户配置的 DoH,未配置则 alidns)
+     * @param doh 显式指定 DoH(调试用,可空则走远程配置/本地预设)
      * @return 本地代理端口,失败返回 -1
      */
     suspend fun start(context: Context, doh: String? = null): Int = withContext(Dispatchers.IO) {
@@ -56,25 +65,45 @@ object EchProxyManager {
         try {
             cachePath = File(context.filesDir, "ech-public-config.json").absolutePath
             val chosen = freePort()
-            // ECH 用当前 DoH 预设(与网络设置联动,可切换 alidns/dnspod/
-            // cloudflare/自定义)。不依赖 useDoH 开关——ECH 代理自身需要
-            // 一个可用的 DoH 解析域名,Cloudflare Gateway 在部分网络被墙。
-            val dohArg = doh ?: runCatching {
-                val cfg = io.github.daisukikaffuchino.han1meviewer.logic.network.DohConfig
-                when (SettingsRepository.dohPreset) {
-                    "custom" -> cfg.customUrl().takeIf { it.isNotBlank() }
-                    else -> cfg.selectedPreset().url
+
+            // 1. 远程配置(多 DoH + 自定义 IP)
+            var remoteDoh: String? = null
+            var remoteIps: String? = null
+            runCatching { fetchRemoteConfig() }.onSuccess { cfg ->
+                val list = listOfNotNull(cfg.doh, cfg.doh2, cfg.doh3).distinct()
+                if (list.isNotEmpty()) {
+                    remoteDoh = list.joinToString(",")
+                    LogUtil.record("I", TAG, "remote config: doh=${remoteDoh}")
                 }
-            }.getOrNull() ?: DEFAULT_DOH
-            Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")
-            LogUtil.record("I", TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")
+                if (!cfg.ip.isNullOrBlank()) {
+                    remoteIps = cfg.ip
+                    LogUtil.record("I", TAG, "remote config: ip=${cfg.ip}")
+                }
+            }.onFailure { e ->
+                LogUtil.record("W", TAG, "remote config unavailable: ${e.message}")
+            }
+
+            // 2. DoH 选择: 远程配置 > 本地 DoH 预设 > alidns 兜底
+            val dohArg = doh
+                ?: remoteDoh
+                ?: runCatching {
+                    val cfg = io.github.daisukikaffuchino.han1meviewer.logic.network.DohConfig
+                    when (SettingsRepository.dohPreset) {
+                        "custom" -> cfg.customUrl().takeIf { it.isNotBlank() }
+                        else -> cfg.selectedPreset().url
+                    }
+                }.getOrNull()
+                ?: DEFAULT_DOH
+            val ipArg = remoteIps ?: ""
+            Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg, ip=$ipArg)")
+            LogUtil.record("I", TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg, ip=$ipArg)")
 
             Echproxy.start(
                 "127.0.0.1:$chosen",          // listen
                 "hanime.tv",                  // target
                 "",                           // echB64 (空 → DoH/cloudflare-ech.com + fallback)
-                dohArg,                       // DoH JSON endpoint
-                "",                           // ipList (可选自定义边缘IP)
+                dohArg,                       // DoH JSON endpoint (逗号分隔多 DoH)
+                ipArg,                        // ipList (远程配置的自定义边缘 IP)
                 cachePath!!,                  // ECH 公钥配置缓存(5h)
                 false,                        // insecure
             )
@@ -107,6 +136,76 @@ object EchProxyManager {
                 kotlinx.coroutines.delay(3000)
             }
         }
+    }
+
+    /**
+     * 从远程配置域名的 DNS TXT 记录拉取 doh/doh2/doh3/ip。
+     * 依次尝试本地预设 DoH + 默认 alidns,解析 TXT。
+     */
+    private suspend fun fetchRemoteConfig(): RemoteEchConfig = withContext(Dispatchers.IO) {
+        val dohCandidates = listOfNotNull(
+            runCatching {
+                val cfg = io.github.daisukikaffuchino.han1meviewer.logic.network.DohConfig
+                when (SettingsRepository.dohPreset) {
+                    "custom" -> cfg.customUrl().takeIf { it.isNotBlank() }
+                    else -> cfg.selectedPreset().url
+                }
+            }.getOrNull(),
+            DEFAULT_DOH,
+        ).distinct()
+
+        var lastError: Exception? = null
+        for (doh in dohCandidates) {
+            try {
+                val txt = dohQuery(doh, REMOTE_CONFIG_DOMAIN, "TXT")
+                val cfg = parseRemoteConfig(txt)
+                if (cfg.doh != null || cfg.ip != null) {
+                    return@withContext cfg
+                }
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+        throw lastError ?: Exception("no DoH endpoint available")
+    }
+
+    private fun dohQuery(doh: String, name: String, type: String): String {
+        val url = URL("$doh?name=$name&type=$type")
+        val conn = url.openConnection()
+        conn.setRequestProperty("accept", "application/dns-json")
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        val body = conn.getInputStream().bufferedReader().use { it.readText() }
+        val json = JSONObject(body)
+        val answer = json.optJSONArray("Answer") ?: return ""
+        val sb = StringBuilder()
+        for (i in 0 until answer.length()) {
+            val rec = answer.optJSONObject(i) ?: continue
+            if (rec.optInt("type") == 16) {
+                sb.append(rec.optString("data")).append('\n')
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun parseRemoteConfig(txt: String): RemoteEchConfig {
+        val cfg = RemoteEchConfig()
+        txt.split("\n").forEach { line ->
+            line.split(";").forEach { part ->
+                val idx = part.indexOf("=")
+                if (idx > 0) {
+                    val key = part.substring(0, idx).trim().lowercase()
+                    val value = part.substring(idx + 1).trim().trim('"')
+                    when (key) {
+                        "doh" -> cfg.doh = value
+                        "doh2" -> cfg.doh2 = value
+                        "doh3" -> cfg.doh3 = value
+                        "ip", "ips" -> cfg.ip = value
+                    }
+                }
+            }
+        }
+        return cfg
     }
 
     /** 停止 ECH 代理。 */
@@ -146,4 +245,11 @@ object EchProxyManager {
     private fun freePort(): Int {
         ServerSocket(0).use { return it.localPort }
     }
+
+    private data class RemoteEchConfig(
+        var doh: String? = null,
+        var doh2: String? = null,
+        var doh3: String? = null,
+        var ip: String? = null,
+    )
 }

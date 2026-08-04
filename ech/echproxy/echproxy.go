@@ -867,6 +867,7 @@ type dohResp struct {
 }
 
 // dohQuery performs a DoH JSON query and returns the answer records.
+// endpoint may be a comma-separated list of DoH endpoints, tried in order.
 func dohQuery(endpoint, name, qtype string) (*dohResp, error) {
 	var lastErr error
 	for _, base := range strings.Split(endpoint, ",") {

@@ -592,8 +592,10 @@ private fun buildDohSummary(context: Context): String {
     return if (bootstrap != null) "$core\nBootstrap: $bootstrap" else core
 }
 
-/** ECH 代理实际使用的 DoH(始终取当前预设,不依赖 useDoH 开关)。 */
+/** ECH 代理实际使用的 DoH(远程配置优先,否则当前预设,不依赖 useDoH 开关)。 */
 private fun buildEchDohSummary(context: Context): String {
+    // 远程配置的 doh 已在 EchProxyManager 启动时记录,这里优先显示预设
+    // (远程配置域名固定,显示它没有意义;预设是用户可切换的)。
     val core = if (SettingsRepository.dohPreset == "custom") {
         SettingsRepository.dohCustomUrl.ifBlank { context.getString(R.string.custom) }
     } else {
