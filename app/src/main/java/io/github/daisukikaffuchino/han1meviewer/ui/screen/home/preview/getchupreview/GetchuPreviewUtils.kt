@@ -9,6 +9,7 @@ import coil3.ImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ImageRequest
 import io.github.daisukikaffuchino.han1meviewer.DESKTOP_USER_AGENT
+import io.github.daisukikaffuchino.han1meviewer.logic.network.EchInterceptor
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HDns
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
 import okhttp3.OkHttpClient
