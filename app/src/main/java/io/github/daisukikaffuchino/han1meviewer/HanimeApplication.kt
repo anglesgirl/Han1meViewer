@@ -14,6 +14,7 @@ import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
 import io.github.daisukikaffuchino.han1meviewer.ui.crash.CrashHandler
 import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders
 import io.github.daisukikaffuchino.han1meviewer.util.AppLanguageManager
+import io.github.daisukikaffuchino.han1meviewer.util.JankMonitor
 import io.github.daisukikaffuchino.utils.ActivityManager
 import io.github.daisukikaffuchino.utils.LogUtil
 import io.github.daisukikaffuchino.utils.applicationContext as globalApplicationContext
@@ -50,6 +51,7 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         // 用 ECH 隐藏 SNI,不支持的自动降级普通 TLS)。代理就绪前网络
         // 请求走原有路径,不会阻塞启动。
         io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.startAsync(this)
+        JankMonitor.start()
         initNotificationChannel()
         MPVLib.create(applicationContext)
         MPVLib.init()

@@ -188,7 +188,10 @@
         <string name="copy_logs">复制全部</string>
     <string name="logs_copied">日志已复制到剪贴板</string>
     <string name="clear_logs">清空日志</string>
-    <string name="logs_empty">暂无日志。</string>
+    <string name="logs_empty">暫無日誌。</string>
+    <string name="export_logs">匯出檔案</string>
+    <string name="logs_exported">日誌已匯出到下載目錄</string>
+    <string name="export_logs_failed">匯出失敗</string>
     <string name="ech_doh">ECH DoH</string>
     <string name="ech_doh_summary_format">ECH 代理使用：%1$s（点击切换）</string>
         <string name="use_ech_always_on">所有流量统一走 ECH 代理（自动 ECH / TLS 降级），始终开启</string>

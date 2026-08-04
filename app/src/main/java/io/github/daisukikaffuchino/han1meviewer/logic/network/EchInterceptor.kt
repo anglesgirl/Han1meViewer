@@ -7,6 +7,7 @@ import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import android.os.SystemClock
 
 /**
  * ECH 拦截器:把**所有** HTTPS 请求改写为
@@ -65,7 +66,11 @@ class EchInterceptor : Interceptor {
         val proxied = builder.build()
         LogUtil.record("D", "EchProxy", "ECH route ${originHost}${url.encodedPath} -> 127.0.0.1:$echPort")
 
+        val startMs = SystemClock.elapsedRealtime()
         val response = chain.proceed(proxied)
+        val elapsedMs = SystemClock.elapsedRealtime() - startMs
+        // 耗时日志:诊断慢请求/丢帧时直接看每请求耗时,不用猜。
+        LogUtil.record("D", "EchProxy", "route ${originHost}${url.encodedPath} -> ${elapsedMs}ms ${response.code}")
 
         // 响应里的 Set-Cookie 存回原始域名
         val setCookies = response.headers("Set-Cookie")

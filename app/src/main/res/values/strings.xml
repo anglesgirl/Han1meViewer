@@ -195,6 +195,9 @@ Some mirrors may not support login, may not share cookies, may fail verification
     <string name="logs_copied">Logs copied to clipboard</string>
     <string name="clear_logs">Clear logs</string>
     <string name="logs_empty">No logs yet.</string>
+    <string name="export_logs">Export file</string>
+    <string name="logs_exported">Logs exported to Downloads</string>
+    <string name="export_logs_failed">Export failed</string>
     <string name="doh_settings">DoH Settings</string>
     <string name="doh_preset">DoH Preset</string>
     <string name="doh_custom_url">Custom DoH URL</string>

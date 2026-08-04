@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import echproxy.Echproxy
 import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository
+import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
 import io.github.daisukikaffuchino.utils.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +48,9 @@ object EchProxyManager {
 
     private var cachePath: String? = null
 
+    /** 远端配置缓存文件(两行: doh 逗号串 / ip 串),启动时直接复用,不等网络。 */
+    private var configCacheFile: File? = null
+
     /** 兜底 DoH 端点(仅当远程配置和本地预设都不可用时)。 */
     const val DEFAULT_DOH = "https://dns.alidns.com/dns-query"
 
@@ -66,39 +70,22 @@ object EchProxyManager {
         if (isRunning) return@withContext port
         try {
             cachePath = File(context.filesDir, "ech-public-config.json").absolutePath
+            configCacheFile = File(context.filesDir, "ech-remote-config.txt")
             val chosen = freePort()
 
-            // 1. 远程配置(多 DoH + 自定义 IP)
-            var remoteDoh: String? = null
-            var remoteIps: String? = null
-            runCatching { fetchRemoteConfig() }.onSuccess { cfg ->
-                val list = listOfNotNull(cfg.doh, cfg.doh2, cfg.doh3).distinct()
-                if (list.isNotEmpty()) {
-                    remoteDoh = list.joinToString(",")
-                    LogUtil.record("I", TAG, "remote config: doh=${remoteDoh}")
-                }
-                if (!cfg.ip.isNullOrBlank()) {
-                    remoteIps = cfg.ip
-                    LogUtil.record("I", TAG, "remote config: ip=${cfg.ip}")
-                }
-            }.onFailure { e ->
-                LogUtil.record("W", TAG, "remote config unavailable: ${e.message}")
-            }
-
-            // 2. DoH 选择: 远程配置 > 本地 DoH 预设 > alidns 兜底
+            // 1. 立即用缓存/本地预设启动代理——不等待 remote config。
+            //    远端配置(优选 DoH/边缘 IP)由后台任务刷新后热更新,首屏不等网络。
+            val cached = loadConfigCache()
             val dohArg = doh
-                ?: remoteDoh
-                ?: runCatching {
-                    val cfg = io.github.daisukikaffuchino.han1meviewer.logic.network.DohConfig
-                    when (SettingsRepository.dohPreset) {
-                        "custom" -> cfg.customUrl().takeIf { it.isNotBlank() }
-                        else -> cfg.selectedPreset().url
-                    }
-                }.getOrNull()
+                ?: cached?.first
+                ?: localPresetDoh()
                 ?: DEFAULT_DOH
-            val ipArg = remoteIps ?: ""
-            Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg, ip=$ipArg)")
-            LogUtil.record("I", TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg, ip=$ipArg)")
+            val ipArg = cached?.second ?: ""
+            LogUtil.record(
+                "I", TAG,
+                "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg, ip=$ipArg)" +
+                    (if (cached != null) " [config cache hit]" else "")
+            )
 
             Echproxy.start(
                 "127.0.0.1:$chosen",          // listen
@@ -110,11 +97,13 @@ object EchProxyManager {
                 false,                        // insecure
             )
             port = chosen
-            Log.i(TAG, "ECH proxy started on port $chosen")
             LogUtil.record("I", TAG, "ECH proxy started on 127.0.0.1:$chosen")
             // 让系统代理(HttpURLConnection/WebView)指向本地 ECH 代理。
-            io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector.rebuildNetwork()
+            HProxySelector.rebuildNetwork()
             startStatusPolling()
+
+            // 2. 后台异步刷新远端配置:拉到新配置 → 写缓存 → 热更新 Go 端端点。
+            scope.launch { refreshRemoteConfig(dohArg, ipArg) }
             chosen
         } catch (e: Throwable) {
             Log.e(TAG, "ECH proxy start failed", e)
@@ -122,6 +111,62 @@ object EchProxyManager {
             port = -1
             -1
         }
+    }
+
+    /**
+     * 后台刷新远端配置(不阻塞启动)。
+     * 成功:写缓存文件,若与当前端点不同则 SetEndpoints 热更新(无需重启代理)。
+     * 失败:沿用缓存/当前配置,仅记录。
+     */
+    private suspend fun refreshRemoteConfig(currentDoh: String, currentIp: String) {
+        runCatching { fetchRemoteConfig() }
+            .onSuccess { cfg ->
+                val list = listOfNotNull(cfg.doh, cfg.doh2, cfg.doh3).distinct()
+                val newDoh = if (list.isNotEmpty()) list.joinToString(",") else null
+                val newIp = cfg.ip?.takeIf { it.isNotBlank() }
+                LogUtil.record("I", TAG, "remote config: doh=$newDoh, ip=$newIp")
+                saveConfigCache(newDoh, newIp)
+                if (newDoh != null || newIp != null) {
+                    val finalDoh = newDoh ?: currentDoh
+                    val finalIp = newIp ?: ""
+                    if (finalDoh != currentDoh || finalIp != currentIp) {
+                        runCatching { Echproxy.setEndpoints(finalDoh, finalIp) }
+                            .onSuccess {
+                                LogUtil.record("I", TAG, "endpoints hot-updated (doh=$finalDoh, ip=$finalIp)")
+                            }
+                            .onFailure { e ->
+                                LogUtil.record("W", TAG, "endpoints hot-update failed: ${e.message}")
+                            }
+                    }
+                }
+            }
+            .onFailure { e ->
+                LogUtil.record("W", TAG, "remote config refresh failed (using cached/current): ${e.message}")
+            }
+    }
+
+    /** 本地 DoH 预设(用户设置),remote config 与显式参数都缺失时的回退。 */
+    private fun localPresetDoh(): String? = runCatching {
+        val cfg = io.github.daisukikaffuchino.han1meviewer.logic.network.DohConfig
+        when (SettingsRepository.dohPreset) {
+            "custom" -> cfg.customUrl().takeIf { it.isNotBlank() }
+            else -> cfg.selectedPreset().url
+        }
+    }.getOrNull()
+
+    /** 读取上次成功的远端配置缓存(两行: doh 逗号串 / ip 串)。 */
+    private fun loadConfigCache(): Pair<String, String>? {
+        val f = configCacheFile ?: return null
+        return runCatching {
+            val lines = f.readLines()
+            if (lines.isEmpty() || lines[0].isBlank()) null
+            else lines[0] to (lines.getOrNull(1) ?: "")
+        }.getOrNull()
+    }
+
+    private fun saveConfigCache(doh: String?, ip: String?) {
+        val f = configCacheFile ?: return
+        runCatching { f.writeText("${doh ?: ""}\n${ip ?: ""}") }
     }
 
     /** 每 3 秒把 ECH 代理的握手/降级状态写入日志缓冲(日志页可见)。 */

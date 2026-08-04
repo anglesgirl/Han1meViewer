@@ -72,7 +72,21 @@ var (
 	// 落盘,后续连接直接读缓存握手,避免每次启动都实时查 DoH。
 	cachePathMu sync.RWMutex
 	cachePath   string
+
+	// DNS 磁盘缓存:DoH 解析结果(IP 列表)落盘复用,冷启动不再对每个 host
+	// 重新 A+AAAA 查询("不再二次解析")。TTL 1h,与 DoH 应答 TTL 量级一致。
+	dnsCacheMu   sync.RWMutex
+	dnsCache     = map[string]dnsCacheEntry{}
+	dnsCachePath string
 )
+
+// dnsCacheEntry 是某个 host 的 DoH 解析缓存(IPv4 在前)与过期时间(unix 秒)。
+type dnsCacheEntry struct {
+	IPs    []string `json:"ips"`
+	Expire int64    `json:"expire"`
+}
+
+const dnsCacheTTL = time.Hour
 
 // hostConf caches what we learned about a secondary upstream: its DoH-resolved
 // addresses and its ECH config (absent for servers that don't offer ECH).
@@ -266,7 +280,9 @@ func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) err
 	_ = target
 	cachePathMu.Lock()
 	cachePath = cpArg
+	dnsCachePath = filepath.Join(filepath.Dir(cpArg), "ech-dns-cache.json")
 	cachePathMu.Unlock()
+	loadDnsCache()
 	fallback := []byte(nil)
 	if strings.TrimSpace(echB64) != "" {
 		decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(echB64))
@@ -325,6 +341,27 @@ func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) err
 		mu.Unlock()
 	}()
 	return nil
+}
+
+// SetEndpoints 热更新 DoH 端点与优选 IP 列表(remote config 异步到达时调用,
+// 无需重启代理)。已建连的 host 保持原连接;新 host 使用新配置。
+func SetEndpoints(doh, ipList string) {
+	custom := make([]string, 0)
+	for _, ip := range parseIPList(ipList) {
+		if isCloudflareAS13335(ip) {
+			custom = append(custom, ip)
+		}
+	}
+	mu.Lock()
+	if strings.TrimSpace(doh) != "" {
+		hostsMu.Lock()
+		activeDoH = doh
+		hostsMu.Unlock()
+	}
+	customIPs = custom
+	mu.Unlock()
+	setDNSInfo("endpoints updated (doh=%s, ip=%d)", orNone(activeDoH), len(custom))
+	log.Printf("echproxy: endpoints updated via SetEndpoints")
 }
 
 // Stop shuts the proxy down. Safe to call when not running.
@@ -1075,6 +1112,11 @@ func resolveViaDoH(host, endpoint string) ([]string, error) {
 	if strings.TrimSpace(endpoint) == "" {
 		return nil, errors.New("no DoH endpoint configured")
 	}
+	// 1. 磁盘缓存命中(1h TTL)→ 直接复用,不再二次解析。
+	if ips, ok := cachedResolve(host); ok {
+		log.Printf("echproxy: %s: DNS cache hit (%d addr(s))", host, len(ips))
+		return ips, nil
+	}
 	var v4, v6 []string
 	var firstErr error
 
@@ -1105,7 +1147,68 @@ func resolveViaDoH(host, endpoint string) ([]string, error) {
 		}
 		return nil, firstErr
 	}
+	// 2. 解析成功 → 写入缓存(内存 + 磁盘),下次直接复用。
+	storeDnsCache(host, out)
 	return out, nil
+}
+
+// cachedResolve 返回未过期的 DNS 缓存(内存,启动时从磁盘加载)。
+func cachedResolve(host string) ([]string, bool) {
+	dnsCacheMu.RLock()
+	e, ok := dnsCache[host]
+	dnsCacheMu.RUnlock()
+	if ok && len(e.IPs) > 0 && time.Now().Unix() < e.Expire {
+		return e.IPs, true
+	}
+	return nil, false
+}
+
+// storeDnsCache 写入内存缓存并落盘。
+func storeDnsCache(host string, ips []string) {
+	if len(ips) == 0 {
+		return
+	}
+	dnsCacheMu.Lock()
+	dnsCache[host] = dnsCacheEntry{IPs: ips, Expire: time.Now().Add(dnsCacheTTL).Unix()}
+	dnsCacheMu.Unlock()
+	persistDnsCache()
+}
+
+// persistDnsCache 把整个缓存写盘(文件很小,整写即可)。
+func persistDnsCache() {
+	p := dnsCachePath
+	if p == "" {
+		return
+	}
+	dnsCacheMu.RLock()
+	data, err := json.Marshal(dnsCache)
+	dnsCacheMu.RUnlock()
+	if err != nil {
+		return
+	}
+	if dir := filepath.Dir(p); dir != "" {
+		_ = os.MkdirAll(dir, 0o755)
+	}
+	_ = os.WriteFile(p, data, 0o600)
+}
+
+// loadDnsCache 启动时把磁盘缓存载入内存。
+func loadDnsCache() {
+	p := dnsCachePath
+	if p == "" {
+		return
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return
+	}
+	var m map[string]dnsCacheEntry
+	if json.Unmarshal(data, &m) != nil {
+		return
+	}
+	dnsCacheMu.Lock()
+	dnsCache = m
+	dnsCacheMu.Unlock()
 }
 
 // quotedRe extracts the quoted chunks of a TXT record. Long TXT values are
