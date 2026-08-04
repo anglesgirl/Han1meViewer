@@ -402,6 +402,17 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// 请求级日志:方法 路径 状态码(供日志页诊断 javchu.com 等打不开的问题)
+	statusText := resp.Status
+	loc := resp.Header.Get("Location")
+	if loc != "" {
+		statusText += " -> " + loc
+	}
+	setStatus("HTTP %s %s %s", r.Method, r.URL.Path, statusText)
+	if resp.StatusCode >= 400 {
+		setStatus("HTTP %d for %s (upstream %s)", resp.StatusCode, r.URL.Path, target)
+	}
+
 	if loc := resp.Header.Get("Location"); loc != "" {
 		resp.Header.Set("Location", rewriteLocation(loc, target))
 	}
@@ -441,8 +452,11 @@ func isTargetHost(value string) bool {
 }
 
 // handleConnect implements the CONNECT method of a standard HTTP proxy.
-// It dials the target host over ECH (when AS13335 / Cloudflare) or plain TLS
-// (non-CF CDNs), then pipes bytes in both directions.
+// It dials the target host over **plain TCP** and pipes bytes in both
+// directions. The client performs its own TLS inside the tunnel (standard
+// CONNECT semantics). Do NOT use DialTLSContext here: that returns an
+// already-ECH-handshaked TLS conn, and the client's own TLS handshake on
+// top would produce double-encrypted garbage.
 func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 	hostport := r.Host
 	if hostport == "" {
@@ -458,28 +472,37 @@ func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build (or reuse) the ECH-aware transport for this host. AS13335 hosts
-	// get ECH; other CDNs (m3u8/ts) get plain TLS over DoH-resolved IPs.
-	t, err := transportFor(host)
-	if err != nil {
-		http.Error(w, "echproxy: transport for "+host+": "+err.Error(), http.StatusBadGateway)
+	// Resolve via DoH (bypass poisoned system DNS) but dial plain TCP.
+	// ECH is negotiated by the client's own TLS inside the tunnel; we only
+	// guarantee the route + DoH resolution.
+	doh, insecure := activeDoH, activeInse
+	_ = insecure
+	ips, err := resolveViaDoH(host, doh)
+	if err != nil || len(ips) == 0 {
+		setStatus("CONNECT %s DoH resolve failed: %v", host, err)
+		http.Error(w, "echproxy: resolve "+host+": "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
-	// Dial upstream with ECH (hostDialContext). The addr form is host:port.
-	dialAddr := hostport
-	if _, _, err := net.SplitHostPort(hostport); err != nil {
-		dialAddr = net.JoinHostPort(host, "443")
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), dialTimeout)
-	upstream, err := t.DialTLSContext(ctx, "tcp", dialAddr)
-	cancel()
-	if err != nil {
-		setStatus("CONNECT %s failed: %v", host, err)
-		http.Error(w, "echproxy: CONNECT "+host+": "+err.Error(), http.StatusBadGateway)
+	defer cancel()
+	var upstream net.Conn
+	var lastErr error
+	for _, ip := range ips {
+		addr := net.JoinHostPort(ip, "443")
+		upstream, lastErr = (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, "tcp", addr)
+		if lastErr == nil {
+			break
+		}
+	}
+	if upstream == nil {
+		setStatus("CONNECT %s dial failed: %v", host, lastErr)
+		http.Error(w, "echproxy: CONNECT "+host+": "+lastErr.Error(), http.StatusBadGateway)
 		return
 	}
 	defer upstream.Close()
+	// 隧道建立日志:CONNECT 目标 成功(裸 TCP,客户端在隧道内自行 TLS)
+	setStatus("CONNECT %s tunnel established (plain TCP via DoH)", host)
 
 	// Hijack the client connection to build a raw tunnel.
 	hj, ok := w.(http.Hijacker)
