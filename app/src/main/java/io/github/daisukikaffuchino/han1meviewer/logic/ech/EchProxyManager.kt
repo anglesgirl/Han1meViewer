@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.net.Proxy
 import java.net.ServerSocket
 import java.net.URL
 
@@ -171,8 +172,12 @@ object EchProxyManager {
 
     private fun dohQuery(doh: String, name: String, type: String): String {
         val url = URL("$doh?name=$name&type=$type")
-        val conn = url.openConnection()
+        // 必须显式 NO_PROXY:ECH 开启时 rebuildNetwork 会把系统代理设为
+        // 本地 ECH 代理,HttpURLConnection 默认读系统属性 → 请求走 CONNECT
+        // 隧道 → 递归/失败。远程配置查询应直连 DoH 服务器。
+        val conn = url.openConnection(Proxy.NO_PROXY)
         conn.setRequestProperty("accept", "application/dns-json")
+        conn.setRequestProperty("User-Agent", "Han1meViewer")
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
         val body = conn.getInputStream().bufferedReader().use { it.readText() }
