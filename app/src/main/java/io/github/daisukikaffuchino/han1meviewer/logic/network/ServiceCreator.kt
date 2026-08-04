@@ -72,7 +72,9 @@ object ServiceCreator {
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
-            .proxySelector(HProxySelector.getInstance())
+            // ECH:站点流量用拦截器改写走本地 ECH 代理(X-Ech-Target),
+            // 不用 proxySelector(CONNECT 隧道无法隐藏 SNI,封锁站点不通)。
+            .addInterceptor(EchInterceptor())
             .dns(dns)
             .build()
     }
@@ -98,7 +100,9 @@ object ServiceCreator {
             .addInterceptor(CloudflareInterceptor(applicationContext))
             .cache(cache)
             .cookieJar(HCookieJar())
-            .proxySelector(HProxySelector.getInstance())
+            // ECH:站点流量用拦截器改写走本地 ECH 代理(X-Ech-Target),
+            // 不用 proxySelector(CONNECT 隧道无法隐藏 SNI,封锁站点不通)。
+            .addInterceptor(EchInterceptor())
             .dns(dns)
             .build()
     }

@@ -107,20 +107,12 @@ class HProxySelector private constructor() : ProxySelector() {
     }
 
     override fun select(uri: URI?): MutableList<Proxy> {
-        // ECH 代理:开启且本地代理就绪时,当前站点域名及其 API 走 ECH 代理。
-        // 其他域名(更新检查 COS、图片 CDN、GitHub 等)保持直连(NO_PROXY),
-        // 避免被 rebuildNetwork 设置的全局系统代理劫持到 ECH 代理。
-        if (SettingsRepository.useEch) {
-            val echPort = io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port
-            if (echPort > 0) {
-                if (uri?.host?.let { host -> echDomainMatches(host) } == true) {
-                    return mutableListOf(
-                        Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", echPort))
-                    )
-                }
-                // 非站点域名:直连,不走 ECH 代理(更新检查/其他服务不受影响)。
-                return mutableListOf(Proxy.NO_PROXY)
-            }
+        // ECH 开启时:站点流量由 EchInterceptor 改写走 ECH 代理
+        // (X-Ech-Target 模式,Go 内部 ECH 隐藏 SNI,封锁站点可通)。
+        // 这里一律直连——绝不能让 OkHttp 走 CONNECT 隧道:
+        // CONNECT 无法隐藏 SNI(GFW 会重置 javchu.com 等封锁站点)。
+        if (SettingsRepository.useEch && io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port > 0) {
+            return mutableListOf(Proxy.NO_PROXY)
         }
 
         val type = SettingsRepository.proxyType
@@ -145,22 +137,6 @@ class HProxySelector private constructor() : ProxySelector() {
         }
 
         return delegation?.select(uri) ?: alternative.select(uri)
-    }
-
-    /** 判断 host 是否属于当前站点(支持切换的官方域名 + 自定义镜像站)。 */
-    private fun echDomainMatches(host: String): Boolean {
-        val h = host.lowercase()
-        // 官方可切换域名
-        io.github.daisukikaffuchino.han1meviewer.HanimeConstants.HANIME_HOSTNAME.forEach { d ->
-            if (h == d || h.endsWith(".$d")) return true
-        }
-        // 当前选中的站点/镜像站
-        runCatching {
-            val base = SettingsRepository.baseUrl
-            val domain = base.substringAfter("://").substringBefore("/").lowercase()
-            if (domain.isNotBlank() && (h == domain || h.endsWith(".$domain"))) return true
-        }
-        return false
     }
 
     override fun connectFailed(uri: URI?, sa: SocketAddress?, ioe: IOException?) {

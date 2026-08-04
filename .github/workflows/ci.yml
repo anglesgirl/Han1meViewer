@@ -78,14 +78,27 @@ jobs:
           echo "Version: $VER"
           # 固定 tag:同一版本重复构建只更新资产,发布页保持一个入口
           TAG="v${VER}"
+          # 加速下载直链(大陆用户下载快)
+          ACCEL1="https://gh-proxy.com/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}"
+          ACCEL2="https://ghfast.top/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}"
+          DIRECT="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}"
+          printf '%s\n' "arm64-only APK (${SIZE_MB}MB) with ECH proxy. Settings > Network > ECH Proxy." > /tmp/release_notes.md
+          printf '%s\n' "" >> /tmp/release_notes.md
+          printf '%s\n' "## Download acceleration (mainland China)" >> /tmp/release_notes.md
+          printf '%s\n' "- gh-proxy.com: ${ACCEL1}" >> /tmp/release_notes.md
+          printf '%s\n' "- ghfast.top: ${ACCEL2}" >> /tmp/release_notes.md
+          printf '%s\n' "" >> /tmp/release_notes.md
+          printf '%s\n' "Direct: ${DIRECT}" >> /tmp/release_notes.md
+          NOTES=$(cat /tmp/release_notes.md)
           # 创建或更新 release(首次 draft,用户确认后公开)
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" >/dev/null 2>&1 || true
             gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$TAG" "$APK" \
               --repo "$GITHUB_REPOSITORY" \
               --title "Han1meViewer ${VER} (ECH)" \
-              --notes "arm64-only APK (${SIZE_MB}MB) with ECH proxy. 设置 → 网络 → ECH Proxy 开启后重启生效。" \
+              --notes "$NOTES" \
               --draft
           fi
           echo "RELEASE_TAG=$TAG"

@@ -6,6 +6,7 @@ import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -26,6 +27,7 @@ import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.USER_AGENT
 import io.github.daisukikaffuchino.han1meviewer.logic.NetworkRepo
 import io.github.daisukikaffuchino.han1meviewer.logic.network.CloudflareVerificationCoordinator
+import io.github.daisukikaffuchino.han1meviewer.logic.network.EchWebViewClient
 import io.github.daisukikaffuchino.han1meviewer.logic.state.WebsiteState
 import io.github.daisukikaffuchino.han1meviewer.login
 import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
@@ -242,6 +244,18 @@ private fun createLoginWebView(
             return super.shouldOverrideUrlLoading(view, request)
         }
 
+        override fun shouldInterceptRequest(
+            view: WebView,
+            request: WebResourceRequest,
+        ): WebResourceResponse? {
+            // ECH:站点请求走本地 ECH 代理(X-Ech-Target,隐藏 SNI)。
+            // WebView 的系统代理 CONNECT 隧道无法隐藏 SNI,封锁站点(如
+            // javchu.com)会被 GFW 重置,必须在这里拦截走 ECH。
+            val resp = EchWebViewClient.intercept(request)
+            if (resp != null) return resp
+            return super.shouldInterceptRequest(view, request)
+        }
+
         override fun onReceivedError(
             view: WebView?,
             request: WebResourceRequest?,
@@ -280,6 +294,16 @@ private fun createCloudflareWebView(
             view: WebView?,
             request: WebResourceRequest?,
         ): Boolean = false
+
+        override fun shouldInterceptRequest(
+            view: WebView,
+            request: WebResourceRequest,
+        ): WebResourceResponse? {
+            // ECH:站点请求走本地 ECH 代理(X-Ech-Target,隐藏 SNI)。
+            val resp = EchWebViewClient.intercept(request)
+            if (resp != null) return resp
+            return super.shouldInterceptRequest(view, request)
+        }
     }
     evaluateJavascript("navigator.userAgent", onUserAgent)
     webChromeClient = object : WebChromeClient() {

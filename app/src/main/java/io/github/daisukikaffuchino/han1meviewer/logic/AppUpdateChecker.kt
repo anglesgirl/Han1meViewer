@@ -119,7 +119,10 @@ object AppUpdateChecker {
 
     private fun AppUpdatePayload.toAvailableUpdateOrNull(): AppUpdateInfo? {
         val versionName = versionName?.trim().orEmpty()
-        val downloadUrl = downloadUrl?.trim().orEmpty()
+        // 下载地址重写:远程 update.json 指向上游 daisukiKaffuChino/Han1meViewer,
+        // 但本 fork 的发布在 anglesgirl/Han1meViewer,重写让用户下载到正确的包。
+        val rawDownloadUrl = downloadUrl?.trim().orEmpty()
+        val downloadUrl = rewriteDownloadUrl(rawDownloadUrl)
         if (versionName.isBlank() || versionCode <= 0 || downloadUrl.isBlank()) return null
         if (downloadUrl.toHttpUrlOrNull() == null) {
             LogUtil.e(TAG, "downloadUrl is invalid")
@@ -138,6 +141,23 @@ object AppUpdateChecker {
             it.versionCode > currentVersionCode &&
                 (it.forceUpdate || it.versionCode != ignoredVersionCode)
         }
+    }
+
+    /** 把上游 GitHub 下载地址重写为本 fork 的 release 页。 */
+    private fun rewriteDownloadUrl(url: String): String {
+        if (url.isBlank()) return url
+        // 只重写指向上游仓库的 release 链接
+        if (url.contains("github.com/daisukiKaffuChino/Han1meViewer", ignoreCase = true) ||
+            url.contains("github.com/daisukiKaffuChino/HanimeViewer", ignoreCase = true)
+        ) {
+            val rewritten = url.replace(
+                Regex("github\\.com/[^/]+/[^/]+", RegexOption.IGNORE_CASE),
+                "github.com/anglesgirl/Han1meViewer"
+            )
+            LogUtil.i(TAG, "downloadUrl rewritten: $url -> $rewritten")
+            return rewritten
+        }
+        return url
     }
 
     private fun AppUpdatePayload.toAnnouncementOrNull(): Announcement? {
