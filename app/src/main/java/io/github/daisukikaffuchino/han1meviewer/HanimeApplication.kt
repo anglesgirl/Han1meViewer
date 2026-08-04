@@ -58,7 +58,10 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         SingletonImageLoader.setSafe { context ->
             ImageLoader.Builder(context)
                 .components {
-                    add(OkHttpNetworkFetcherFactory { ServiceCreator.hClient })
+                    // 直接传 OkHttpClient 实例(Call.Factory),匹配
+                    // OkHttpNetworkFetcherFactory(callFactory: Call.Factory)
+                    // 重载,避开 lambda 多候选歧义。
+                    add(OkHttpNetworkFetcherFactory(ServiceCreator.hClient))
                 }
                 .build()
         }
