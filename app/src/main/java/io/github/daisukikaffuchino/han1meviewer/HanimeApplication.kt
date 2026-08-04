@@ -8,9 +8,13 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository
 import io.github.daisukikaffuchino.han1meviewer.logic.datastore.DataStoreManager
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
+import io.github.daisukikaffuchino.han1meviewer.logic.network.ServiceCreator
 import io.github.daisukikaffuchino.han1meviewer.ui.crash.CrashHandler
 import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders
 import io.github.daisukikaffuchino.han1meviewer.util.AppLanguageManager
@@ -47,6 +51,17 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         registerActivityLifecycleCallbacks(this)
         ProxySelector.setDefault(HProxySelector.getInstance())
         HProxySelector.rebuildNetwork()
+        // 图片统一走 ECH 代理:Coil 默认 ImageLoader 改用共享 hClient
+        // (带 EchInterceptor + HDns),封面/头像不再裸连海外 CDN——
+        // 走本地 ECH 代理后享受 DNS 落盘缓存 + 连接池复用 + 优选 CF IP。
+        // 用 lambda 取最新 hClient,rebuildOkHttpClient() 重建后自动生效。
+        SingletonImageLoader.setSafe { context ->
+            ImageLoader.Builder(context)
+                .components {
+                    add(OkHttpNetworkFetcherFactory { ServiceCreator.hClient })
+                }
+                .build()
+        }
         // ECH 代理:始终开启(所有流量统一走 ECH 代理,支持 ECH 的目标
         // 用 ECH 隐藏 SNI,不支持的自动降级普通 TLS)。代理就绪前网络
         // 请求走原有路径,不会阻塞启动。
