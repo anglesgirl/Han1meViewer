@@ -137,6 +137,23 @@ fun MainActivityContent(
         }
     }
     LaunchedEffect(Unit) {
+        // 禁用了首次启动的用户须知/源验证对话框,这里直接把标记置为
+        // 已通过,否则 initializeHomePage() 会因 usageSourceVerified=false
+        // 直接 return → "正在检查更新..." 无限转圈、主页不加载。
+        if (!SettingsRepository.usageNoticeAccepted || !SettingsRepository.usageSourceVerified) {
+            scope.launch {
+                SettingsRepository.update {
+                    it.copy(
+                        usageNoticeAccepted = true,
+                        usageSourceVerified = true,
+                        usageSourcePending = false,
+                    )
+                }
+                viewModel.initializeHomePage()
+            }
+        } else {
+            viewModel.initializeHomePage()
+        }
         pendingNavigationRequests.collect { intent ->
             backStack.handleMainIntent(intent)
         }
