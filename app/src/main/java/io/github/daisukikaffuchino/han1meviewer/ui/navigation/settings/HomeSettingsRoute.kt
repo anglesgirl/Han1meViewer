@@ -83,6 +83,7 @@ fun HomeSettingsRouteScreen(
     onNavigateToHKeyframes: () -> Unit = {},
     onNavigateToSharedHKeyframes: () -> Unit = {},
     onNavigateToOpenSourceLicenses: () -> Unit = {},
+    onOpenLogs: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -298,6 +299,7 @@ fun HomeSettingsRouteScreen(
         },
         onOpenFakeLauncherIcon = { showLauncherPicker = true },
         onOpenOpenSourceLicense = onNavigateToOpenSourceLicenses,
+        onOpenLogs = onOpenLogs,
         onClearCache = {
             val cacheDir = context.cacheDir
             val folderSize = cacheDir?.folderSize ?: 0L

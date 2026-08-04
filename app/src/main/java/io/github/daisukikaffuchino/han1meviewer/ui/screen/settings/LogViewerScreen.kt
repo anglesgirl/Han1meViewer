@@ -38,11 +38,11 @@ fun LogViewerScreen(
 
     // 实时刷新:监听 LogUtil + 每 1s 兜底轮询。
     LaunchedEffect(Unit) {
-        val listener = { refreshTick++ }
+        val listener = { refreshTick = refreshTick + 1 }
         LogUtil.addListener(listener)
         while (true) {
             delay(1000)
-            refreshTick++
+            refreshTick = refreshTick + 1
         }
     }
     LaunchedEffect(refreshTick) {
