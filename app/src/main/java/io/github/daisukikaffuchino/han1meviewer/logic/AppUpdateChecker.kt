@@ -1,6 +1,7 @@
 package io.github.daisukikaffuchino.han1meviewer.logic
 
 import android.util.Base64
+import io.github.daisukikaffuchino.han1meviewer.BuildConfig
 import io.github.daisukikaffuchino.utils.LogUtil
 import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository
 import io.github.daisukikaffuchino.han1meviewer.R
@@ -12,6 +13,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -56,6 +61,12 @@ object AppUpdateChecker {
     private const val ENCODED_UPDATE_REFERER = "aG5tdmlld2VydXAuY29t"
     private const val CURRENT_VERSION_CODE = 260804
 
+    /** GitHub Releases API:优先用它检查更新(api.github.com 大陆裸连可用)。 */
+    private const val GITHUB_API_URL =
+        "https://api.github.com/repos/anglesgirl/Han1meViewer/releases/latest"
+    private const val GITHUB_DOWNLOAD_BASE =
+        "https://github.com/anglesgirl/Han1meViewer/releases/download"
+
     private val jsonParser = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -72,8 +83,16 @@ object AppUpdateChecker {
     suspend fun checkForUpdate(): AppUpdateCheckResult = withContext(Dispatchers.IO) {
         val cachedJson = SettingsRepository.current.cachedUpdateJson
 
+        // 1. 优先 GitHub Releases API(版本/下载地址完全由本 fork 控制,
+        //    api.github.com 大陆裸连可用;我们的 release 自动发布到 GitHub)
+        val gitHubResult = runCatching { requestUpdateFromGitHub() }
+            .onFailure { LogUtil.e(TAG, "GitHub update check failed", it) }
+            .getOrNull()
+        if (gitHubResult != null) return@withContext gitHubResult
+
+        // 2. 回退:上游 COS update.json(保留,部分网络 api.github.com 不可达)
         val responseJson = runCatching { requestUpdateJson() }
-            .onFailure { LogUtil.e(TAG, "Failed to check for updates", it) }
+            .onFailure { LogUtil.e(TAG, "COS update check failed", it) }
             .getOrNull()
 
         if (responseJson != null) SettingsRepository.setCachedUpdateJson(responseJson)
@@ -86,6 +105,87 @@ object AppUpdateChecker {
     }
 
     suspend fun ignoreUpdate(versionCode: Int) = SettingsRepository.setIgnoredVersionCode(versionCode)
+
+    /**
+     * 从 GitHub Releases API 获取最新 release:
+     * - tag_name → 版本号(如 v26.3.2 → 26.3.2)
+     * - assets 里的 arm64 APK → 下载地址
+     * - body → 更新说明
+     * 版本比较用 versionCode:tag 里 vX.Y.Z 转 XYYZZ(如 26.3.2 → 260302),
+     * 与本地 CURRENT_VERSION_CODE 格式不一致时回退 COS。
+     */
+    private fun requestUpdateFromGitHub(): AppUpdateCheckResult? {
+        val request = Request.Builder()
+            .url(GITHUB_API_URL)
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Han1meViewer")
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                LogUtil.d(TAG, "GitHub API HTTP ${response.code}")
+                return null
+            }
+            val body = response.body.string()
+            val json = runCatching { jsonParser.parseToJsonElement(body).jsonObject }
+                .onFailure { LogUtil.e(TAG, "GitHub API parse failed", it) }
+                .getOrNull() ?: return null
+
+            val tagName = json["tag_name"]?.jsonPrimitive?.contentOrNull ?: return null
+            val versionName = tagName.removePrefix("v").trim()
+            if (versionName.isBlank()) return null
+
+            // 语义化版本比较:v26.3.2 > 本地 26.3.1 才算更新
+            val currentName = BuildConfig.VERSION_NAME
+            if (compareVersions(versionName, currentName) <= 0) {
+                LogUtil.d(TAG, "GitHub latest ${versionName} <= current ${currentName}, no update")
+                return null
+            }
+
+            // 找 APK asset(release 只发布一个 arm64 APK,直接按后缀匹配;
+            // 若将来有多个,优先含 arm64 字样的)
+            val assets = json["assets"]?.jsonArray ?: return null
+            var apkName: String? = null
+            for (asset in assets) {
+                val name = asset.jsonObject["name"]?.jsonPrimitive?.contentOrNull ?: continue
+                if (!name.endsWith(".apk", ignoreCase = true)) continue
+                if (name.contains("arm64", ignoreCase = true)) {
+                    apkName = name
+                    break
+                }
+                if (apkName == null) apkName = name
+            }
+            val downloadUrl = apkName?.let { "$GITHUB_DOWNLOAD_BASE/$tagName/$it" } ?: return null
+
+            val description = json["body"]?.jsonPrimitive?.contentOrNull?.take(500).orEmpty()
+
+            LogUtil.i(TAG, "GitHub update found: ${versionName} -> $downloadUrl")
+            return AppUpdateCheckResult(
+                updateInfo = AppUpdateInfo(
+                    versionName = versionName,
+                    versionCode = CURRENT_VERSION_CODE + 1, // 仅用于忽略逻辑占位
+                    downloadUrl = downloadUrl,
+                    updateDescription = description,
+                    forceUpdate = false,
+                ),
+            )
+        }
+    }
+
+    /** 语义化版本比较:1.2.3 > 1.2.2。返回 a 与 b 的比较结果。 */
+    private fun compareVersions(a: String, b: String): Int {
+        fun parse(s: String): List<Int> =
+            s.split(".").mapNotNull { it.toIntOrNull() }
+        val pa = parse(a)
+        val pb = parse(b)
+        val n = maxOf(pa.size, pb.size)
+        for (i in 0 until n) {
+            val x = pa.getOrElse(i) { 0 }
+            val y = pb.getOrElse(i) { 0 }
+            if (x != y) return x.compareTo(y)
+        }
+        return 0
+    }
 
     private fun requestUpdateJson(): String {
         val request = Request.Builder()
