@@ -38,13 +38,16 @@ object EchProxyManager {
 
     private var cachePath: String? = null
 
-    /** 默认 DoH 端点:Cloudflare Gateway,GFW 环境下可用。 */
-    const val DEFAULT_DOH = "https://pieqllv9i7.cloudflare-gateway.com/dns-query"
+    /** 兜底 DoH 端点(仅当用户 DoH 未配置时使用)。 */
+    const val DEFAULT_DOH = "https://dns.alidns.com/dns-query"
+
+    /** 状态轮询任务。 */
+    private var statusJob: kotlinx.coroutines.Job? = null
 
     /**
      * 启动 ECH 代理。
      * @param context 用于定位缓存目录
-     * @param doh DoH JSON 端点(可空,默认使用 Cloudflare Gateway)
+     * @param doh DoH JSON 端点(可空,默认用用户配置的 DoH,未配置则 alidns)
      * @return 本地代理端口,失败返回 -1
      */
     suspend fun start(context: Context, doh: String? = null): Int = withContext(Dispatchers.IO) {
@@ -52,8 +55,13 @@ object EchProxyManager {
         try {
             cachePath = File(context.filesDir, "ech-public-config.json").absolutePath
             val chosen = freePort()
-            val dohArg = doh ?: DEFAULT_DOH
+            // 优先用用户配置的 DoH(网络设置里可选 alidns/dnspod/cloudflare),
+            // Cloudflare Gateway 在部分网络被墙,会导致代理解析失败 → 全网不通。
+            val dohArg = doh ?: runCatching {
+                io.github.daisukikaffuchino.han1meviewer.logic.network.DohConfig.resolveUrl()
+            }.getOrNull() ?: DEFAULT_DOH
             Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")
+            LogUtil.record("I", TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")
 
             Echproxy.start(
                 "127.0.0.1:$chosen",          // listen
@@ -69,12 +77,29 @@ object EchProxyManager {
             LogUtil.record("I", TAG, "ECH proxy started on 127.0.0.1:$chosen")
             // 让系统代理(HttpURLConnection/WebView)指向本地 ECH 代理。
             io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector.rebuildNetwork()
+            startStatusPolling()
             chosen
         } catch (e: Throwable) {
             Log.e(TAG, "ECH proxy start failed", e)
             LogUtil.record("E", TAG, "ECH proxy start failed: ${e.message}")
             port = -1
             -1
+        }
+    }
+
+    /** 每 3 秒把 ECH 代理的握手/降级状态写入日志缓冲(日志页可见)。 */
+    private fun startStatusPolling() {
+        statusJob?.cancel()
+        statusJob = scope.launch {
+            var last = ""
+            while (isRunning) {
+                val s = try { Echproxy.lastStatus() } catch (e: Throwable) { "" }
+                if (s.isNotBlank() && s != last) {
+                    last = s
+                    LogUtil.record("I", TAG, "status: $s")
+                }
+                kotlinx.coroutines.delay(3000)
+            }
         }
     }
 
