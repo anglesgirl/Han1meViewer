@@ -1,5 +1,6 @@
 package io.github.daisukikaffuchino.han1meviewer.ui.activity
 
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
@@ -27,6 +28,8 @@ abstract class BaseActivity : AppCompatActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         onActivityCreated(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+            window.isNavigationBarContrastEnforced = false
     }
 
     override fun onResume() {
