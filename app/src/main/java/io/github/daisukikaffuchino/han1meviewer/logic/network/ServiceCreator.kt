@@ -72,7 +72,7 @@ object ServiceCreator {
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
-            .proxySelector(HProxySelector())
+            .proxySelector(HProxySelector.getInstance())
             .dns(dns)
             .build()
     }
@@ -94,11 +94,12 @@ object ServiceCreator {
         return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UserAgentInterceptor)
+            .addInterceptor(EchInterceptor())
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
             .cache(cache)
             .cookieJar(HCookieJar())
-            .proxySelector(HProxySelector())
+            .proxySelector(HProxySelector.getInstance())
             .dns(dns)
             .build()
     }

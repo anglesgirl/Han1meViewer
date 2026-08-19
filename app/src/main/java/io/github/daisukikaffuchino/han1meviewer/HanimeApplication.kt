@@ -10,6 +10,7 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository
 import io.github.daisukikaffuchino.han1meviewer.logic.datastore.DataStoreManager
+import io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
 import io.github.daisukikaffuchino.han1meviewer.ui.crash.CrashHandler
 import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders
@@ -44,8 +45,9 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         SettingsRepository.install(DataStoreManager)
         AppLanguageManager.applyStoredLanguage(this)
         registerActivityLifecycleCallbacks(this)
-        ProxySelector.setDefault(HProxySelector())
+        ProxySelector.setDefault(HProxySelector.getInstance())
         HProxySelector.rebuildNetwork()
+        EchProxyManager.startAsync(this)
         initNotificationChannel()
         MPVLib.create(applicationContext)
         MPVLib.init()

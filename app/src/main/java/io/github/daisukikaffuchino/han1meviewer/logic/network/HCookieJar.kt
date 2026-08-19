@@ -23,6 +23,26 @@ class HCookieJar : CookieJar {
     companion object {
         @JvmStatic
         val cookieMap: MutableMap<String, MutableList<Cookie>> = mutableMapOf()
+
+        /** ECH 拦截器用:取某站点的全部 cookie(含登录 cookie)。 */
+        @JvmStatic
+        fun loadCookiesFor(host: String): List<Cookie> {
+            val cookies = mutableListOf<Cookie>()
+            cookieMap[host]?.let { cookies.addAll(it) }
+            cookies.addAll(CookieString(SettingsRepository.current.loginCookie).toLoginCookieList(host))
+            if (SettingsRepository.cloudFlareCookieHost == host) {
+                cookies.addAll(CookieString(SettingsRepository.current.cloudFlareCookie).toLoginCookieList(host))
+            }
+            return cookies
+        }
+
+        /** ECH 拦截器用:把响应 cookie 存到指定站点域名。 */
+        @JvmStatic
+        fun saveCookiesFor(host: String, cookies: List<Cookie>) {
+            cookieMap[host] = cookies.toMutableList().also {
+                it += CookieString(SettingsRepository.current.loginCookie).toLoginCookieList(host)
+            }
+        }
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {

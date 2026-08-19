@@ -23,8 +23,25 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
+      - name: Set up Go 1.24
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      - name: Build ECH proxy AAR (gomobile, arm64)
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          cd ech
+          go get golang.org/x/mobile/bind@latest
+          mkdir -p ../app/libs
+          gomobile bind -v -target=android/arm64 -androidapi 29 \
+            -o ../app/libs/echproxy.aar ./echproxy
+          ls -la ../app/libs
 
       - name: Build
         run: ./gradlew buildDebug -x lint
