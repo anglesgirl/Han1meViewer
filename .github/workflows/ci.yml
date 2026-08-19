@@ -4,10 +4,10 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "experiment/**" ]
     paths-ignore:
       - "**.md"
-
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
