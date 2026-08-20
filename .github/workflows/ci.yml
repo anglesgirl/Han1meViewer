@@ -44,4 +44,40 @@ jobs:
           ls -la ../app/libs
 
       - name: Build
-        run: ./gradlew buildDebug -x lint
+        run: ./gradlew buildDebug -x lint 2>&1 | tee build.log
+
+      - name: Upload APK on success
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Notify Telegram (always)
+        if: always()
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          REPO="${GITHUB_REPOSITORY}"
+          RUN_ID="${GITHUB_RUN_ID}"
+          SHA="${GITHUB_SHA:0:8}"
+          BR="${{ github.ref_name }}"
+          URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
+          if [ "${{ job.status }}" = "success" ]; then
+            EMOJI="✅"
+            TITLE="CI 成功"
+            BODY="分支 ${BR} (${SHA}) 构建通过。APK 已作为产物上传，可在 Actions run 页面下载。"
+          else
+            EMOJI="❌"
+            TITLE="CI 失败"
+            LOG=$(grep -iE "error:|e: |FAILURE|what went wrong|Exception|Unresolved" build.log 2>/dev/null | tail -n 20)
+            BODY="分支 ${BR} (${SHA}) 构建失败。错误摘要：
+          ${LOG}"
+          fi
+          MSG="${EMOJI} ${TITLE} — ${REPO}
+          ${BODY}
+          ${URL}"
+          curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${MSG}" | head -c 160
