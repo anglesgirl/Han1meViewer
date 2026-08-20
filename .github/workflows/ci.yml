@@ -44,7 +44,7 @@ jobs:
           ls -la ../app/libs
 
       - name: Build
-        run: ./gradlew buildDebug -x lint 2>&1 | tee build.log
+        run: ./gradlew assembleDebug -x lint 2>&1 | tee build.log
 
       - name: Upload APK on success
         if: success()
@@ -52,6 +52,7 @@ jobs:
         with:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
 
       - name: Notify Telegram (always)
         if: always()
