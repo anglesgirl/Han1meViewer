@@ -70,6 +70,8 @@ class HanimeApplication : YenalyApplication() {
         if (!isMainProcess()) return
         initCrashX()
         Diagnostics.initialize(this)
+        // Fork 自用包：预先标记用户须知已接受，避免依赖该标记的初始化流程卡住。
+        if (!Preferences.usageNoticeAccepted) Preferences.usageNoticeAccepted = true
         ThemeUtils.applyDarkModeFromPreferences(this)
         if (Preferences.useDynamicColor){
             DynamicColors.applyToActivitiesIfAvailable(this)

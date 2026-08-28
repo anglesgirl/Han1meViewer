@@ -72,7 +72,7 @@ import com.yenaly.han1meviewer.ui.view.video.HanimeDataSource
 import com.yenaly.han1meviewer.ui.view.video.VideoPlayerAppBarBehavior
 import com.yenaly.han1meviewer.ui.viewmodel.CommentViewModel
 import com.yenaly.han1meviewer.ui.viewmodel.VideoViewModel
-import com.yenaly.han1meviewer.util.checkBadGuy
+
 import com.yenaly.han1meviewer.util.loadAssetAs
 import com.yenaly.yenaly_libs.utils.OrientationManager
 import com.yenaly.yenaly_libs.utils.browse
@@ -511,7 +511,6 @@ fun VideoRouteHostScreen(
         checkedQuality = null
         pendingDownloadPrompt = null
         videoTitle = null
-        checkBadGuy(activity, R.raw.akarin)
         viewModel.videoCode = route.videoCode
         viewModel.getHanimeVideo(route.videoCode, route.localUri)
     }

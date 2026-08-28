@@ -75,7 +75,8 @@ fun MainActivityContent(
         val scope = rememberCoroutineScope()
         var currentMainDestination by remember { mutableStateOf(MainDestinationSpec.Home) }
         var pendingUpdate by remember { mutableStateOf<Latest?>(null) }
-        var showUsageNotice by remember { mutableStateOf(!Preferences.usageNoticeAccepted) }
+        // Fork 自用包：跳过首次启动的用户须知弹窗（保留代码但默认已接受）。
+        var showUsageNotice by remember { mutableStateOf(false) }
         val loginFirst = stringResource(R.string.login_first)
         val updateDownloadBackground = stringResource(R.string.update_download_background)
         val isDrawerOpen =
