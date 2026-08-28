@@ -46,11 +46,7 @@ import cn.jzvd.Jzvd
 import coil.load
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.CollapsingToolbarLayout
-import com.google.firebase.Firebase
-import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.analytics.analytics
-import com.google.firebase.analytics.logEvent
-import com.yenaly.han1meviewer.FirebaseConstants
+import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.getHanimeVideoLink
@@ -659,10 +655,7 @@ fun VideoRouteHostScreen(
                     title,
                     HKeyframeEntity.Keyframe(position = currentPosition, prompt = null),
                 )
-                Firebase.analytics.logEvent(FirebaseAnalytics.Event.SELECT_CONTENT) {
-                    param(FirebaseAnalytics.Param.ITEM_ID, FirebaseConstants.H_KEYFRAMES)
-                    param(FirebaseAnalytics.Param.CONTENT_TYPE, FirebaseConstants.H_KEYFRAMES)
-                }
+                Diagnostics.event("h_keyframe_added")
                 showAddHKeyframeDialog = null
             },
             onDismiss = { showAddHKeyframeDialog = null },

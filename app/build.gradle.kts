@@ -12,9 +12,6 @@ plugins {
     alias(libs.plugins.org.jetbrains.kotlin.plugin.parcelize)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
     alias(libs.plugins.com.google.devtools.ksp)
-    alias(libs.plugins.com.google.gms.google.services)
-    alias(libs.plugins.com.google.firebase.crashlytics)
-    alias(libs.plugins.com.google.firebase.firebase.pref)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.navigation.safeargs)
     id("com.mikepenz.aboutlibraries.plugin") version "14.2.1"
@@ -83,7 +80,9 @@ android {
         }
 
         debug {
-            isMinifyEnabled = false
+            // Fork 自用包：开启 R8 以贴近正式版体积（正式版 ~40MB，未压缩 debug 达 160MB）。
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
@@ -200,15 +199,7 @@ dependencies {
     implementation(libs.circular.reveal.switch)
     implementation(libs.drawerlayout)
 
-    // firebase
-
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.analytics)
-    implementation(libs.firebase.crashlytics)
-    implementation(libs.firebase.perf)
-    implementation(libs.firebase.config)
     debugImplementation(libs.androidx.ui.test.manifest)
-    implementation(libs.firebase.database)
     ksp(libs.room.compiler)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)

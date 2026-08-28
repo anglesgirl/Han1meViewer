@@ -27,6 +27,7 @@ object Diagnostics {
     fun initialize(context: Context) {
         if (initialized) return
         initialized = true
+        installCrashReporter()
         event(
             "app_started",
             mapOf(
@@ -36,6 +37,35 @@ object Diagnostics {
                 "device" to "${Build.MANUFACTURER} ${Build.MODEL}",
             ),
         )
+    }
+
+    /**
+     * Reports fatal crashes synchronously before the process dies, then delegates to the
+     * previously installed handler (CrashX) so existing behaviour is preserved.
+     */
+    private fun installCrashReporter() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                val trace = error.stackTrace.take(12).joinToString("\n") { it.toString() }
+                val fields = mapOf(
+                    "thread" to thread.name,
+                    "error_type" to error.javaClass.name,
+                    "message" to (error.message ?: "unknown"),
+                    "stack" to trace,
+                    "version_name" to BuildConfig.VERSION_NAME,
+                    "device" to "${Build.MANUFACTURER} ${Build.MODEL}",
+                    "sdk" to Build.VERSION.SDK_INT.toString(),
+                )
+                // Never touch the network on the crashing thread: it may be the main thread,
+                // where Android forbids network access. Upload on a worker and wait briefly.
+                val worker = Thread { runCatching { uploadBlocking("app_crash", fields) } }
+                worker.isDaemon = true
+                worker.start()
+                worker.join(crashUploadTimeoutMs)
+            }
+            previous?.uncaughtException(thread, error)
+        }
     }
 
     fun event(name: String, fields: Map<String, Any?> = emptyMap()) {
@@ -48,6 +78,11 @@ object Diagnostics {
     }
 
     private suspend fun upload(name: String, fields: Map<String, String>) = withContext(Dispatchers.IO) {
+        uploadBlocking(name, fields)
+    }
+
+    /** Performs the HTTP POST on the calling thread; used by the crash handler. */
+    private fun uploadBlocking(name: String, fields: Map<String, String>) {
         val body = JSONObject().apply {
             put("app", appId)
             put("event", name)
@@ -73,6 +108,7 @@ object Diagnostics {
     }
 
     private const val maxValueLength = 512
+    private const val crashUploadTimeoutMs = 4_000L
     private val sensitiveKeys = setOf(
         "authorization", "cookie", "cookies", "token", "password", "secret",
         "request_body", "response_body", "url", "full_url",

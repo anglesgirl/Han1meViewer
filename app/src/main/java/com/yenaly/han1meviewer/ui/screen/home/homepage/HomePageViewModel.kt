@@ -6,8 +6,8 @@ import androidx.core.content.edit
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.database.FirebaseDatabase
-import com.yenaly.han1meviewer.FIREBASE_REALTIME_DATABASE
+
+
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.SAVED_USER_ID
@@ -16,7 +16,7 @@ import com.yenaly.han1meviewer.logic.NetworkRepo
 import com.yenaly.han1meviewer.logic.entity.HKeyframeEntity
 import com.yenaly.han1meviewer.logic.entity.WatchHistoryEntity
 import com.yenaly.han1meviewer.logic.exception.LoginStateExpiredException
-import com.yenaly.han1meviewer.logic.model.Announcement
+
 import com.yenaly.han1meviewer.logic.state.PageState
 import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.logout
@@ -25,17 +25,17 @@ import com.yenaly.yenaly_libs.utils.getSpValue
 import com.yenaly.yenaly_libs.utils.putSpValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
+
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.coroutines.resume
-import kotlin.time.Duration.Companion.milliseconds
+
+
+
+
 
 class HomePageViewModel: ViewModel() {
     data class SessionExpiredMessage(
@@ -46,7 +46,6 @@ class HomePageViewModel: ViewModel() {
     private val _homePageFlow = MutableStateFlow<PageState<HomeData>>(PageState.Loading)
     val homePageFlow = _homePageFlow.asStateFlow()
 
-    private val database = FirebaseDatabase.getInstance(FIREBASE_REALTIME_DATABASE)
 
     private val _sessionExpiredMessage = MutableSharedFlow<SessionExpiredMessage>()
     val sessionExpiredMessage = _sessionExpiredMessage
@@ -71,15 +70,9 @@ class HomePageViewModel: ViewModel() {
             } else if (!isRefresh && current !is PageState.Success){
                 _homePageFlow.value = PageState.Loading
             }
-            val announcementsDeferred = async(Dispatchers.IO) {
-                withTimeoutOrNull(ANNOUNCEMENTS_TIMEOUT_MILLIS.milliseconds) {
-                    fetchAnnouncementsFromFirebase()
-                }.orEmpty()
-            }
             NetworkRepo.getHomePage().collect { networkState ->
                 when (networkState){
                     is WebsiteState.Error -> {
-                        announcementsDeferred.cancel()
                         if (networkState.throwable is LoginStateExpiredException) {
                             logout()
                             _sessionExpiredMessage.emit(
@@ -93,12 +86,11 @@ class HomePageViewModel: ViewModel() {
                         _homePageFlow.value = PageState.Error(networkState.throwable, cachedInfo = previousData)
                     }
                     is WebsiteState.Success -> {
-                        val currentAnnouncements = announcementsDeferred.await()
                         AppViewModel.csrfToken = networkState.info.csrfToken
                         networkState.info.userId.takeIf { it.isNotEmpty() }?.let { userId ->
                             Preferences.preferenceSp.edit { putString(SAVED_USER_ID, userId) }
                         }
-                        val homeData = HomeData(page = networkState.info, announcements = currentAnnouncements)
+                        val homeData = HomeData(page = networkState.info)
                         _homePageFlow.value = PageState.Success(info = homeData, isRefreshing = false)
                     }
                     is WebsiteState.Loading -> { }
@@ -106,45 +98,6 @@ class HomePageViewModel: ViewModel() {
             }
         }
     }
-    private suspend fun fetchAnnouncementsFromFirebase(): List<Announcement> =
-        suspendCancellableCoroutine { continuation ->
-            val lastDismissTime = getSpValue("last_dismiss_time", 0L, "setting_pref")
-            val shouldShowAnno = System.currentTimeMillis() - lastDismissTime > 24 * 60 * 60 * 1000L
-            if (!shouldShowAnno) {
-                continuation.resume(emptyList())
-                return@suspendCancellableCoroutine
-            }
-
-            database.getReference("announcements").get()
-                .addOnSuccessListener { snapshot ->
-                    val list = mutableListOf<Announcement>()
-                    if (snapshot.exists()) {
-                        for (announceSnap in snapshot.children) {
-                            val announcement = announceSnap.getValue(Announcement::class.java)
-                            if (announcement != null && announcement.isActive) {
-                                list.add(announcement)
-                            }
-                        }
-                        if (continuation.isActive) {
-                            continuation.resume(list.sortedBy { it.priority })
-                        }
-                    } else {
-                        if (continuation.isActive) {
-                            continuation.resume(emptyList())
-                        }
-                    }
-                }.addOnFailureListener { e ->
-                    Log.e("Announcement", "读取失败: ${e.message}")
-                    if (continuation.isActive) {
-                        continuation.resume(emptyList()) // 失败也容错返回空列表
-                    }
-                }
-        }
-
-    private companion object {
-        const val ANNOUNCEMENTS_TIMEOUT_MILLIS = 5_000L
-    }
-
     fun dismissAnnouncements(){
         putSpValue("last_dismiss_time", System.currentTimeMillis(), "setting_pref")
         val current = _homePageFlow.value
