@@ -229,10 +229,10 @@ object Preferences {
         get() = preferenceSp.getString(SettingsPreferenceKeys.CUSTOM_HOSTS_DATA, EMPTY_STRING).orEmpty()
 
     val useDoH: Boolean
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_DOH, false)
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_DOH, true)
 
     val dohPreset: String
-        get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_PRESET, "alidns") ?: "alidns"
+        get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_PRESET, "han1me_app") ?: "han1me_app"
 
     val dohCustomUrl: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_CUSTOM_URL, EMPTY_STRING).orEmpty()

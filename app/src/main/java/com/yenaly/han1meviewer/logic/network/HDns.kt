@@ -9,6 +9,7 @@ import okhttp3.dnsoverhttps.DnsOverHttps
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.net.InetAddress
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -114,12 +115,18 @@ class HDns : Dns {
             return runCatching { lookupByDoH(dohUrl, hostname) }
                 .getOrElse {
                     Log.w("DOH", "lookup failed for $hostname: ${it.message}")
-                    Diagnostics.event("doh_failure", mapOf(
-                        "host" to hostname,
-                        "error_type" to it.javaClass.simpleName,
-                        "error" to (it.message ?: "unknown"),
-                    ))
-                    Dns.SYSTEM.lookup(hostname)
+                    Diagnostics.event(
+                        "doh_failure", mapOf(
+                            "host" to hostname,
+                            "error_type" to it.javaClass.simpleName,
+                            "error" to (it.message ?: "unknown"),
+                            "fail_closed" to true,
+                        )
+                    )
+                    // fail-closed：DoH 不可达时绝不回落系统 DNS。
+                    // 系统 DNS 在受污染网络下会返回被投毒结果，且会以明文 SNI 直连暴露访问目标。
+                    // 这同时是维护者的总闸：停用下发的 DoH 端点即可让全部网络失效。
+                    throw UnknownHostException("DoH unavailable for $hostname (fail-closed)")
                 }
         }
 

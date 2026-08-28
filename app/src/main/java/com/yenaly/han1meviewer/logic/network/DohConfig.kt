@@ -11,6 +11,17 @@ data class DohPreset(
 
 object DohConfig {
     val presets = listOf(
+        // App 专属 DoH（Cloudflare Zero Trust location: Han1meViewer-app）。
+        // 由维护者集中下发策略（ECH 注入 / 按域名指定 IP）；停用该 location 即可关停全部网络。
+        DohPreset(
+            key = "han1me_app",
+            title = "Han1meViewer 专用",
+            url = "https://82sew1c85i.cloudflare-gateway.com/dns-query",
+            bootstrapIps = listOf(
+                "162.159.36.20", "162.159.36.5",
+                "2606:4700:54::a29f:2407", "2606:4700:5c::a29f:2e07",
+            ),
+        ),
         DohPreset(
             key = "alidns",
             title = "AliDNS",
