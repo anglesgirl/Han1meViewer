@@ -9,6 +9,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.color.DynamicColors
 import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.ech.EchProvider
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.util.AnimeShaders
@@ -70,6 +71,8 @@ class HanimeApplication : YenalyApplication() {
         if (!isMainProcess()) return
         initCrashX()
         Diagnostics.initialize(this)
+        // 尽早安装 Conscrypt：ECH 需要自带 BoringSSL（系统原生 ECH 从 API 37 才有）。
+        EchProvider.install()
         // Fork 自用包：预先标记用户须知已接受，避免依赖该标记的初始化流程卡住。
         if (!Preferences.usageNoticeAccepted) Preferences.usageNoticeAccepted = true
         ThemeUtils.applyDarkModeFromPreferences(this)

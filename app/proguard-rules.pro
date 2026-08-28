@@ -33,3 +33,10 @@
 -keep class androidx.window.extensions.embedding.** { *; }
 -keep class is.xyz.mpv.** { *; }
 -keep class lis.xyz.mpv.** { *; }
+
+# Conscrypt（ECH）：JNI 通过名字回调 Java 层，R8 改名会导致 native 初始化失败。
+-keep class org.conscrypt.** { *; }
+-keepclasseswithmembernames class org.conscrypt.** {
+    native <methods>;
+}
+-dontwarn org.conscrypt.**
