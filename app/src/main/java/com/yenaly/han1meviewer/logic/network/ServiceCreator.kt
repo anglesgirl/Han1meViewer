@@ -5,6 +5,7 @@ import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.HA1_GITHUB_API_URL
 import com.yenaly.han1meviewer.HJson
 import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.diagnostics.NetworkDiagnosticsInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.CloudflareInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.GetchuInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
@@ -86,6 +87,7 @@ object ServiceCreator {
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
+            .addInterceptor(NetworkDiagnosticsInterceptor("getchu_api"))
             .cookieJar(CookieJar.NO_COOKIES)
             .proxySelector(HProxySelector())
             .dns(dns)
@@ -98,6 +100,7 @@ object ServiceCreator {
             .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
+            .addInterceptor(NetworkDiagnosticsInterceptor("download"))
             .dns(dns)
             .build()
     }
@@ -111,6 +114,7 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
+            .addInterceptor(NetworkDiagnosticsInterceptor("hanime_api"))
             .cache(cache)
             .cookieJar(HCookieJar())
             .proxySelector(HProxySelector())
@@ -124,6 +128,7 @@ object ServiceCreator {
             .dns(GitHubDns)
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
+            .addInterceptor(NetworkDiagnosticsInterceptor("github_api"))
             .addInterceptor { chain ->
                 val request = chain.request().newBuilder().addHeader(
                     "Authorization", "Bearer ${BuildConfig.HA_GITHUB_TOKEN}"

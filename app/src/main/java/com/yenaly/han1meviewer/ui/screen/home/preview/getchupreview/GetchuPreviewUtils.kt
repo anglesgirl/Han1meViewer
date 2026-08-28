@@ -7,6 +7,7 @@ import coil3.ImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ImageRequest
 import com.yenaly.han1meviewer.DESKTOP_USER_AGENT
+import com.yenaly.han1meviewer.diagnostics.NetworkDiagnosticsInterceptor
 import com.yenaly.han1meviewer.logic.network.HDns
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import okhttp3.OkHttpClient
@@ -53,6 +54,7 @@ internal fun createGetchuImageLoader(context: Context): ImageLoader {
         .connectTimeout(15, TimeUnit.SECONDS)
         .dns(HDns())
         .proxySelector(HProxySelector())
+        .addInterceptor(NetworkDiagnosticsInterceptor("getchu_image"))
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url

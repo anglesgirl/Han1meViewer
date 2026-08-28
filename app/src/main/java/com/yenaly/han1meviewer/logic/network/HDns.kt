@@ -3,6 +3,7 @@ package com.yenaly.han1meviewer.logic.network
 import android.util.Log
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
 import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import okhttp3.Dns
 import okhttp3.dnsoverhttps.DnsOverHttps
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -113,6 +114,11 @@ class HDns : Dns {
             return runCatching { lookupByDoH(dohUrl, hostname) }
                 .getOrElse {
                     Log.w("DOH", "lookup failed for $hostname: ${it.message}")
+                    Diagnostics.event("doh_failure", mapOf(
+                        "host" to hostname,
+                        "error_type" to it.javaClass.simpleName,
+                        "error" to (it.message ?: "unknown"),
+                    ))
                     Dns.SYSTEM.lookup(hostname)
                 }
         }
@@ -129,6 +135,10 @@ class HDns : Dns {
         val dns = getOrCreateDohDns(config)
         return dns.lookup(hostname).also {
             Log.i("DOH", it.toString())
+            Diagnostics.event("doh_result", mapOf(
+                "host" to hostname,
+                "address_count" to it.size,
+            ))
         }
     }
 

@@ -38,6 +38,7 @@ import cn.jzvd.Jzvd
 import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.USER_AGENT
+import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.util.AnimeShaders
 import com.yenaly.han1meviewer.util.AnimeShaders.getCert
@@ -363,6 +364,11 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
 
     override fun onPlayerError(error: PlaybackException) {
         Log.e(TAG, "onPlayerError: $error")
+        Diagnostics.event("media3_failure", mapOf(
+            "error_code" to error.errorCode,
+            "error_name" to error.errorCodeName,
+            "message" to (error.message ?: "unknown"),
+        ))
         handler?.post { jzvd.onError(1000, 1000) }
     }
 

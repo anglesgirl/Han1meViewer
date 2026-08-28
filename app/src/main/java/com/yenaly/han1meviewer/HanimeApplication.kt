@@ -14,6 +14,7 @@ import com.google.firebase.crashlytics.setCustomKeys
 import com.google.firebase.database.database
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
+import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.ui.activity.MainActivity
@@ -76,6 +77,7 @@ class HanimeApplication : YenalyApplication() {
         super.onCreate()
         if (!isMainProcess()) return
         initCrashX()
+        Diagnostics.initialize(this)
         ThemeUtils.applyDarkModeFromPreferences(this)
         if (Preferences.useDynamicColor){
             DynamicColors.applyToActivitiesIfAvailable(this)

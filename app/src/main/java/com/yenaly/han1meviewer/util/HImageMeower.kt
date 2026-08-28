@@ -7,6 +7,7 @@ import coil.imageLoader
 import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.ImageResult
+import com.yenaly.han1meviewer.diagnostics.NetworkDiagnosticsInterceptor
 import com.yenaly.yenaly_libs.utils.applicationContext
 import com.yenaly.han1meviewer.logic.network.HDns
 import okhttp3.OkHttpClient
@@ -21,6 +22,7 @@ object HImageMeower {
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .dns(HDns())
+        .addInterceptor(NetworkDiagnosticsInterceptor("coil_image"))
         .build()
 
     private val imageLoader = ImageLoader.Builder(applicationContext)
