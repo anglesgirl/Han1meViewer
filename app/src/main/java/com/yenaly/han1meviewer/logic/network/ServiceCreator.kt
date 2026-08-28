@@ -130,8 +130,12 @@ object ServiceCreator {
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(NetworkDiagnosticsInterceptor("github_api"))
             .addInterceptor { chain ->
+                // 空 token 会让 GitHub 直接返回 401；fork 构建没有 secret 时应匿名请求
+                // （公开仓库的 releases/workflow runs 匿名可读，限额 60 次/小时）。
+                val token = BuildConfig.HA_GITHUB_TOKEN
+                if (token.isBlank()) return@addInterceptor chain.proceed(chain.request())
                 val request = chain.request().newBuilder().addHeader(
-                    "Authorization", "Bearer ${BuildConfig.HA_GITHUB_TOKEN}"
+                    "Authorization", "Bearer $token"
                 ).build()
                 return@addInterceptor chain.proceed(request)
             }
