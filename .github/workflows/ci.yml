@@ -31,8 +31,9 @@ jobs:
           if [ -n "$DATA" ]; then
             printf '%s' "$DATA" | base64 -di > app/google-services.json
           else
-            printf '%s' '{"project_info":{"project_number":"0","project_id":"diagnostics-build"},"client":[{"client_info":{"mobilesdk_app_id":"1:0:android:0000000000000000","android_client_info":{"package_name":"com.yenaly.han1meviewer"}},"api_key":[{"current_key":"placeholder"}]}]}' > app/google-services.json
+            printf '%s' '{"project_info":{"project_number":"000000000000","project_id":"diagnostics-build","storage_bucket":"diagnostics-build.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000","android_client_info":{"package_name":"com.yenaly.han1meviewer"}},"oauth_client":[],"api_key":[{"current_key":"ci-placeholder-key"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}},{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000001","android_client_info":{"package_name":"com.yenaly.han1meviewer.debug"}},"oauth_client":[],"api_key":[{"current_key":"ci-placeholder-key"}],"services":{"appinvite_service":{"other_platform_oauth_client":[]}}}],"configuration_version":"1"}' > app/google-services.json
           fi
+          python3 -c "import json;json.load(open('app/google-services.json'));print('google-services.json OK')"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
