@@ -175,7 +175,6 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.converter.serialization)
     implementation(libs.okhttp)
-    implementation(libs.conscrypt.android)
     implementation(libs.okhttp.dns.over.https)
 
     // pic

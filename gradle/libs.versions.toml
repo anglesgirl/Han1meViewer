@@ -50,7 +50,7 @@ retrofit = "3.0.0"
 converterSerialization = "1.0.0"
 coil = "2.7.0"
 okhttp = "5.4.0"
-conscrypt = "2.7-alpha"
+
 jiaoziVideoPlayer = "7.7.2.3300"
 junit = "4.13.2"
 testJunit = "1.3.0"
@@ -125,9 +125,7 @@ retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = 
 converter-serialization = { group = "com.jakewharton.retrofit", name = "retrofit2-kotlinx-serialization-converter", version.ref = "converterSerialization" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-dns-over-https = { group = "com.squareup.okhttp3", name = "okhttp-dnsoverhttps", version.ref = "okhttp" }
-# Conscrypt 2.7-alpha 是首个带 Conscrypt.setEchConfigList 的版本（BoringSSL ECH，RFC 9849）。
-# Android 16 及以下没有系统原生 ECH（需 API 37），必须自带该 provider。
-conscrypt-android = { group = "org.conscrypt", name = "conscrypt-android", version.ref = "conscrypt" }
+
 
 # Pic
 coil = { group = "io.coil-kt", name = "coil", version.ref = "coil" }

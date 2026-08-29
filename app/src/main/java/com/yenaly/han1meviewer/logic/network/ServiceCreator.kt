@@ -6,8 +6,6 @@ import com.yenaly.han1meviewer.HA1_GITHUB_API_URL
 import com.yenaly.han1meviewer.HJson
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.diagnostics.NetworkDiagnosticsInterceptor
-import com.yenaly.han1meviewer.logic.network.ech.EchOkHttp
-import com.yenaly.han1meviewer.logic.network.ech.EchVerificationInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.CloudflareInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.GetchuInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
@@ -86,12 +84,11 @@ object ServiceCreator {
 
     private fun buildGetchuClient(): OkHttpClient {
         // getchu 未发布 ECH（实测无 ech 参数），走机会性策略：注入不了就正常直连。
-        return EchOkHttp.apply(OkHttpClient.Builder())
+        return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
             .addInterceptor(NetworkDiagnosticsInterceptor("getchu_api"))
-            .addNetworkInterceptor(EchVerificationInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
             .proxySelector(HProxySelector())
             .dns(dns)
@@ -99,7 +96,7 @@ object ServiceCreator {
     }
 
     private fun buildDownloadClient(): OkHttpClient {
-        return EchOkHttp.apply(OkHttpClient.Builder())
+        return OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
@@ -113,13 +110,12 @@ object ServiceCreator {
      * Build OkHttpClient
      */
     private fun buildHClient(): OkHttpClient {
-        return EchOkHttp.apply(OkHttpClient.Builder())
+        return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
             .addInterceptor(NetworkDiagnosticsInterceptor("hanime_api"))
-            .addNetworkInterceptor(EchVerificationInterceptor())
             .cache(cache)
             .cookieJar(HCookieJar())
             .proxySelector(HProxySelector())
@@ -128,7 +124,7 @@ object ServiceCreator {
     }
 
     private fun buildGithubClient(): OkHttpClient {
-        return EchOkHttp.apply(OkHttpClient.Builder())
+        return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .dns(GitHubDns)
             .addInterceptor(UserAgentInterceptor)
