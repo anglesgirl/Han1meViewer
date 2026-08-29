@@ -89,6 +89,7 @@ object ServiceCreator {
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
             .addInterceptor(NetworkDiagnosticsInterceptor("getchu_api"))
+            .addInterceptor(EchInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
             .proxySelector(HProxySelector())
             .dns(dns)
@@ -102,6 +103,7 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
             .addInterceptor(NetworkDiagnosticsInterceptor("download"))
+            .addInterceptor(EchInterceptor())
             .dns(dns)
             .build()
     }
@@ -116,6 +118,7 @@ object ServiceCreator {
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
             .addInterceptor(NetworkDiagnosticsInterceptor("hanime_api"))
+            .addInterceptor(EchInterceptor())
             .cache(cache)
             .cookieJar(HCookieJar())
             .proxySelector(HProxySelector())
