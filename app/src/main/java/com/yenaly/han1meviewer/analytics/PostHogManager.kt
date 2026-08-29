@@ -28,14 +28,16 @@ object PostHogManager {
     fun track(event: String, props: Map<String, Any?> = emptyMap()) {
         if (!initialized) return
         try {
-            val full = buildMap {
+            val safe: Map<String, Any> = buildMap {
                 put("app", APP)
                 props.forEach { (k, v) ->
-                    val s = v?.toString()
-                    put(k, if (s != null && s.length > 200) s.take(200) + "…" else v)
+                    if (v != null) {
+                        val s = v.toString()
+                        put(k, if (s.length > 200) s.take(200) + "…" else v)
+                    }
                 }
             }
-            PostHog.capture(event, properties = full)
+            PostHog.capture(event, properties = safe)
         } catch (_: Exception) {}
     }
 
