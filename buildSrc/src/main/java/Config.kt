@@ -46,7 +46,7 @@ object Config {
                 else -> {
                     versionCode = LocalDateTime.now(Clock.systemUTC()).format(
                         DateTimeFormatter.ofPattern("yyMMddHH")
-                    ).toInt()
+                    ).toInt() + 1
                     versionName = "${major}.${minor}.${patch}-$source+$versionCode"
                 }
             }
