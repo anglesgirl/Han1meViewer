@@ -57,8 +57,10 @@ class EchInterceptor : Interceptor {
 
         val method = request.method
 
-        try {
-            val jsonStr = EchHttpClient.request(method, request.url.toString(), headers.toTypedArray(), bodyBytes, dohUrl, dohResolve)
+        var lastError: Exception? = null
+        repeat(2) { attempt ->
+            try {
+                val jsonStr = EchHttpClient.request(method, request.url.toString(), headers.toTypedArray(), bodyBytes, dohUrl, dohResolve)
             val json = JSONObject(jsonStr)
             val statusCode = json.optInt("statusCode", 200)
             val bodyBase64 = json.optString("body", "")
@@ -118,15 +120,25 @@ class EchInterceptor : Interceptor {
                 Diagnostics.event("ech_logs", mapOf("host" to host, "log" to echLogs.optString(echLogs.length()-1)))
             }
             return builder.build()
-        } catch (e: Exception) {
-            PostHogManager.track("ech_fail", mapOf("host" to host))
-            // 热修复：ECH 公钥过期期间先回落明文，避免首页“没有网络”；待 ECH 刷新后再切回 fail-closed
-            Diagnostics.event("ech_intercept_failure", mapOf(
-                "host" to host,
-                "error_type" to e.javaClass.simpleName,
-                "error" to (e.message ?: "unknown")
-            ))
-            return chain.proceed(request)
+            } catch (e: Exception) {
+                lastError = e
+                val isEch = e.message?.contains("ECH", true) == true
+                PostHogManager.track("ech_fail", mapOf("host" to host, "attempt" to (attempt+1), "is_ech" to isEch))
+                Diagnostics.event("ech_intercept_failure", mapOf(
+                    "host" to host,
+                    "attempt" to (attempt+1),
+                    "error_type" to e.javaClass.simpleName,
+                    "error" to (e.message ?: "unknown")
+                ))
+                if (!isEch || attempt == 1) {
+                    // 非 ECH 错误或已重试，直接回落明文（热修复期间 fail-open）
+                    return chain.proceed(request)
+                }
+                // ECH 失败：等待 DoH TTL 刷新后重试一次（应对公钥刚轮换）
+                try { Thread.sleep(300) } catch (_: Exception) {}
+            }
         }
+        // 理论上不会到这里
+        return chain.proceed(request)
     }
 }
