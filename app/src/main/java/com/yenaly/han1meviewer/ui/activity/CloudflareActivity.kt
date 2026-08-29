@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -20,6 +21,7 @@ import androidx.preference.PreferenceManager
 import com.yenaly.han1meviewer.Preferences.cloudFlareCookie
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
+import com.yenaly.han1meviewer.logic.network.WebViewEchHelper
 import com.yenaly.han1meviewer.ui.screen.web.CloudflareScreen
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
 import com.yenaly.han1meviewer.util.CookieString
@@ -78,6 +80,16 @@ class CloudflareActivity : AppCompatActivity() {
             }
 
             webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    if (request != null) {
+                        WebViewEchHelper.intercept(request)?.let { return it }
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,

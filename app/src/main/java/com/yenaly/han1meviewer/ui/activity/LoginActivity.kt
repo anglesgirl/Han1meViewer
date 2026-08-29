@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.enableEdgeToEdge
@@ -27,6 +28,7 @@ import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.NetworkRepo
+import com.yenaly.han1meviewer.logic.network.WebViewEchHelper
 import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.login
 import com.yenaly.han1meviewer.ui.screen.login.LoginDialog
@@ -107,6 +109,16 @@ class LoginActivity : FrameActivity() {
             settings.userAgentString = USER_AGENT
 
             webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    if (request != null) {
+                        WebViewEchHelper.intercept(request)?.let { return it }
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
                 override fun onPageFinished(view: WebView, url: String) {
                     isRefreshing = false
                 }
