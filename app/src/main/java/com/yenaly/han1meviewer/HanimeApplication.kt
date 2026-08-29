@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.color.DynamicColors
+import com.yenaly.han1meviewer.analytics.Analytics
 import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.logic.network.HProxySelector
@@ -72,6 +73,9 @@ class HanimeApplication : YenalyApplication() {
         super.onCreate()
         if (!isMainProcess()) return
         initCrashX()
+        // 发版统计：MHAnalytics
+        Analytics.initialize(this)
+        // 排错日志：发版后由 Analytics 替代，本地仍保留但仅内部使用
         Diagnostics.initialize(this)
         // 仅加载已验证的 Plus native ECH 库；网络切换在链路验证后单独开启。
         runCatching { EchHttpClient.init(this) }
