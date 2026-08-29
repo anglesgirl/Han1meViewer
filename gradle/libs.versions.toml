@@ -142,7 +142,7 @@ media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls
 mpv-lib = { group = "com.github.abdallahmehiz", name = "mpv-android", version.ref = "mpv" }
 
 # analytics
-posthog-android = { group = "com.posthog", name = "posthog", version.ref = "posthog" }
+posthog-android = { group = "com.posthog", name = "posthog-android", version.ref = "posthog" }
 
 # Other
 about = { group = "com.drakeet.about", name = "about", version.ref = "about" }
