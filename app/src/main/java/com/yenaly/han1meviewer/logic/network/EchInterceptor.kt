@@ -120,15 +120,12 @@ class EchInterceptor : Interceptor {
             return builder.build()
         } catch (e: Exception) {
             PostHogManager.track("ech_fail", mapOf("host" to host))
+            // 热修复：ECH 公钥过期期间先回落明文，避免首页“没有网络”；待 ECH 刷新后再切回 fail-closed
             Diagnostics.event("ech_intercept_failure", mapOf(
                 "host" to host,
                 "error_type" to e.javaClass.simpleName,
                 "error" to (e.message ?: "unknown")
             ))
-            // fail-closed: HANIME 域名不回落明文 SNI
-            if (host in HanimeConstants.HANIME_HOSTNAME || host.endsWith("hanime1.me") || host.endsWith("javchu.com")) {
-                throw IOException("ECH request failed for $host: ${e.message}", e)
-            }
             return chain.proceed(request)
         }
     }
