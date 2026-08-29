@@ -5,6 +5,7 @@ import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.HanimeConstants
 import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
@@ -26,7 +27,7 @@ class EchInterceptor : Interceptor {
         if (!shouldIntercept(host)) return chain.proceed(request)
 
         val dohUrl = DohConfig.resolveUrl() ?: "https://82sew1c85i.cloudflare-gateway.com/dns-query"
-        val dohHost = try { okhttp3.HttpUrl.get(dohUrl).host } catch (_: Exception) { "82sew1c85i.cloudflare-gateway.com" }
+        val dohHost = try { dohUrl.toHttpUrl().host } catch (_: Exception) { "82sew1c85i.cloudflare-gateway.com" }
         val ips = DohConfig.bootstrapIps().ifEmpty { listOf("162.159.36.20","162.159.36.5") }
         val dohResolve = "$dohHost:443:${ips.joinToString(",")}"
 
