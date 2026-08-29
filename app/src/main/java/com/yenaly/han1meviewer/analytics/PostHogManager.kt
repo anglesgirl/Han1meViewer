@@ -35,7 +35,7 @@ object PostHogManager {
                     put(k, if (s != null && s.length > 200) s.take(200) + "…" else v)
                 }
             }
-            PostHog.capture(event, full)
+            PostHog.capture(event, properties = full)
         } catch (_: Exception) {}
     }
 
