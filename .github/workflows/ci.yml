@@ -7,6 +7,12 @@ on:
     branches: [ "main", "diagnostics-foundation" ]
     paths-ignore:
       - "**.md"
+  workflow_dispatch:
+    inputs:
+      version_source:
+        description: "HA1_VERSION_SOURCE"
+        default: "release"
+        required: false
 
 jobs:
   build:
@@ -70,7 +76,7 @@ jobs:
           exit "$status"
         env:
           HA_GITHUB_TOKEN: ''
-          HA1_VERSION_SOURCE: 'ci'
+          HA1_VERSION_SOURCE: ${{ inputs.version_source || 'ci' }}
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
