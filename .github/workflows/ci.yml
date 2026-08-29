@@ -27,6 +27,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Restore release keystore
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          mkdir -p ~/.android
+          echo "$KEYSTORE_BASE64" | base64 -d > ~/.android/keystore.jks
+          ls -lh ~/.android/keystore.jks
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
       - name: Restore Gradle cache
         uses: actions/cache@v4
         with:
@@ -43,7 +52,12 @@ jobs:
           set +e
           for attempt in 1 2 3; do
             echo "Gradle build attempt ${attempt}/3"
-            ./gradlew assembleDebug -x lint
+            if [ -n "$KEYSTORE_BASE64" ]; then
+              echo "Building RELEASE with fixed signature"
+              ./gradlew assembleRelease -x lint
+            else
+              ./gradlew assembleDebug -x lint
+            fi
             status=$?
             if [ "$status" -eq 0 ]; then
               exit 0
@@ -57,9 +71,14 @@ jobs:
         env:
           HA_GITHUB_TOKEN: ''
           HA1_VERSION_SOURCE: 'ci'
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
 
       - name: Upload APK Zip
         uses: actions/upload-artifact@v4
         with:
           name: app-release-${{ github.sha }}
-          path: app/build/outputs/apk/debug/Han1meViewer-v*.apk
+          path: |
+            app/build/outputs/apk/release/Han1meViewer-v*.apk
+            app/build/outputs/apk/debug/Han1meViewer-v*.apk
