@@ -16,6 +16,7 @@ import com.yenaly.han1meviewer.logic.entity.SearchHistoryEntity
 import com.yenaly.han1meviewer.logic.model.HanimeInfo
 import com.yenaly.han1meviewer.logic.model.SearchOption
 import com.yenaly.han1meviewer.logic.state.PageLoadingState
+import com.yenaly.han1meviewer.analytics.PostHogManager
 import com.yenaly.han1meviewer.util.loadAssetAs
 import com.yenaly.yenaly_libs.base.YenalyViewModel
 import com.yenaly.yenaly_libs.utils.unsafeLazy
@@ -148,6 +149,7 @@ class SearchViewModel(
         sort: String?, broad: Boolean, date: String?,
         duration: String?, tags: Set<String>, brands: Set<String>,
     ) {
+        if (!query.isNullOrBlank()) PostHogManager.track("search", mapOf("keyword" to query))
         viewModelScope.launch {
             NetworkRepo.getHanimeSearchResult(
                 page, query, genre,

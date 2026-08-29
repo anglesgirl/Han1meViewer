@@ -9,6 +9,7 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.color.DynamicColors
 import com.yenaly.han1meviewer.analytics.PostHogManager
+import com.yenaly.han1meviewer.analytics.AppCrashListener
 import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.logic.network.HProxySelector
@@ -60,6 +61,7 @@ class HanimeApplication : YenalyApplication() {
             .reportButtonText(getString(R.string.crash_report))
             .copyButtonText(getString(R.string.crash_copy))
             .restartActivity(MainActivity::class.java)
+            .eventListener(AppCrashListener())
             .apply()
     }
 

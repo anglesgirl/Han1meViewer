@@ -27,6 +27,7 @@ import com.yenaly.han1meviewer.HANIME_LOGIN_URL
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
+import com.yenaly.han1meviewer.analytics.PostHogManager
 import com.yenaly.han1meviewer.logic.NetworkRepo
 import com.yenaly.han1meviewer.logic.network.WebViewEchHelper
 import com.yenaly.han1meviewer.logic.state.WebsiteState
@@ -181,6 +182,7 @@ class LoginActivity : FrameActivity() {
                     WebsiteState.Loading -> Unit
 
                     is WebsiteState.Error -> {
+                        PostHogManager.track("login_fail")
                         isLoggingIn = false
                         state.throwable.printStackTrace()
                         if (state.throwable is IllegalStateException) {
@@ -191,6 +193,7 @@ class LoginActivity : FrameActivity() {
                     }
 
                     is WebsiteState.Success -> {
+                        PostHogManager.track("login")
                         login(state.info)
                         setResult(RESULT_OK)
                         showLoginDialog = false

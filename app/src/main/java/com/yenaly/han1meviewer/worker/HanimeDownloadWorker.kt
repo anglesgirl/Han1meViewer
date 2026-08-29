@@ -28,6 +28,7 @@ import com.yenaly.han1meviewer.HFileManager.createVideoName
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.DatabaseRepo
 import com.yenaly.han1meviewer.logic.entity.download.HanimeDownloadEntity
+import com.yenaly.han1meviewer.analytics.PostHogManager
 import com.yenaly.han1meviewer.logic.network.ServiceCreator
 import com.yenaly.han1meviewer.logic.state.DownloadState
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
@@ -336,6 +337,7 @@ class HanimeDownloadWorker(
                 return@withContext Result.success()
             }
 
+            PostHogManager.track("download_start", mapOf("videoCode" to videoCode))
             var downloadedLength = entity.downloadedLength
             val needRange = downloadedLength > 0
             var raf: RandomAccessFile? = null
@@ -431,6 +433,7 @@ class HanimeDownloadWorker(
                 }
 
                 showSuccessNotification()
+                PostHogManager.track("download_complete", mapOf("videoCode" to videoCode))
                 result = Result.success(
                     workDataOf(DownloadState.STATE to DownloadState.Finished.mask)
                 )

@@ -23,6 +23,7 @@ import com.yenaly.han1meviewer.logic.model.HanimeVideo
 import com.yenaly.han1meviewer.logic.state.VideoLoadingState
 import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel.csrfToken
+import com.yenaly.han1meviewer.analytics.PostHogManager
 import com.yenaly.han1meviewer.util.TagLocalizer
 import com.yenaly.yenaly_libs.base.YenalyViewModel
 import com.yenaly.yenaly_libs.utils.dp
@@ -260,6 +261,7 @@ class VideoViewModel(application: Application) : YenalyViewModel(application) {
                 }
                 _hanimeVideoStateFlow.value = emitState
                 if (emitState is VideoLoadingState.Success) {
+                    PostHogManager.track("video_play", mapOf("videoCode" to videoCode))
                     _hanimeVideoFlow.update { emitState.info }
                     csrfToken = emitState.info.csrfToken
                 }

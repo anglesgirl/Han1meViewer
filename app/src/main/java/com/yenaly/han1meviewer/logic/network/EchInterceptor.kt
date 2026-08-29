@@ -3,6 +3,7 @@ package com.yenaly.han1meviewer.logic.network
 import android.util.Base64
 import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.HanimeConstants
+import com.yenaly.han1meviewer.analytics.PostHogManager
 import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -111,12 +112,14 @@ class EchInterceptor : Interceptor {
                 "ech_status" to echStatus,
                 "method" to method
             ))
+            PostHogManager.track("ech_success", mapOf("host" to host))
             if (echLogs != null && echLogs.length() > 0) {
                 // 只取最后一条日志避免刷屏
                 Diagnostics.event("ech_logs", mapOf("host" to host, "log" to echLogs.optString(echLogs.length()-1)))
             }
             return builder.build()
         } catch (e: Exception) {
+            PostHogManager.track("ech_fail", mapOf("host" to host))
             Diagnostics.event("ech_intercept_failure", mapOf(
                 "host" to host,
                 "error_type" to e.javaClass.simpleName,
