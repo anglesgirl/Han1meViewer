@@ -8,6 +8,7 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.color.DynamicColors
 import com.yenaly.han1meviewer.diagnostics.Diagnostics
+import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.logic.network.ech.EchProvider
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
@@ -71,6 +72,9 @@ class HanimeApplication : YenalyApplication() {
         if (!isMainProcess()) return
         initCrashX()
         Diagnostics.initialize(this)
+        // 仅加载已验证的 Plus native ECH 库；网络切换在链路验证后单独开启。
+        runCatching { EchHttpClient.init(this) }
+            .onFailure { Diagnostics.event("ech_native_load_failure", mapOf("error_type" to it.javaClass.simpleName)) }
         // 尽早安装 Conscrypt：ECH 需要自带 BoringSSL（系统原生 ECH 从 API 37 才有）。
         EchProvider.install()
         // Fork 自用包：预先标记用户须知已接受，避免依赖该标记的初始化流程卡住。
