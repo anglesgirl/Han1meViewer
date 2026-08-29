@@ -79,7 +79,7 @@ object Analytics {
                 }
             } catch (_: Exception) {}
         }
-        val id = Math.random().toString(36).substring(2) + now.toString(36)
+        val id = java.util.UUID.randomUUID().toString().replace("-","").substring(0,8) + java.lang.Long.toString(now, 36)
         prefs.edit().putString(KEY_SESSION, JSONObject().apply { put("id", id); put("lastActive", now) }.toString()).apply()
         return id
     }
