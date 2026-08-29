@@ -189,6 +189,9 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.mpv.lib)
 
+    // analytics
+    implementation(libs.posthog.android)
+
     // view
 
     implementation(libs.multitype)
