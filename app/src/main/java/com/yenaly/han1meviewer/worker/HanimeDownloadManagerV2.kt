@@ -297,7 +297,7 @@ object HanimeDownloadManagerV2 {
         }.id
 
     /**
-     * 取消正在执行的 WorkManager 任务
+     * 取消正在执行的 WorkManager 任务（用户主动暂停）
      */
     private suspend fun stopWork(args: HanimeDownloadWorker.Args) {
         runSuspendCatching {
