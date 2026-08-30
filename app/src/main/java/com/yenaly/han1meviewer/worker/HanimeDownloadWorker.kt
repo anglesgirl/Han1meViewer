@@ -180,6 +180,13 @@ class HanimeDownloadWorker(
 
     override suspend fun doWork(): Result {
         if (fastPathCancel) return Result.success()
+        // 任务已被删除（数据库记录不存在且非重下载/删除场景）→ 直接静默结束，避免删除后复活
+        if (!shouldRedownload && !shouldDelete &&
+            DatabaseRepo.HanimeDownload.find(videoCode, quality) == null
+        ) {
+            Log.d(TAG, "doWork: 任务已删除，直接结束 $videoCode")
+            return Result.success()
+        }
         setForeground(createForegroundInfo())
         return download()
     }
@@ -310,6 +317,13 @@ class HanimeDownloadWorker(
                         }
                 }
             } catch (e: Exception) {
+                if (isStopped) {
+                    // 任务被删除/取消，不再重试
+                    cancelDownloadNotification()
+                    return@withContext Result.success(
+                        workDataOf(DownloadState.STATE to DownloadState.Paused.mask)
+                    )
+                }
                 if (e.isRetryableNetworkError() && runAttemptCount < MAX_WORK_RETRY_COUNT) {
                     DatabaseRepo.HanimeDownload.find(videoCode, quality)?.let {
                         DatabaseRepo.HanimeDownload.update(it.copy(state = DownloadState.Queued))
@@ -445,6 +459,12 @@ class HanimeDownloadWorker(
 
             } catch (e: Exception) {
                 result = if (e is CancellationException || e.isStoppedCancellation()) {
+                    cancelDownloadNotification()
+                    Result.success(
+                        workDataOf(DownloadState.STATE to DownloadState.Paused.mask)
+                    )
+                } else if (isStopped) {
+                    // 任务被删除/取消，不再重试
                     cancelDownloadNotification()
                     Result.success(
                         workDataOf(DownloadState.STATE to DownloadState.Paused.mask)
@@ -601,6 +621,10 @@ class HanimeDownloadWorker(
                 Result.success(workDataOf(DownloadState.STATE to DownloadState.Finished.mask))
             } catch (e: Exception) {
                 if (e is CancellationException || e.isStoppedCancellation()) {
+                    cancelDownloadNotification()
+                    Result.success(workDataOf(DownloadState.STATE to DownloadState.Paused.mask))
+                } else if (isStopped) {
+                    // 任务被删除/取消，不再重试
                     cancelDownloadNotification()
                     Result.success(workDataOf(DownloadState.STATE to DownloadState.Paused.mask))
                 } else if (e.isRetryableNetworkError() && runAttemptCount < MAX_WORK_RETRY_COUNT) {
