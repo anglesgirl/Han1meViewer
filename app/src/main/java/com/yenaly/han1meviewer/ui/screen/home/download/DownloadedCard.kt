@@ -235,7 +235,7 @@ fun DownloadedVideoCard(
                             ),
                         )
                         Text(
-                            text = item.video.quality,
+                            text = item.video.quality.displayQuality(),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -351,3 +351,7 @@ private fun PreviewDownloadedVideoCard() {
         )
     }
 }
+
+/** 画质显示：Unknown（javchu m3u8 源）显示为"默认画质" */
+private fun String?.displayQuality(): String =
+    if (this == com.yenaly.han1meviewer.HanimeResolution.RES_UNKNOWN) "默认画质" else this.orEmpty()

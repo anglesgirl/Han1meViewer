@@ -256,10 +256,6 @@ private fun VideoIntroductionContent(
         DownloadQualityDialog(
             videoUrls = video.videoUrls,
             onDismiss = { showDownloadQualityDialog = false },
-            onOpenOfficial = {
-                showDownloadQualityDialog = false
-                onRequestOpenOfficialDownloadPage()
-            },
             onSelectQuality = { quality ->
                 showDownloadQualityDialog = false
                 onPrepareDownload(quality)
@@ -273,10 +269,6 @@ private fun VideoIntroductionContent(
             prompt = downloadPrompt,
             onDismiss = onDismissDownloadPrompt,
             onConfirm = onConfirmDownloadPrompt,
-            onOpenOfficial = {
-                onDismissDownloadPrompt()
-                onRequestOpenOfficialDownloadPage()
-            },
         )
     }
 
@@ -432,7 +424,6 @@ private fun VideoIntroductionContent(
 private fun DownloadQualityDialog(
     videoUrls: ResolutionLinkMap,
     onDismiss: () -> Unit,
-    onOpenOfficial: () -> Unit,
     onSelectQuality: (String) -> Unit,
 ) {
     val qualities = videoUrls.keys.toList()
@@ -457,7 +448,7 @@ private fun DownloadQualityDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(quality)
+                        Text(if (quality == com.yenaly.han1meviewer.HanimeResolution.RES_UNKNOWN) "默认画质" else quality)
                         if (quality == com.yenaly.han1meviewer.HanimeResolution.RES_UNKNOWN) {
                             Text(
                                 text = stringResource(R.string.after_download_tips),
@@ -484,7 +475,6 @@ private fun DownloadConfirmDialog(
     prompt: DownloadPromptState,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
-    onOpenOfficial: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -506,9 +496,9 @@ private fun DownloadConfirmDialog(
                     stringResource(R.string.quality_with_colon) + if (
                         prompt.oldQuality != null && prompt.oldQuality != prompt.newQuality
                     ) {
-                        "${prompt.oldQuality} → ${prompt.newQuality}"
+                        "${prompt.oldQuality.displayQuality()} → ${prompt.newQuality.displayQuality()}"
                     } else {
-                        prompt.newQuality
+                        prompt.newQuality.displayQuality()
                     }
                 )
                 Text(
@@ -524,13 +514,8 @@ private fun DownloadConfirmDialog(
             }
         },
         dismissButton = {
-            Row {
-                TextButton(onClick = onOpenOfficial) {
-                    Text(stringResource(R.string.go_to_official))
-                }
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.no))
-                }
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.no))
             }
         },
     )
@@ -1479,3 +1464,7 @@ private fun VideoIntroductionScreenErrorPreview() {
         )
     }
 }
+
+/** 画质显示：Unknown（javchu m3u8 源）显示为"默认画质" */
+private fun String?.displayQuality(): String =
+    if (this == com.yenaly.han1meviewer.HanimeResolution.RES_UNKNOWN) "默认画质" else this.orEmpty()
