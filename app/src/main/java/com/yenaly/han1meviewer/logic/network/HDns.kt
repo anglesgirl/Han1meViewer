@@ -115,18 +115,31 @@ class HDns : Dns {
             return runCatching { lookupByDoH(dohUrl, hostname) }
                 .getOrElse {
                     Log.w("DOH", "lookup failed for $hostname: ${it.message}")
+                    // 关键区分：只有 ECH 目标域名才 fail-closed（防 DNS 污染 + 明文 SNI 暴露）
+                    // 视频 CDN（如 t33.cdn2020.com，量子 CDN 非 CF）在用户 DoH 上可能 NXDOMAIN，
+                    // 但系统 DNS 可解析且浏览器直连可播——这类域名必须回落系统 DNS，否则播放器永远 2001。
+                    val echTarget = HANIME_HOSTNAME.contains(hostname) ||
+                        hostname == GETCHU_HOSTNAME || hostname.endsWith(".getchu.com") ||
+                        hostname.endsWith(".ubisoft.com")
                     Diagnostics.event(
                         "doh_failure", mapOf(
                             "host" to hostname,
                             "error_type" to it.javaClass.simpleName,
                             "error" to (it.message ?: "unknown"),
-                            "fail_closed" to true,
+                            "fail_closed" to echTarget,
+                            "fallback" to (!echTarget).toString(),
                         )
                     )
-                    // fail-closed：DoH 不可达时绝不回落系统 DNS。
-                    // 系统 DNS 在受污染网络下会返回被投毒结果，且会以明文 SNI 直连暴露访问目标。
-                    // 这同时是维护者的总闸：停用下发的 DoH 端点即可让全部网络失效。
-                    throw UnknownHostException("DoH unavailable for $hostname (fail-closed)")
+                    if (echTarget) {
+                        // fail-closed：ECH 目标 DoH 不可达时绝不回落系统 DNS。
+                        // 系统 DNS 在受污染网络下会返回被投毒结果，且会以明文 SNI 直连暴露访问目标。
+                        // 这同时是维护者的总闸：停用下发的 DoH 端点即可让全部网络失效。
+                        throw UnknownHostException("DoH unavailable for $hostname (fail-closed)")
+                    }
+                    // 非 ECH 目标（视频 CDN/封面图等）：DoH 解析失败时回落系统 DNS，保证播放器可用
+                    Log.w("DOH", "fallback to system DNS for $hostname")
+                    Diagnostics.event("dns_fallback", mapOf("host" to hostname))
+                    return Dns.SYSTEM.lookup(hostname)
                 }
         }
 

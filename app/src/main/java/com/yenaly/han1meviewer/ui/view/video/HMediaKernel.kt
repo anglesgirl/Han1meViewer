@@ -160,7 +160,8 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             )
 
             val currUrl = jzvd.jzDataSource.currentUrl.toString()
-            val videoSource = if (currUrl.contains(".m3u8")) {
+            val isHls = currUrl.contains(".m3u8")
+            val videoSource = if (isHls) {
                 HlsMediaSource.Factory(dataSourceFactory)
                     .createMediaSource(MediaItem.fromUri(currUrl))
             } else {
@@ -169,6 +170,12 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             }
 
             Log.i(TAG, "URL Link = $currUrl")
+            Diagnostics.event("player_prepare", mapOf(
+                "url" to currUrl.take(200),
+                "is_hls" to isHls.toString(),
+                "host" to (runCatching { java.net.URI(currUrl).host }.getOrNull() ?: ""),
+                "header_map" to (jzvd.jzDataSource.headerMap?.size ?: 0).toString(),
+            ))
 
             exoPlayer.addListener(this)
 
@@ -317,10 +324,12 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
 
     override fun onTimelineChanged(timeline: Timeline, reason: Int) {
         Log.i(TAG, "onTimelineChanged")
+        Diagnostics.event("player_timeline", mapOf("reason" to reason.toString(), "periods" to timeline.periodCount.toString()))
     }
 
     override fun onIsLoadingChanged(isLoading: Boolean) {
-        Log.i(TAG, "onIsLoadingChanged")
+        Log.i(TAG, "onIsLoadingChanged: $isLoading")
+        Diagnostics.event("player_loading", mapOf("loading" to isLoading.toString()))
     }
 
     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -337,6 +346,7 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
 
     override fun onPlaybackStateChanged(playbackState: Int) {
         Log.i(TAG, "onPlaybackStateChanged: $playbackState")
+        Diagnostics.event("player_state", mapOf("state" to playbackState.toString()))
         handler?.post {
             when (playbackState) {
                 Player.STATE_BUFFERING -> {
@@ -367,10 +377,16 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
 
     override fun onPlayerError(error: PlaybackException) {
         Log.e(TAG, "onPlayerError: $error")
+        val causeMsg = error.cause?.message?.take(300)
+        val causeType = error.cause?.javaClass?.name ?: ""
+        val causeStack = error.cause?.stackTrace?.take(5)?.joinToString(" | ") { it.toString() } ?: ""
         Diagnostics.event("media3_failure", mapOf(
             "error_code" to error.errorCode,
             "error_name" to error.errorCodeName,
             "message" to (error.message ?: "unknown"),
+            "cause_type" to causeType,
+            "cause_msg" to (causeMsg ?: ""),
+            "cause_stack" to causeStack.take(500),
         ))
         handler?.post { jzvd.onError(1000, 1000) }
     }
@@ -705,6 +721,12 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
         }
 
         Log.e(TAG, "URL Link = $url")
+        Diagnostics.event("player_prepare", mapOf(
+            "url" to url.take(200),
+            "is_hls" to url.contains(".m3u8").toString(),
+            "host" to (runCatching { java.net.URI(url).host }.getOrNull() ?: ""),
+            "kernel" to "mpv",
+        ))
         MPVLib.setOptionString("force-window", "yes")
 
         val uri = url.toUri()
