@@ -515,10 +515,49 @@ class HanimeDownloadWorker(
                 // HLS 分片合并写 App 私有文件（SAF 目标在下载完成后由现有同步逻辑处理）
                 val output = FileOutputStream(file)
 
+                // 先建数据库记录（Downloading），让下载列表立即显示任务
+                val videoUri = safUri?.toString() ?: file.toUri().toString()
+                val existingEntity = DatabaseRepo.HanimeDownload.find(videoCode, quality)
+                if (existingEntity != null) {
+                    DatabaseRepo.HanimeDownload.update(
+                        existingEntity.copy(
+                            state = DownloadState.Downloading,
+                            videoUri = videoUri,
+                        )
+                    )
+                } else {
+                    DatabaseRepo.HanimeDownload.insert(
+                        HanimeDownloadEntity(
+                            coverUrl = coverUrl,
+                            coverUri = null,
+                            title = hanimeName,
+                            addDate = System.currentTimeMillis(),
+                            videoCode = videoCode,
+                            videoUri = videoUri,
+                            quality = quality,
+                            videoUrl = downloadUrl,
+                            length = 0,
+                            downloadedLength = 0,
+                            state = DownloadState.Downloading,
+                        )
+                    )
+                }
+
                 val progressNotifier: suspend (Int, Int) -> Unit = { done, total ->
                     val progress = (done * 100 / total).coerceAtMost(100)
                     setProgress(workDataOf(PROGRESS to progress))
                     updateDownloadNotification(progress)
+                    // 下载中更新数据库进度（length 未知时按分片数估算）
+                    val cur = DatabaseRepo.HanimeDownload.find(videoCode, quality)
+                    if (cur != null) {
+                        DatabaseRepo.HanimeDownload.update(
+                            cur.copy(
+                                state = DownloadState.Downloading,
+                                downloadedLength = progress.toLong(),
+                                length = 100L,
+                            )
+                        )
+                    }
                 }
 
                 val totalBytes = HlsDownloader.download(
@@ -528,11 +567,10 @@ class HanimeDownloadWorker(
                 )
 
                 // 更新数据库为完成状态
-                val videoUri = safUri?.toString() ?: file.toUri().toString()
-                val entity = DatabaseRepo.HanimeDownload.find(videoCode, quality)
-                if (entity != null) {
+                val finalEntity = DatabaseRepo.HanimeDownload.find(videoCode, quality)
+                if (finalEntity != null) {
                     DatabaseRepo.HanimeDownload.update(
-                        entity.copy(
+                        finalEntity.copy(
                             downloadedLength = totalBytes,
                             length = totalBytes,
                             state = DownloadState.Finished,
