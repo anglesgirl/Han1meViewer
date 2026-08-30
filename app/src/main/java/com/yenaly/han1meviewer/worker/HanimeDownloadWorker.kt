@@ -515,7 +515,7 @@ class HanimeDownloadWorker(
                 // HLS 分片合并写 App 私有文件（SAF 目标在下载完成后由现有同步逻辑处理）
                 val output = FileOutputStream(file)
 
-                val progressNotifier: (Int, Int) -> Unit = { done, total ->
+                val progressNotifier: suspend (Int, Int) -> Unit = { done, total ->
                     val progress = (done * 100 / total).coerceAtMost(100)
                     setProgress(workDataOf(PROGRESS to progress))
                     updateDownloadNotification(progress)

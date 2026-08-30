@@ -35,7 +35,7 @@ object HlsDownloader {
     suspend fun download(
         playlistUrl: String,
         output: java.io.OutputStream,
-        onProgress: (done: Int, total: Int) -> Unit,
+        onProgress: suspend (done: Int, total: Int) -> Unit,
     ): Long = withContext(Dispatchers.IO) {
         val referer = Preferences.baseUrl.removeSuffix("/")
         // 1. 解析出最终媒体播放列表（处理 master -> variant 跳转）
@@ -57,16 +57,19 @@ object HlsDownloader {
 
         // 5. 逐个分片下载并合并
         var totalBytes = 0L
-        output.use { fos ->
-            segments.items.forEachIndexed { index, seg ->
+        try {
+            for (index in segments.items.indices) {
+                val seg = segments.items[index]
                 val data = fetchBytes(seg.uri, referer)
                 val decrypted = if (key != null) {
                     decryptAes128(data, key, segments.ivFor(index))
                 } else data
-                fos.write(decrypted)
+                output.write(decrypted)
                 totalBytes += decrypted.size
                 onProgress(index + 1, segments.items.size)
             }
+        } finally {
+            output.close()
         }
         totalBytes
     }
