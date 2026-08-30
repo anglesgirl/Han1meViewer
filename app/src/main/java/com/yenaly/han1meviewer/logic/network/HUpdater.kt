@@ -62,9 +62,15 @@ object HUpdater {
                 val ver = HanimeNetwork.githubService.getLatestVersion()
                 val isNeeded = checkNeedUpdate(ver.tagName)
                 if (isNeeded) {
+                    // GitHub 直连慢，用 gh-proxy.com 镜像加速下载
+                    val rawUrl = ver.assets.first().browserDownloadURL
+                    val proxiedUrl = rawUrl.replace(
+                        "https://github.com/",
+                        "https://gh-proxy.com/https://github.com/"
+                    )
                     return Latest(
                         ver.tagName, ver.body,
-                        ver.assets.first().browserDownloadURL,
+                        proxiedUrl,
                         ver.assets.first().nodeID
                     )
                 }
