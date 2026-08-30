@@ -134,7 +134,35 @@ class EchInterceptor : Interceptor {
                     // 非 ECH 错误或已重试，直接回落明文（热修复期间 fail-open）
                     return chain.proceed(request)
                 }
-                // ECH 失败：等待 DoH TTL 刷新后重试一次（应对公钥刚轮换）
+                // ECH 失败（公钥轮换/过期）：
+                // 1) 用同一 DoH 查 cloudflare-ech.com 强制刷新全局 ECH 缓存（绕 .so 30 分钟缓存）
+                // 2) 通知 ech-sync Worker 立即更新 x.xn--pn1aul.eu.org 的 HTTPS 记录
+                // 3) 稍等后重试原请求
+                try {
+                    val warmUrl = dohUrl + (if (dohUrl.contains("?")) "&" else "?") + "name=cloudflare-ech.com&type=65&_=" + System.currentTimeMillis()
+                    val warmReq = okhttp3.Request.Builder().url(warmUrl).addHeader("Accept", "application/dns-json").build()
+                    val warmCli = okhttp3.OkHttpClient.Builder()
+                        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                    warmCli.newCall(warmReq).execute().use { resp -> resp.body?.string() }
+                    Diagnostics.event("ech_warm_cf", mapOf("host" to host))
+                } catch (_: Exception) {}
+                // 通知 ech-sync Worker 立即同步（App 专用 key；触发失败不影响主流程）
+                try {
+                    val notifyReq = okhttp3.Request.Builder()
+                        .url("https://ech-sync.lintoya.workers.dev/?key=a1b6071f9147b44e0b1e08b25aee9ee3")
+                        .get().build()
+                    val notifyCli = okhttp3.OkHttpClient.Builder()
+                        .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                    notifyCli.newCall(notifyReq).execute().use { resp -> resp.body?.string() }
+                    Diagnostics.event("ech_sync_notify", mapOf("host" to host, "status" to "ok"))
+                } catch (e: Exception) {
+                    Diagnostics.event("ech_sync_notify_fail", mapOf("host" to host, "err" to (e.message ?: "unknown")))
+                }
+                // 等待 DoH TTL / Worker 更新传播后重试一次
                 try { Thread.sleep(300) } catch (_: Exception) {}
             }
         }
