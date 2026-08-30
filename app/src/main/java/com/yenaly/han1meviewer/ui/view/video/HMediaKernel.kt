@@ -22,7 +22,7 @@ import androidx.media3.common.Timeline
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -40,6 +40,7 @@ import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.ServiceCreator
 import com.yenaly.han1meviewer.util.AnimeShaders
 import com.yenaly.han1meviewer.util.AnimeShaders.getCert
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
@@ -150,9 +151,11 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                 }
 
             // Produces DataSource instances through which media data is loaded.
+            // 必须用 OkHttpDataSource 复用带 EchInterceptor 的 OkHttpClient，
+            // 否则 ExoPlayer 走 Media3 自带 HTTP 栈 → 绕过 ECH/HDns/Referer → CDN 直连失败
             val dataSourceFactory = DefaultDataSource.Factory(
                 context,
-                DefaultHttpDataSource.Factory()
+                OkHttpDataSource.Factory(ServiceCreator.hClient)
                     .setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
             )
 

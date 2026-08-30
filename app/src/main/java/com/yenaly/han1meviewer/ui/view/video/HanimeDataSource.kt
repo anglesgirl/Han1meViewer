@@ -1,7 +1,9 @@
 package com.yenaly.han1meviewer.ui.view.video
 
 import cn.jzvd.JZDataSource
+import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.ResolutionLinkMap
+import com.yenaly.han1meviewer.USER_AGENT
 
 class HanimeDataSource : JZDataSource {
 
@@ -17,7 +19,12 @@ class HanimeDataSource : JZDataSource {
             urlsList.addAll(map.entries as Set<Map.Entry<Any?, Any?>>)
         }
         this.title = title
-        this.headerMap = hashMapOf()
+        // CDN 防盗链：视频 CDN（如 javchu 的 t33.cdn2020.com）要求 Referer=站点 + UA 才放行
+        // （hanime1 的 CDN 不校验所以以前一直能播；空 headerMap 是 "站点 A 能播、B 崩" 的根因）
+        this.headerMap = hashMapOf(
+            "Referer" to Preferences.baseUrl.removeSuffix("/"),
+            "User-Agent" to USER_AGENT,
+        )
         this.looping = false
         this.objects = null
     }
