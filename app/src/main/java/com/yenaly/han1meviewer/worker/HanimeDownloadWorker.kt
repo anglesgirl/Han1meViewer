@@ -275,6 +275,11 @@ class HanimeDownloadWorker(
 
     private suspend fun download(): Result {
         return withContext(Dispatchers.IO) {
+            // m3u8 (HLS) 分片源（如 javchu 的 t33.cdn2020.com）：走分片下载合并，
+            // 不走 mp4 直链的 Range 断点续传逻辑
+            if (downloadUrl.endsWith(".m3u8", ignoreCase = true)) {
+                return@withContext downloadHls()
+            }
             val file = HFileManager.getDownloadVideoFile(
                 context = context, title = hanimeName, quality = quality, suffix = videoType, videoCode = videoCode
             )
@@ -482,6 +487,115 @@ class HanimeDownloadWorker(
                 bodyStream?.closeQuietly()
             }
             return@withContext result
+        }
+    }
+
+    /**
+     * m3u8 (HLS) 下载：解析播放列表 → 下载分片 → 合并为单个 .ts 文件。
+     * 进度按分片数上报；下载完成后直接标记 Finished（分片源不支持断点续传单文件）。
+     */
+    private suspend fun downloadHls(): Result {
+        return withContext(Dispatchers.IO) {
+            val file = HFileManager.getDownloadVideoFile(
+                context = context, title = hanimeName, quality = quality, suffix = "ts", videoCode = videoCode
+            )
+            val safUri = SafFileManager.getDownloadVideoFileUri(context, videoCode, createVideoName(hanimeName, quality, "ts"))
+            var safPfd: ParcelFileDescriptor? = null
+            try {
+                // 清理旧文件（重下载/删除场景）
+                if (shouldRedownload || shouldDelete) {
+                    HFileManager.getDownloadVideoFolder(context, videoCode).deleteRecursively()
+                    DatabaseRepo.HanimeDownload.delete(videoCode)
+                    if (shouldDelete) {
+                        return@withContext Result.success(
+                            workDataOf(DownloadState.STATE to DownloadState.Finished.mask)
+                        )
+                    }
+                }
+                file.parentFile?.mkdirs()
+                // SAF 模式：写到 SAF 通道；普通模式：直接写 file
+                val output: java.io.OutputStream = if (safUri != null) {
+                    safPfd = context.contentResolver.openFileDescriptor(safUri, "rw")
+                    val ch = safPfd?.fileDescriptor?.let { FileOutputStream(it).channel }
+                        ?: throw IOException("Open SAF file failed")
+                    java.io.OutputStream().apply {
+                        override fun write(b: Int) { ch.write(byteArrayOf(b.toByte())) }
+                        override fun write(b: ByteArray, off: Int, len: Int) { ch.write(java.nio.ByteBuffer.wrap(b, off, len)) }
+                    }
+                } else {
+                    FileOutputStream(file)
+                }
+
+                val progressNotifier: (Int, Int) -> Unit = { done, total ->
+                    val progress = (done * 100 / total).coerceAtMost(100)
+                    setProgress(workDataOf(PROGRESS to progress))
+                    updateDownloadNotification(progress)
+                }
+
+                val totalBytes = HlsDownloader.download(
+                    playlistUrl = downloadUrl,
+                    output = output,
+                    onProgress = progressNotifier,
+                )
+
+                // 更新数据库为完成状态
+                val videoUri = safUri?.toString() ?: file.toUri().toString()
+                val entity = DatabaseRepo.HanimeDownload.find(videoCode, quality)
+                if (entity != null) {
+                    DatabaseRepo.HanimeDownload.update(
+                        entity.copy(
+                            downloadedLength = totalBytes,
+                            length = totalBytes,
+                            state = DownloadState.Finished,
+                            videoUri = videoUri,
+                        )
+                    )
+                } else {
+                    DatabaseRepo.HanimeDownload.insert(
+                        HanimeDownloadEntity(
+                            coverUrl = coverUrl,
+                            coverUri = null,
+                            title = hanimeName,
+                            addDate = System.currentTimeMillis(),
+                            videoCode = videoCode,
+                            videoUri = videoUri,
+                            quality = quality,
+                            videoUrl = downloadUrl,
+                            length = totalBytes,
+                            downloadedLength = totalBytes,
+                            state = DownloadState.Finished,
+                        )
+                    )
+                }
+                showSuccessNotification()
+                PostHogManager.track("download_complete", mapOf("videoCode" to videoCode, "type" to "hls"))
+                Result.success(workDataOf(DownloadState.STATE to DownloadState.Finished.mask))
+            } catch (e: Exception) {
+                if (e is CancellationException || e.isStoppedCancellation()) {
+                    cancelDownloadNotification()
+                    mainScope.launch {
+                        GlobalToasts.show(context.getString(R.string.download_error_cancelled), level = GlobalToasts.ToastLevel.INFO)
+                    }
+                    Result.success(workDataOf(DownloadState.STATE to DownloadState.Paused.mask))
+                } else if (e.isRetryableNetworkError() && runAttemptCount < MAX_WORK_RETRY_COUNT) {
+                    val reason = e.toDownloadErrorMessage()
+                    showRetryNotification(reason)
+                    mainScope.launch {
+                        GlobalToasts.show(context.getString(R.string.download_task_retrying_s_reason_s, hanimeName, reason), level = GlobalToasts.ToastLevel.WARNING)
+                    }
+                    Result.retry()
+                } else {
+                    val reason = e.toDownloadErrorMessage()
+                    showFailureNotification(reason)
+                    e.printStackTrace()
+                    mainScope.launch {
+                        GlobalToasts.show(context.getString(R.string.download_task_failed_s_reason_s, hanimeName, reason), level = GlobalToasts.ToastLevel.ERROR)
+                    }
+                    Result.failure(workDataOf(DownloadState.STATE to DownloadState.Failed.mask))
+                }
+            } finally {
+                safPfd?.closeQuietly()
+            }
         }
     }
 
