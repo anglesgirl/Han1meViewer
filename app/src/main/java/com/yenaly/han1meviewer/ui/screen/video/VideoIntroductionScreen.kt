@@ -448,11 +448,9 @@ private fun DownloadQualityDialog(
                             .selectable(
                                 selected = false,
                                 onClick = {
-                                    if (quality == com.yenaly.han1meviewer.HanimeResolution.RES_UNKNOWN) {
-                                        onOpenOfficial()
-                                    } else {
-                                        onSelectQuality(quality)
-                                    }
+                                    // Unknown 清晰度（javchu 的 m3u8 源）也走 App 内下载（HLS），
+                                    // 不再跳官方下载页——官方页打开的是 javchu.com/download?v=xxx
+                                    onSelectQuality(quality)
                                 },
                             )
                             .padding(vertical = 6.dp),
@@ -462,7 +460,7 @@ private fun DownloadQualityDialog(
                         Text(quality)
                         if (quality == com.yenaly.han1meviewer.HanimeResolution.RES_UNKNOWN) {
                             Text(
-                                text = stringResource(R.string.go_to_official),
+                                text = stringResource(R.string.after_download_tips),
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.labelMedium,
                             )
