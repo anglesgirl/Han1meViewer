@@ -500,7 +500,6 @@ class HanimeDownloadWorker(
                 context = context, title = hanimeName, quality = quality, suffix = "ts", videoCode = videoCode
             )
             val safUri = SafFileManager.getDownloadVideoFileUri(context, videoCode, createVideoName(hanimeName, quality, "ts"))
-            var safPfd: ParcelFileDescriptor? = null
             try {
                 // 清理旧文件（重下载/删除场景）
                 if (shouldRedownload || shouldDelete) {
@@ -513,18 +512,8 @@ class HanimeDownloadWorker(
                     }
                 }
                 file.parentFile?.mkdirs()
-                // SAF 模式：写到 SAF 通道；普通模式：直接写 file
-                val output: java.io.OutputStream = if (safUri != null) {
-                    safPfd = context.contentResolver.openFileDescriptor(safUri, "rw")
-                    val ch = safPfd?.fileDescriptor?.let { FileOutputStream(it).channel }
-                        ?: throw IOException("Open SAF file failed")
-                    java.io.OutputStream().apply {
-                        override fun write(b: Int) { ch.write(byteArrayOf(b.toByte())) }
-                        override fun write(b: ByteArray, off: Int, len: Int) { ch.write(java.nio.ByteBuffer.wrap(b, off, len)) }
-                    }
-                } else {
-                    FileOutputStream(file)
-                }
+                // HLS 分片合并写 App 私有文件（SAF 目标在下载完成后由现有同步逻辑处理）
+                val output = FileOutputStream(file)
 
                 val progressNotifier: (Int, Int) -> Unit = { done, total ->
                     val progress = (done * 100 / total).coerceAtMost(100)
@@ -594,7 +583,6 @@ class HanimeDownloadWorker(
                     Result.failure(workDataOf(DownloadState.STATE to DownloadState.Failed.mask))
                 }
             } finally {
-                safPfd?.closeQuietly()
             }
         }
     }

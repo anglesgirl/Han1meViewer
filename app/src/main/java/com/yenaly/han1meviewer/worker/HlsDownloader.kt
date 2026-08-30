@@ -45,8 +45,8 @@ object HlsDownloader {
         val media = fetchText(mediaUrl, referer)
         // 3. 解析分片 + 加密信息
         val segments = parseSegments(mediaUrl, media)
-        Log.i(TAG, "segments: ${segments.size}, encrypted=${segments.keyUri != null}")
-        if (segments.isEmpty()) throw IOException("m3u8 无分片")
+        Log.i(TAG, "segments: ${segments.items.size}, encrypted=${segments.keyUri != null}")
+        if (segments.items.isEmpty()) throw IOException("m3u8 无分片")
 
         // 4. 下载 key（若加密）
         val key: ByteArray? = segments.keyUri?.let { keyUri ->
@@ -65,7 +65,7 @@ object HlsDownloader {
                 } else data
                 fos.write(decrypted)
                 totalBytes += decrypted.size
-                onProgress(index + 1, segments.size)
+                onProgress(index + 1, segments.items.size)
             }
         }
         totalBytes
@@ -123,7 +123,6 @@ object HlsDownloader {
         val items = mutableListOf<Segment>()
         var keyUri: String? = null
         var keyIv: ByteArray? = null
-        var pendingKeyInfo = false
         val lines = text.lines()
         var i = 0
         while (i < lines.size) {
@@ -143,7 +142,6 @@ object HlsDownloader {
                         // 其他 METHOD（如 NONE）视为无加密
                         keyUri = null
                     }
-                    pendingKeyInfo = true
                 }
                 line.startsWith("#EXTINF") -> {
                     // 下一个非 # 行是分片 URI
