@@ -6,6 +6,7 @@ import com.yenaly.han1meviewer.logic.network.ServiceCreator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
+import java.io.File
 import java.io.IOException
 import java.io.OutputStream
 import java.net.URI
@@ -14,11 +15,14 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * HLS (m3u8) 下载器：解析播放列表 → 下载分片 → 合并为单个 .ts 文件。
+ * HLS (m3u8) 下载器：解析播放列表 → 分片下载 → 合并为单个 .ts 文件。
  *
  * 背景：hanime1 是 mp4 直链（下载器现有 Range 断点续传即可），
  * 但 javchu 的视频源是 m3u8 分片（如 t33.cdn2020.com），原下载器会把
  * 播放列表文本直接存成 .mp4 导致无法播放。此文件补齐 m3u8 下载。
+ *
+ * 断点续传：每个分片解密后单独落盘为 part_XXXXX.ts，中断重试时
+ * 已存在的 part 文件直接跳过；全部完成后按序合并为单个 .ts 并清理 part。
  *
  * 支持：
  * - master playlist（#EXT-X-STREAM-INF）自动选最高码率
@@ -31,11 +35,15 @@ object HlsDownloader {
     private const val TAG = "HlsDownloader"
     private const val BUFFER_SIZE = 64 * 1024
 
-    /** 下载 m3u8 并合并写入指定输出流。onProgress: (doneSegments, totalSegments) */
+    /**
+     * 下载 m3u8 分片到 partDir（可续传），全部完成后合并写入 output 并返回真实字节数。
+     * onProgress: (doneSegments, totalSegments, downloadedBytes, estimatedTotalBytes)
+     */
     suspend fun download(
         playlistUrl: String,
+        partDir: File,
         output: java.io.OutputStream,
-        onProgress: suspend (done: Int, total: Int) -> Unit,
+        onProgress: suspend (done: Int, total: Int, downloadedBytes: Long, estimatedTotalBytes: Long) -> Unit,
     ): Long = withContext(Dispatchers.IO) {
         val referer = Preferences.baseUrl.removeSuffix("/")
         // 1. 解析出最终媒体播放列表（处理 master -> variant 跳转）
@@ -55,23 +63,53 @@ object HlsDownloader {
             }
         }
 
-        // 5. 逐个分片下载并合并
-        var totalBytes = 0L
+        // 5. 逐个分片下载（已存在的 part 文件跳过 = 断点续传）
+        partDir.mkdirs()
+        var downloadedBytes = 0L
         try {
             for (index in segments.items.indices) {
+                val partFile = File(partDir, "part_%05d.ts".format(index))
+                if (partFile.exists() && partFile.length() > 0) {
+                    // 断点续传：跳过已下载分片
+                    downloadedBytes += partFile.length()
+                    val estimated = if (index + 1 > 0 && downloadedBytes > 0) {
+                        downloadedBytes / (index + 1) * segments.items.size
+                    } else 0L
+                    onProgress(index + 1, segments.items.size, downloadedBytes, estimated)
+                    continue
+                }
                 val seg = segments.items[index]
                 val data = fetchBytes(seg.uri, referer)
                 val decrypted = if (key != null) {
                     decryptAes128(data, key, segments.ivFor(index))
                 } else data
-                output.write(decrypted)
-                totalBytes += decrypted.size
-                onProgress(index + 1, segments.items.size)
+                partFile.writeBytes(decrypted)
+                downloadedBytes += decrypted.size
+                val estimated = downloadedBytes / (index + 1) * segments.items.size
+                onProgress(index + 1, segments.items.size, downloadedBytes, estimated)
             }
+
+            // 6. 全部下载完成：按序合并 part 为单个文件
+            var totalBytes = 0L
+            for (index in segments.items.indices) {
+                val partFile = File(partDir, "part_%05d.ts".format(index))
+                if (!partFile.exists()) throw IOException("缺少分片 $index，无法合并")
+                partFile.inputStream().use { input ->
+                    val buf = ByteArray(BUFFER_SIZE)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        output.write(buf, 0, n)
+                        totalBytes += n
+                    }
+                }
+            }
+            // 清理 part 临时文件
+            partDir.deleteRecursively()
+            totalBytes
         } finally {
             output.close()
         }
-        totalBytes
     }
 
     /** 若为 master playlist，返回最高码率 variant 的播放列表 URL；否则原样返回 */

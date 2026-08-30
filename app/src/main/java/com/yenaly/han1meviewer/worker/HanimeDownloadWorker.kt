@@ -491,8 +491,8 @@ class HanimeDownloadWorker(
     }
 
     /**
-     * m3u8 (HLS) 下载：解析播放列表 → 下载分片 → 合并为单个 .ts 文件。
-     * 进度按分片数上报；下载完成后直接标记 Finished（分片源不支持断点续传单文件）。
+     * m3u8 (HLS) 下载：解析播放列表 → 分片下载（可断点续传）→ 合并为单个 .ts 文件。
+     * 进度按真实字节数上报，length 用估算值（分片数 × 平均分片大小）。
      */
     private suspend fun downloadHls(): Result {
         return withContext(Dispatchers.IO) {
@@ -500,6 +500,8 @@ class HanimeDownloadWorker(
                 context = context, title = hanimeName, quality = quality, suffix = "ts", videoCode = videoCode
             )
             val safUri = SafFileManager.getDownloadVideoFileUri(context, videoCode, createVideoName(hanimeName, quality, "ts"))
+            // 分片临时目录（断点续传：已下载分片直接跳过）
+            val partDir = File(file.parentFile, "$videoCode.parts")
             try {
                 // 清理旧文件（重下载/删除场景）
                 if (shouldRedownload || shouldDelete) {
@@ -543,18 +545,18 @@ class HanimeDownloadWorker(
                     )
                 }
 
-                val progressNotifier: suspend (Int, Int) -> Unit = { done, total ->
+                val progressNotifier: suspend (Int, Int, Long, Long) -> Unit = { done, total, downloadedBytes, estimatedTotal ->
                     val progress = (done * 100 / total).coerceAtMost(100)
                     setProgress(workDataOf(PROGRESS to progress))
                     updateDownloadNotification(progress)
-                    // 下载中更新数据库进度（length 未知时按分片数估算）
+                    // 下载中更新数据库进度（真实字节 + 估算总大小）
                     val cur = DatabaseRepo.HanimeDownload.find(videoCode, quality)
                     if (cur != null) {
                         DatabaseRepo.HanimeDownload.update(
                             cur.copy(
                                 state = DownloadState.Downloading,
-                                downloadedLength = progress.toLong(),
-                                length = 100L,
+                                downloadedLength = downloadedBytes,
+                                length = if (estimatedTotal > 0) estimatedTotal else 1L,
                             )
                         )
                     }
@@ -562,6 +564,7 @@ class HanimeDownloadWorker(
 
                 val totalBytes = HlsDownloader.download(
                     playlistUrl = downloadUrl,
+                    partDir = partDir,
                     output = output,
                     onProgress = progressNotifier,
                 )
