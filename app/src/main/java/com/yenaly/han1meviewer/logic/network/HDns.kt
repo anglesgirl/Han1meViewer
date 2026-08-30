@@ -40,6 +40,17 @@ class HDns : Dns {
 
         private val getchuIps = listOf("210.155.150.166", "210.155.150.145")
 
+        /**
+         * 视频 CDN 强制 IP 映射（绕过 NXDOMAIN 的权威 DNS）。
+         * 2026-08-30 实测：t33.cdn2020.com 在 CF Gateway/Google 上 NXDOMAIN，
+         * 1.1.1.1 / 腾讯 DoH 返回可用边缘 IP（TLS 证书 CN=t33.cdn2020.com 有效）。
+         * 4 个边缘 IP 全部列出做冗余：103.143.178.6 / 103.143.179.2 / 103.143.178.7 / 103.143.179.1
+         * 注意：CDN 边缘 IP 可能轮换，失效时需更新此表。
+         */
+        private val videoCdnIps = mapOf(
+            "t33.cdn2020.com" to listOf("103.143.178.6", "103.143.179.2", "103.143.178.7", "103.143.179.1"),
+        )
+
         private const val GETCHU_HOSTNAME = "www.getchu.com"
 
         /**
@@ -94,6 +105,17 @@ class HDns : Dns {
     override fun lookup(hostname: String): List<InetAddress> {
         if (hostname == GETCHU_HOSTNAME) {
             return getchuIps.map {
+                InetAddress.getByAddress(hostname, InetAddress.getByName(it).address)
+            }
+        }
+
+        // 视频 CDN 强制 IP：t33.cdn2020.com 的权威 DNS(quantum-dns)对部分 resolver 返回 NXDOMAIN
+        // （实测 2026-08-30：CF Gateway NXDOMAIN、Google NXDOMAIN、阿里 SERVFAIL；
+        //   1.1.1.1 / 腾讯 DoH 解析到 103.143.178.7，TLS 证书 CN=t33.cdn2020.com 有效）
+        // 若不强制指定，播放器拿不到 IP 报 2001 NETWORK_CONNECTION_FAILED。
+        videoCdnIps[hostname]?.let { ips ->
+            Diagnostics.event("dns_pinned", mapOf("host" to hostname, "ips" to ips.joinToString(",")))
+            return ips.map {
                 InetAddress.getByAddress(hostname, InetAddress.getByName(it).address)
             }
         }
