@@ -294,6 +294,11 @@ object Preferences {
     val isAnalyticsEnabled: Boolean
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_ANALYTICS, true)
 
+    /** 远程诊断日志开关：默认关，关于页连点 7 次版本号开启 */
+    var isDiagnosticsEnabled: Boolean
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_DIAGNOSTICS, false)
+        set(value) = preferenceSp.edit().putBoolean(SettingsPreferenceKeys.USE_DIAGNOSTICS, value).apply()
+
     // 下载 相關
 
     val downloadCountLimit: Int

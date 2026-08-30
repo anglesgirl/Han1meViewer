@@ -3,6 +3,7 @@ package com.yenaly.han1meviewer.diagnostics
 import android.content.Context
 import android.os.Build
 import com.yenaly.han1meviewer.BuildConfig
+import com.yenaly.han1meviewer.Preferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,6 +70,8 @@ object Diagnostics {
     }
 
     fun event(name: String, fields: Map<String, Any?> = emptyMap()) {
+        // 远程诊断开关：默认关（关于页连点 7 次版本号开启），避免大量无关日志上传
+        if (!Preferences.isDiagnosticsEnabled) return
         val safeFields = fields.mapNotNull { (key, value) ->
             if (key in sensitiveKeys || value == null) null else key to value.toString().take(maxValueLength)
         }.toMap()

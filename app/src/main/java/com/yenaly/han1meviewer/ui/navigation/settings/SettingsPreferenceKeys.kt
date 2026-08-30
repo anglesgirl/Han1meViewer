@@ -7,6 +7,7 @@ object SettingsPreferenceKeys {
     const val UPDATE_POPUP_INTERVAL_DAYS = "update_popup_interval_days"
     const val USE_CI_UPDATE_CHANNEL = "use_ci_update_channel"
     const val USE_ANALYTICS = "use_analytics"
+    const val USE_DIAGNOSTICS = "use_diagnostics"
     const val FAKE_LAUNCHER_ICON = "pref_fake_launcher_icon"
     const val USE_DARK_MODE = "use_dark_mode"
     const val USE_DYNAMIC_COLOR = "use_dynamic_color"

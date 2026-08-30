@@ -1,5 +1,6 @@
 package com.yenaly.han1meviewer.ui.screen.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,7 +20,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.yenaly.han1meviewer.HorizontalCardCountConfig
+import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
+import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import com.yenaly.han1meviewer.SearchGridColumnsConfig
 import com.yenaly.han1meviewer.ui.component.ChoiceDialog
 import com.yenaly.han1meviewer.ui.component.SettingInfoItem
@@ -85,6 +88,20 @@ fun HomeSettingsScreen(
     var showSearchGridColumnsDialog by rememberSaveable { mutableStateOf(false) }
     var showHorizontalCardCountDialog by rememberSaveable { mutableStateOf(false) }
     var showHomeCategoryDialog by rememberSaveable { mutableStateOf(false) }
+    // 关于页连点 7 次版本号切换远程诊断日志开关
+    var aboutTapCount by rememberSaveable { mutableStateOf(0) }
+    val aboutTapOnClick = {
+        aboutTapCount++
+        if (aboutTapCount >= 7) {
+            aboutTapCount = 0
+            val newVal = !Preferences.isDiagnosticsEnabled
+            Preferences.isDiagnosticsEnabled = newVal
+            GlobalToasts.show(
+                if (newVal) "远程诊断日志已开启（连点 7 次可关闭）" else "远程诊断日志已关闭",
+                level = GlobalToasts.ToastLevel.SUCCESS,
+            )
+        }
+    }
 
     ChoiceDialog(
         visible = activeDialog == HomeSettingsChoiceDialog.VideoLanguage,
@@ -508,6 +525,7 @@ fun HomeSettingsScreen(
                 title = stringResource(R.string.about),
                 summary = state.versionSummary,
                 iconRes = R.drawable.ic_baseline_info_24,
+                modifier = Modifier.clickable { aboutTapOnClick() },
             )
         }
     }
