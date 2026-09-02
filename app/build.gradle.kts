@@ -50,10 +50,6 @@ android {
         buildConfigField("String", "VERSION_SOURCE", "\"${source}\"")
 
         buildConfigField("int", "SEARCH_YEAR_RANGE_END", "${Config.thisYear}")
-
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
     }
     signingConfigs {
         create("release") {
