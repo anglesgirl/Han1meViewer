@@ -33,3 +33,8 @@
 -keep class androidx.window.extensions.embedding.** { *; }
 -keep class is.xyz.mpv.** { *; }
 -keep class lis.xyz.mpv.** { *; }
+
+-keep class org.mozilla.geckoview.** { *; }
+-keep class org.mozilla.gecko.** { *; }
+-dontwarn org.mozilla.geckoview.**
+-dontwarn org.mozilla.gecko.**

@@ -50,6 +50,10 @@ android {
         buildConfigField("String", "VERSION_SOURCE", "\"${source}\"")
 
         buildConfigField("int", "SEARCH_YEAR_RANGE_END", "${Config.thisYear}")
+
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
     signingConfigs {
         create("release") {
@@ -62,7 +66,7 @@ android {
 
     splits {
         abi {
-            isEnable = (gradle.startParameter.taskRequests.toString().contains("Release"))
+            isEnable = true
             reset()
             include("arm64-v8a")
             isUniversalApk = false
@@ -79,7 +83,7 @@ android {
             )
             signingConfig = signingConfigs.getByName("release")
             manifestPlaceholders["appIcon"] = "@mipmap/ic_launcher_new"
-
+            packaging { jniLibs { useLegacyPackaging = true } }
         }
 
         debug {
@@ -89,6 +93,7 @@ android {
             )
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appIcon"] = "@mipmap/ic_launcher_debug"
+            packaging { jniLibs { useLegacyPackaging = true } }
         }
     }
     buildFeatures {
@@ -181,6 +186,9 @@ dependencies {
     // pic
 
     implementation(libs.coil)
+
+    // gecko
+    implementation(libs.geckoview)
 
 
     // video

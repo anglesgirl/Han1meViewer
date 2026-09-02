@@ -63,6 +63,7 @@ composeBom = "2026.08.00"
 compose-material3 = "1.5.0-alpha26"
 ui-test-junit4 = "1.12.0"
 mpv = "v0.1.7"
+geckoview = "147.0.20260116091309"
 
 [libraries]
 # Android
@@ -137,6 +138,7 @@ jiaozi-video-player = { group = "cn.jzvd", name = "jiaozivideoplayer", version.r
 media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "exoplayer" }
 media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "exoplayer" }
 mpv-lib = { group = "com.github.abdallahmehiz", name = "mpv-android", version.ref = "mpv" }
+geckoview = { module = "org.mozilla.geckoview:geckoview", version.ref = "geckoview" }
 
 # Other
 about = { group = "com.drakeet.about", name = "about", version.ref = "about" }

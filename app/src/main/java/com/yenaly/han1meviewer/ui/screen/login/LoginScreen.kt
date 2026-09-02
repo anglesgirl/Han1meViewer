@@ -1,6 +1,6 @@
 package com.yenaly.han1meviewer.ui.screen.login
 
-import android.webkit.WebView
+import android.view.View
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,7 +43,7 @@ fun LoginScreen(
     onRefresh: () -> Unit,
     onShowLoginDialog: () -> Unit,
     onOpenQrScanner: () -> Unit,
-    webViewFactory: () -> WebView,
+    webViewFactory: () -> View,
 ) {
     val refreshingState = rememberPullToRefreshState()
     HanimeScaffold(
@@ -145,7 +145,7 @@ fun LoginScreenPreview() {
             onShowLoginDialog = {},
             onOpenQrScanner = {},
             webViewFactory = {
-                WebView(context).apply {
+                View(context).apply {
                 }
             }
         )
