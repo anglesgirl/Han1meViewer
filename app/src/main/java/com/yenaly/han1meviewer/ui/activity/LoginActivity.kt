@@ -138,9 +138,18 @@ class LoginActivity : FrameActivity() {
                         (function() {
                           if (window.__hanimeNativeLoginInstalled) return;
                           window.__hanimeNativeLoginInstalled = true;
+                          function findLoginForm() {
+                            var forms = document.querySelectorAll('form');
+                            for (var i = 0; i < forms.length; i++) {
+                              var action = (forms[i].getAttribute('action') || '').toLowerCase();
+                              if (action.indexOf('/login') >= 0 && forms[i].querySelector('input[name=email]') && forms[i].querySelector('input[name=password]')) return forms[i];
+                            }
+                            return null;
+                          }
                           function loginForm(node) {
-                            var f = node && (node.closest ? node.closest('#loginModalForm') : null);
-                            return f || document.querySelector('#loginModalForm');
+                            var f = node && (node.closest ? node.closest('form') : null);
+                            if (f && (f.getAttribute('action') || '').toLowerCase().indexOf('/login') >= 0) return f;
+                            return findLoginForm();
                           }
                           function submitNative(f, e) {
                             if (!f) return true;
@@ -166,7 +175,7 @@ class LoginActivity : FrameActivity() {
                             if (f) submitNative(f, e);
                           }, true);
                           function rewrite() {
-                            var f = document.querySelector('#loginModalForm');
+                            var f = findLoginForm();
                             if (!f) return;
                             var button = f.querySelector('button[type=submit], input[type=submit]');
                             if (button) button.type = 'button';
