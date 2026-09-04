@@ -1,11 +1,11 @@
-package io.github.daisukikaffuchino.han1meviewer.ui.activity
+package com.yenaly.han1meviewer.ui.activity
 
 import android.os.Bundle
 import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import io.github.daisukikaffuchino.han1meviewer.logic.network.HCookieJar
+import com.yenaly.han1meviewer.logic.network.HCookieJar
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -65,10 +65,11 @@ class VerifierActivity : AppCompatActivity() {
             val client = okhttp3.OkHttpClient.Builder()
                 .addInterceptor(io.github.daisukikaffuchino.han1meviewer.logic.network.EchInterceptor())
                 .addInterceptor(Interceptor { chain ->
-                    val req = chain.request().newBuilder().removeHeader("Expect").build()
-                    logOnMain("REQ ${req.method} ${req.url} headers=${req.headers.toString().take(400)}")
-                    val resp = chain.proceed(req)
-                    logOnMain("RESP ${resp.code} ${resp.message} set-cookie=${resp.headers("Set-Cookie").take(1).toString().take(200)}")
+                    val req2 = chain.request().newBuilder().removeHeader("Expect").build()
+                    // log sync (cannot suspend)
+                    android.util.Log.d("Verifier","REQ ${req2.method} ${req2.url}")
+                    val resp = chain.proceed(req2)
+                    android.util.Log.d("Verifier","RESP ${resp.code}")
                     resp
                 })
                 .build()

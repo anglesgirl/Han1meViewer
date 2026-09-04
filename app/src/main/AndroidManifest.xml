@@ -167,7 +167,7 @@
 
         </activity>
 
-        <activity android:name=".ui.activity.VerifierActivity" android:exported="true" android:label="ECH Verifier"/>
+        <activity android:name="com.yenaly.han1meviewer.ui.activity.VerifierActivity" android:exported="true" android:label="ECH Verifier"/>
 
         <receiver
             android:name=".ui.widget.CheckInWidgetProvider"
