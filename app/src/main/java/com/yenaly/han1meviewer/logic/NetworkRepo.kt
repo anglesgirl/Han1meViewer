@@ -522,7 +522,7 @@ object NetworkRepo {
         }
     }.flowOn(Dispatchers.IO)
 
-    fun login(email: String, password: String, pageToken: String? = null) = flow {
+    fun login(email: String, password: String) = flow {
         emit(WebsiteState.Loading)
         val baseUrl = com.yenaly.han1meviewer.HANIME_BASE_URL
         val loginUrl = "${baseUrl}login"

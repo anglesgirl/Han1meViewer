@@ -113,7 +113,7 @@ class LoginActivity : FrameActivity() {
             addJavascriptInterface(object {
                 @JavascriptInterface
                 fun submit(email: String, password: String, token: String) {
-                    runOnUiThread { handleLogin(email, password, token) }
+                    runOnUiThread { handleLogin(email, password) }
                 }
             }, "HanimeNativeLogin")
 
@@ -136,27 +136,43 @@ class LoginActivity : FrameActivity() {
                 private fun installNativeLoginSubmit(view: WebView) {
                     view.evaluateJavascript("""
                         (function() {
-                          function bind() {
+                          if (window.__hanimeNativeLoginInstalled) return;
+                          window.__hanimeNativeLoginInstalled = true;
+                          function loginForm(node) {
+                            var f = node && (node.closest ? node.closest('#loginModalForm') : null);
+                            return f || document.querySelector('#loginModalForm');
+                          }
+                          function submitNative(f, e) {
+                            if (!f) return true;
+                            if (e) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
+                            var email = f.querySelector('input[name=email]');
+                            var password = f.querySelector('input[name=password]');
+                            var token = f.querySelector('input[name=_token]');
+                            if (!email || !password || !token) return false;
+                            HanimeNativeLogin.submit(email.value, password.value, token.value);
+                            return false;
+                          }
+                          document.addEventListener('click', function(e) {
+                            var target = e.target;
+                            var f = loginForm(target);
+                            if (!f) return;
+                            var button = target && target.closest ? target.closest('button, input, [role=button]') : null;
+                            if (button && (button.type === 'submit' || button.closest('#loginModalForm'))) {
+                              submitNative(f, e);
+                            }
+                          }, true);
+                          document.addEventListener('submit', function(e) {
+                            var f = loginForm(e.target);
+                            if (f) submitNative(f, e);
+                          }, true);
+                          function rewrite() {
                             var f = document.querySelector('#loginModalForm');
                             if (!f) return;
                             var button = f.querySelector('button[type=submit], input[type=submit]');
-                            if (!button || button.dataset.hanimeNativeLogin === '1') return;
-                            button.type = 'button';
-                            button.dataset.hanimeNativeLogin = '1';
-                            function submitNative(e) {
-                              if (e) { e.preventDefault(); e.stopImmediatePropagation(); }
-                              var email = f.querySelector('input[name=email]');
-                              var password = f.querySelector('input[name=password]');
-                              var token = f.querySelector('input[name=_token]');
-                              if (!email || !password || !token) return false;
-                              HanimeNativeLogin.submit(email.value, password.value, token.value);
-                              return false;
-                            }
-                            button.addEventListener('click', submitNative, true);
-                            f.addEventListener('submit', submitNative, true);
+                            if (button) button.type = 'button';
                           }
-                          bind();
-                          if (window.MutationObserver) new MutationObserver(bind).observe(document.documentElement, {childList:true, subtree:true});
+                          rewrite();
+                          if (window.MutationObserver) new MutationObserver(rewrite).observe(document.documentElement, {childList:true, subtree:true, attributes:true});
                         })();
                     """.trimIndent(), null)
                 }
@@ -211,10 +227,10 @@ class LoginActivity : FrameActivity() {
         webView?.destroy()
     }
 
-    private fun handleLogin(username: String, password: String, pageToken: String? = null) {
+    private fun handleLogin(username: String, password: String) {
         isLoggingIn = true
         lifecycleScope.launch {
-            NetworkRepo.login(username, password, pageToken).collect { state ->
+            NetworkRepo.login(username, password).collect { state ->
                 when (state) {
                     WebsiteState.Loading -> Unit
 
