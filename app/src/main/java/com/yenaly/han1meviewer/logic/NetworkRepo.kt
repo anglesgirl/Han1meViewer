@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.Log
 import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.EMPTY_STRING
+import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.Preferences.isAlreadyLogin
 import com.yenaly.han1meviewer.R
