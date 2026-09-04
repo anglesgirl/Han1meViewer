@@ -110,6 +110,12 @@ class LoginActivity : FrameActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.userAgentString = USER_AGENT
+            addJavascriptInterface(object {
+                @JavascriptInterface
+                fun submit(email: String, password: String, token: String) {
+                    runOnUiThread { handleLogin(email, password, token) }
+                }
+            }, "HanimeNativeLogin")
 
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
@@ -128,38 +134,26 @@ class LoginActivity : FrameActivity() {
                 }
 
                 private fun installNativeLoginSubmit(view: WebView) {
-                    if (!loginBridgeInstalled) {
-                        loginBridgeInstalled = true
-                        view.addJavascriptInterface(object {
-                            @JavascriptInterface
-                            fun submit(email: String, password: String, token: String) {
-                                runOnUiThread { handleLogin(email, password, token) }
-                            }
-                        }, "HanimeNativeLogin")
-                    }
                     view.evaluateJavascript("""
                         (function() {
                           function bind() {
-                            var f = document.querySelector('#loginModalForm') ||
-                                    Array.prototype.find.call(document.querySelectorAll('form'), function(x) {
-                                      return (x.getAttribute('action') || '').toLowerCase().indexOf('login') >= 0 && x.querySelector('input[name=email]');
-                                    });
-                            if (!f || f.dataset.hanimeNativeLogin === '1') return;
-                            f.dataset.hanimeNativeLogin = '1';
+                            var f = document.querySelector('#loginModalForm');
+                            if (!f) return;
+                            var button = f.querySelector('button[type=submit], input[type=submit]');
+                            if (!button || button.dataset.hanimeNativeLogin === '1') return;
+                            button.type = 'button';
+                            button.dataset.hanimeNativeLogin = '1';
                             function submitNative(e) {
-                              e.preventDefault();
-                              e.stopImmediatePropagation();
+                              if (e) { e.preventDefault(); e.stopImmediatePropagation(); }
                               var email = f.querySelector('input[name=email]');
                               var password = f.querySelector('input[name=password]');
                               var token = f.querySelector('input[name=_token]');
-                              if (email && password && token) {
-                                HanimeNativeLogin.submit(email.value, password.value, token.value);
-                              }
+                              if (!email || !password || !token) return false;
+                              HanimeNativeLogin.submit(email.value, password.value, token.value);
                               return false;
                             }
+                            button.addEventListener('click', submitNative, true);
                             f.addEventListener('submit', submitNative, true);
-                            var button = f.querySelector('button[type=submit],input[type=submit]');
-                            if (button) button.addEventListener('click', submitNative, true);
                           }
                           bind();
                           if (window.MutationObserver) new MutationObserver(bind).observe(document.documentElement, {childList:true, subtree:true});
