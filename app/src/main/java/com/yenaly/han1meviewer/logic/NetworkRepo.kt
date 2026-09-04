@@ -1,6 +1,8 @@
 package com.yenaly.han1meviewer.logic
 
+import android.util.Base64
 import android.util.Log
+import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.EMPTY_STRING
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.Preferences.isAlreadyLogin
@@ -16,6 +18,7 @@ import com.yenaly.han1meviewer.logic.model.MyListType
 import com.yenaly.han1meviewer.logic.model.OnlineWatchHistorySort
 import com.yenaly.han1meviewer.logic.model.VideoCommentArgs
 import com.yenaly.han1meviewer.logic.model.VideoComments
+import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HUpdater
 import com.yenaly.han1meviewer.logic.network.HanimeNetwork
 import com.yenaly.han1meviewer.logic.state.PageLoadingState
@@ -520,26 +523,73 @@ object NetworkRepo {
 
     fun login(email: String, password: String) = flow {
         emit(WebsiteState.Loading)
-        // 首先获取token
-        val loginPage = HanimeNetwork.hanimeService.getLoginPage()
-        val token = loginPage.body()?.string()?.let(Parser::extractTokenFromLoginPage)
-        val req = HanimeNetwork.hanimeService.login(token, email, password)
-        if (req.isSuccessful) {
-            // 再次获取登录页面，如果失败则返回 cookie
-            // 因为登录成功再次访问 login 会 404，这是判断是否登录成功的方法
-            val loginPageAgain = HanimeNetwork.hanimeService.getLoginPage()
-            if (loginPageAgain.code() == 404) {
-                // Cookie 會返回 XSRF-TOKEN 和 hanime1_session，我們只需要後者
-                // 错误的，还需要 remember_web 字段！但我没找到！
-                Log.d("login_headers", req.headers().toMultimap().toString())
-                emit(WebsiteState.Success(req.headers().values("Set-Cookie")))
-            } else {
-                emit(WebsiteState.Error(IllegalStateException(getString(R.string.account_or_password_wrong))))
+        val baseUrl = com.yenaly.han1meviewer.HANIME_BASE_URL
+        val loginUrl = "${baseUrl}login"
+        val dohUrl = com.yenaly.han1meviewer.logic.network.DohConfig.resolveUrl()
+            ?: "https://82sew1c85i.cloudflare-gateway.com/dns-query"
+        val dohHost = android.net.Uri.parse(dohUrl).host
+            ?: "82sew1c85i.cloudflare-gateway.com"
+        val dohResolve = "$dohHost:443:${DohConfig.bootstrapIps().ifEmpty {
+            listOf("162.159.36.20", "162.159.36.5")
+        }.joinToString(",")}"
+
+        fun parseResponse(raw: String): JSONObject = JSONObject(raw)
+        fun cookiesFrom(response: JSONObject): LinkedHashMap<String, String> {
+            val result = linkedMapOf<String, String>()
+            val headers = response.optJSONArray("headers") ?: return result
+            for (i in 0 until headers.length()) {
+                val line = headers.optString(i)
+                if (!line.contains('\t')) continue
+                if (!line.substringBefore('\t').equals("set-cookie", true)) continue
+                val pair = line.substringAfter('\t').substringBefore(';').trim()
+                val name = pair.substringBefore('=', "").trim()
+                if (name.isNotEmpty() && pair.contains('=')) {
+                    result[name] = pair.substringAfter('=')
+                }
             }
-        } else {
-            // 雙重保險
-            emit(WebsiteState.Error(IllegalStateException(getString(R.string.account_or_password_wrong))))
+            return result
         }
+        fun cookieHeader(cookies: Map<String, String>) =
+            cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+
+        if (!EchHttpClient.isLoaded) EchHttpClient.init(applicationContext)
+        val getResponse = parseResponse(EchHttpClient.request(
+            "GET", loginUrl, arrayOf("User-Agent: $USER_AGENT"), null, dohUrl, dohResolve
+        ))
+        val cookies = cookiesFrom(getResponse)
+        val html = getResponse.optString("body").let { encoded ->
+            if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
+        }
+        val token = Parser.extractTokenFromLoginPage(html)
+        if (cookies.isEmpty()) throw IllegalStateException("登录会话 Cookie 为空")
+
+        val form = "_token=${java.net.URLEncoder.encode(token, "UTF-8")}" +
+            "&email=${java.net.URLEncoder.encode(email, "UTF-8")}" +
+            "&password=${java.net.URLEncoder.encode(password, "UTF-8")}"
+        val postResponse = parseResponse(EchHttpClient.request(
+            "POST", loginUrl,
+            arrayOf(
+                "User-Agent: $USER_AGENT",
+                "Content-Type: application/x-www-form-urlencoded",
+                "Cookie: ${cookieHeader(cookies)}",
+                "Referer: $loginUrl",
+                "Origin: ${baseUrl.removeSuffix("/")}",
+            ),
+            form.toByteArray(Charsets.UTF_8), dohUrl, dohResolve
+        ))
+        cookies.putAll(cookiesFrom(postResponse))
+        val postBody = postResponse.optString("body").let { encoded ->
+            if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
+        }
+        val success = postResponse.optInt("statusCode") in 200..399 &&
+            ("LogOut" in postBody || "logout" in postBody.lowercase() ||
+                "user-modal-trigger" in postBody)
+        if (!success) {
+            Log.w("NetworkRepo", "JNI 登录失败 code=${postResponse.optInt("statusCode")} bodyLen=${postBody.length}")
+            throw IllegalStateException(getString(R.string.account_or_password_wrong))
+        }
+        Log.i("NetworkRepo", "JNI 登录成功 code=${postResponse.optInt("statusCode")} cookieNames=${cookies.keys}")
+        emit(WebsiteState.Success(cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }))
     }.catch { e ->
         emit(WebsiteState.Error(handleException(e)))
     }.flowOn(Dispatchers.IO)
