@@ -141,7 +141,6 @@ class LoginActivity : FrameActivity() {
                             return true
                         }
                     }
-                    // 代理地址让 WebView 自行加载
                     if (raw.startsWith("http://127.0.0.1:23333/")) return false
                     return super.shouldOverrideUrlLoading(view, request)
                 }
@@ -157,7 +156,34 @@ class LoginActivity : FrameActivity() {
                     }
                 }
             }
-            loadUrl(com.yenaly.han1meviewer.logic.network.EchProxyServer.proxyUrl(HANIME_LOGIN_URL))
+            // 主文档用 OkHttp+ECH 预拉，base 设代理域让 POST 走 23333 保留 Body
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val target = HANIME_LOGIN_URL
+                val proxyBase = com.yenaly.han1meviewer.logic.network.EchProxyServer.proxyUrl(target)
+                try {
+                    val dohUrl = com.yenaly.han1meviewer.logic.network.DohConfig.resolveUrl() ?: "https://82sew1c85i.cloudflare-gateway.com/dns-query"
+                    val dohHost = try { android.net.Uri.parse(dohUrl).host ?: "82sew1c85i.cloudflare-gateway.com" } catch (_: Exception) { "82sew1c85i.cloudflare-gateway.com" }
+                    val ips = com.yenaly.han1meviewer.logic.network.DohConfig.bootstrapIps().ifEmpty { listOf("162.159.36.20","162.159.36.5") }
+                    val dohResolve = "$dohHost:443:${ips.joinToString(",")}"
+                    val headers = arrayOf("User-Agent: $USER_AGENT")
+                    val jsonStr = com.liar.han1meplus.EchHttpClient.request("GET", target, headers, null, dohUrl, dohResolve)
+                    val json = org.json.JSONObject(jsonStr)
+                    val b64 = json.optString("body","")
+                    val html = if (b64.isNotEmpty()) String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT), Charsets.UTF_8) else ""
+                    if (html.isNotEmpty()) {
+                        // 把相对 action 改为走代理，确保 POST Body 不丢
+                        var fixed = html.replace("action=\"/login\"", "action=\"${proxyBase}\"")
+                        fixed = fixed.replace("action='/login'", "action='${proxyBase}'")
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            loadDataWithBaseURL(proxyBase, fixed, "text/html", "utf-8", null)
+                        }
+                        return@launch
+                    }
+                } catch (_: Exception) {}
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    loadUrl(proxyBase)
+                }
+            }
         }
     }
 
