@@ -5,6 +5,8 @@ import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HCookieJar
@@ -36,6 +38,12 @@ class VerifierActivity : AppCompatActivity() {
             addView(sv, android.widget.LinearLayout.LayoutParams(-1,0,1f))
         }
         setContentView(root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
         tv.text = "点按钮开始\nBoringSSL+curl 全日志\n长按日志可复制，导出存 /sdcard/Download/verifier.log\n"
     }
     private fun log(s:String){ tv.append(s+"\n"); appendToFile(s) }
