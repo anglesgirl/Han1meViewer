@@ -19,7 +19,7 @@ class VerifierActivity : AppCompatActivity() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        tv = TextView(this).apply { textSize = 11f; setPadding(20,20,20,20); isTextSelectable = true }
+        tv = TextView(this).apply { textSize = 11f; setPadding(20,20,20,20); setTextIsSelectable(true) }
         val btn = Button(this).apply { text = "测试 javchu 登录 (GET+POST 全日志)"; setOnClickListener { runTest() } }
         val btnShare = Button(this).apply { text = "导出日志 (分享)"; setOnClickListener { shareLogs() } }
         val btnCopy = Button(this).apply { text = "复制到剪贴板"; setOnClickListener { copyLogs() } }
