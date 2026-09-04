@@ -166,7 +166,7 @@ class LoginActivity : FrameActivity() {
                             var f = loginForm(target);
                             if (!f) return;
                             var button = target && target.closest ? target.closest('button, input, [role=button]') : null;
-                            if (button && (button.type === 'submit' || button.closest('#loginModalForm'))) {
+                            if (button && button.closest && button.closest('form') === f) {
                               submitNative(f, e);
                             }
                           }, true);
