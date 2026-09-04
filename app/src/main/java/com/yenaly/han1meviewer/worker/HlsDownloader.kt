@@ -215,26 +215,33 @@ object HlsDownloader {
     }
 
     private fun resolveUri(base: String, uri: String): String {
-        if (uri.startsWith("http://") || uri.startsWith("https://")) return uri
-        return try {
+        val raw = if (uri.startsWith("http://") || uri.startsWith("https://")) uri else try {
             URI(base).resolve(uri).toString()
         } catch (e: Exception) {
             val slash = if (base.endsWith("/")) "" else "/"
             base.substringBeforeLast("/") + "/" + uri.removePrefix("./")
         }
+        return normalizeCdnUrl(raw)
+    }
+
+    private fun normalizeCdnUrl(url: String): String {
+        // javchu 部分 m3u8 仍返回 t27.cdn2020.com（已坏/CDN 回源失败），t33 可用
+        // 统一将 cdn2020 的 tXX 子域改写为 t33，避免播放/下载 404
+        return url.replace(Regex("https?://t\\d+\\.cdn2020\\.com"), "https://t33.cdn2020.com")
     }
 
     private fun fetchText(url: String, referer: String): String {
-        return fetchBytes(url, referer).toString(Charsets.UTF_8)
+        return fetchBytes(normalizeCdnUrl(url), referer).toString(Charsets.UTF_8)
     }
 
     private fun fetchBytes(url: String, referer: String): ByteArray {
-        val request = Request.Builder().url(url).get()
+        val fixed = normalizeCdnUrl(url)
+        val request = Request.Builder().url(fixed).get()
             .header("Referer", referer)
             .build()
         ServiceCreator.downloadClient.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} for $url")
-            return resp.body?.bytes() ?: throw IOException("empty body for $url")
+            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} for $fixed")
+            return resp.body?.bytes() ?: throw IOException("empty body for $fixed")
         }
     }
 }

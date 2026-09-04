@@ -159,7 +159,9 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                     .setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
             )
 
-            val currUrl = jzvd.jzDataSource.currentUrl.toString()
+            val rawUrl = jzvd.jzDataSource.currentUrl.toString()
+            // javchu t27.cdn2020.com 已坏，统一改 t33
+            val currUrl = rawUrl.replace(Regex("https?://t\\d+\\.cdn2020\\.com"), "https://t33.cdn2020.com")
             val isHls = currUrl.contains(".m3u8")
             val videoSource = if (isHls) {
                 HlsMediaSource.Factory(dataSourceFactory)
