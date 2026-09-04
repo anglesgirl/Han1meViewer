@@ -381,6 +381,9 @@ fun HomeSettingsRouteScreen(
         },
         onSubmitBug = { context.browse(HA1_GITHUB_ISSUE_URL) },
         onOpenForum = { context.browse(HA1_GITHUB_FORUM_URL) },
+        onOpenVerifier = {
+            context.startActivity(Intent(context, com.yenaly.han1meviewer.ui.activity.VerifierActivity::class.java))
+        },
     )
 
     ConfirmDialog(

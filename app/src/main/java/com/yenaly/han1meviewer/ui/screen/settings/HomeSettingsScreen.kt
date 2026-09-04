@@ -83,6 +83,7 @@ fun HomeSettingsScreen(
     onImportBackup: () -> Unit,
     onSubmitBug: () -> Unit,
     onOpenForum: () -> Unit,
+    onOpenVerifier: () -> Unit,
 ) {
     var activeDialog by rememberSaveable { mutableStateOf<HomeSettingsChoiceDialog?>(null) }
     var showSearchGridColumnsDialog by rememberSaveable { mutableStateOf(false) }
@@ -499,6 +500,14 @@ fun HomeSettingsScreen(
         }
         item {
             SettingNavigationItem(
+                title = "ECH 验证器 (调试)",
+                summary = "测试 javchu 登录全日志，无需 ADB",
+                iconRes = R.drawable.baseline_bug_report_24,
+                onClick = { onOpenVerifier() },
+            )
+        }
+        item {
+            SettingNavigationItem(
                 title = stringResource(R.string.submit_bug),
                 summary = stringResource(R.string.submit_bug_summary),
                 iconRes = R.drawable.baseline_bug_report_24,
@@ -623,6 +632,7 @@ private fun HomeSettingsScreenPreview() {
             onImportBackup = {},
             onSubmitBug = {},
             onOpenForum = {},
+            onOpenVerifier = {},
         )
     }
 }
