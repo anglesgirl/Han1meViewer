@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,7 +45,12 @@ fun LoginScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 text = { Text(stringResource(R.string.scan_for_cookies)) },
-                icon = null,
+                icon = {
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(R.drawable.ic_baseline_scan_24),
+                        contentDescription = null,
+                    )
+                },
                 onClick = onOpenQrScanner,
             )
         },
