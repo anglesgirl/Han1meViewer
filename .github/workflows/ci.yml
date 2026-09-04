@@ -4,7 +4,7 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "diagnostics-foundation" ]
+    branches: [ "main", "diagnostics-foundation", "gecko-lite-ech-v2" ]
     paths-ignore:
       - "**.md"
   workflow_dispatch:

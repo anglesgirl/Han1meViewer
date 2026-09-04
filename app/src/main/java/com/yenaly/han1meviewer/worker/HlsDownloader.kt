@@ -1,6 +1,7 @@
 package com.yenaly.han1meviewer.worker
 
 import android.util.Log
+import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.network.ServiceCreator
 import kotlinx.coroutines.Dispatchers
@@ -221,27 +222,32 @@ object HlsDownloader {
             val slash = if (base.endsWith("/")) "" else "/"
             base.substringBeforeLast("/") + "/" + uri.removePrefix("./")
         }
-        return normalizeCdnUrl(raw)
-    }
-
-    private fun normalizeCdnUrl(url: String): String {
-        // javchu 部分 m3u8 仍返回 t27.cdn2020.com（已坏/CDN 回源失败），t33 可用
-        // 统一将 cdn2020 的 tXX 子域改写为 t33，避免播放/下载 404
-        return url.replace(Regex("https?://t\\d+\\.cdn2020\\.com"), "https://t33.cdn2020.com")
+        return raw
     }
 
     private fun fetchText(url: String, referer: String): String {
-        return fetchBytes(normalizeCdnUrl(url), referer).toString(Charsets.UTF_8)
+        return fetchBytes(url, referer).toString(Charsets.UTF_8)
     }
 
     private fun fetchBytes(url: String, referer: String): ByteArray {
-        val fixed = normalizeCdnUrl(url)
-        val request = Request.Builder().url(fixed).get()
-            .header("Referer", referer)
-            .build()
-        ServiceCreator.downloadClient.newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} for $fixed")
-            return resp.body?.bytes() ?: throw IOException("empty body for $fixed")
+        // 先试原 URL，失败自动切 t33
+        fun tryFetch(u: String): ByteArray {
+            val req = Request.Builder().url(u).get().header("Referer", referer).build()
+            ServiceCreator.downloadClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} for $u")
+                return resp.body?.bytes() ?: throw IOException("empty body for $u")
+            }
+        }
+        try { return tryFetch(url) } catch (e: Exception) {
+            val isCdn = Regex("https?://t\\d+\\.cdn2020\\.com").containsMatchIn(url)
+            val alreadyT33 = url.contains("t33.cdn2020.com")
+            if (isCdn && !alreadyT33) {
+                val retry = url.replace(Regex("https?://t\\d+\\.cdn2020\\.com"), "https://t33.cdn2020.com")
+                Log.i(TAG, "hls cdn fail auto retry t33: $url -> $retry")
+                Diagnostics.event("hls_cdn_retry", mapOf("from" to url.take(150), "to" to retry.take(150)))
+                return tryFetch(retry)
+            }
+            throw e
         }
     }
 }

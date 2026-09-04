@@ -77,6 +77,7 @@ sealed interface HMediaKernel {
 class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMediaKernel {
     private var isActuallyPlaying = false
     private var lastBufferedPercent = -1
+    private var cdnRetried = false
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             isActuallyPlaying = isPlaying
@@ -160,8 +161,8 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             )
 
             val rawUrl = jzvd.jzDataSource.currentUrl.toString()
-            // javchu t27.cdn2020.com 已坏，统一改 t33
-            val currUrl = rawUrl.replace(Regex("https?://t\\d+\\.cdn2020\\.com"), "https://t33.cdn2020.com")
+            // 原样保留，失败再切 t33（自动检测，不预判）
+            val currUrl = rawUrl
             val isHls = currUrl.contains(".m3u8")
             val videoSource = if (isHls) {
                 HlsMediaSource.Factory(dataSourceFactory)
@@ -390,6 +391,31 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             "cause_msg" to (causeMsg ?: ""),
             "cause_stack" to causeStack.take(500),
         ))
+        // 自动检测 CDN 坏节点：tXX.cdn2020.com 失败一次自动切 t33 重试
+        val cur = runCatching { jzvd.jzDataSource.currentUrl.toString() }.getOrNull() ?: ""
+        val isCdn = Regex("https?://t\\d+\\.cdn2020\\.com").containsMatchIn(cur)
+        val alreadyT33 = cur.contains("t33.cdn2020.com")
+        if (isCdn && !alreadyT33 && !cdnRetried) {
+            val retryUrl = cur.replace(Regex("https?://t\\d+\\.cdn2020\\.com"), "https://t33.cdn2020.com")
+            Log.i(TAG, "cdn fail auto retry t33: $cur -> $retryUrl")
+            Diagnostics.event("cdn_auto_retry", mapOf("from" to cur.take(150), "to" to retryUrl.take(150)))
+            cdnRetried = true
+            // 异步切源重试
+            mMediaHandler?.post {
+                try {
+                    val ctx = jzvd.context
+                    val dsFactory = DefaultDataSource.Factory(ctx, OkHttpDataSource.Factory(ServiceCreator.hClient).setDefaultRequestProperties(jzvd.jzDataSource.headerMap))
+                    val isHls = retryUrl.contains(".m3u8")
+                    val src = if (isHls) HlsMediaSource.Factory(dsFactory).createMediaSource(MediaItem.fromUri(retryUrl)) else ProgressiveMediaSource.Factory(dsFactory).createMediaSource(MediaItem.fromUri(retryUrl))
+                    _exoPlayer?.setMediaSource(src)
+                    _exoPlayer?.prepare()
+                    _exoPlayer?.playWhenReady = true
+                    return@post
+                } catch (_: Exception) {}
+                handler?.post { jzvd.onError(1000, 1000) }
+            }
+            return
+        }
         handler?.post { jzvd.onError(1000, 1000) }
     }
 
