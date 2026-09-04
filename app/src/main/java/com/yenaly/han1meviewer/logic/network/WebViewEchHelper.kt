@@ -5,17 +5,14 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import com.liar.han1meplus.EchHttpClient
 import com.yenaly.han1meviewer.HanimeConstants
+import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 
 object WebViewEchHelper {
     private val hanimeHosts = HanimeConstants.HANIME_HOSTNAME.toSet()
 
-    private fun shouldIntercept(host: String?): Boolean {
-        if (host == null) return false
-        if (!EchHttpClient.isLoaded) return false
-        return host in hanimeHosts || host.endsWith("hanime1.me") || host.endsWith("hanime1.com") || host.endsWith("hanimeone.me") || host.endsWith("javchu.com")
-    }
+    private fun shouldIntercept(host: String?): Boolean = true
 
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
         val host = request.url.host ?: return null
@@ -60,8 +57,21 @@ object WebViewEchHelper {
             val stream = ByteArrayInputStream(bodyBytes)
             // API 21+ 6参构造支持状态码和头
             WebResourceResponse(mimeType, encoding, statusCode, "OK", responseHeaders, stream)
-        } catch (_: Exception) {
-            null // 失败回落系统 WebView
+        } catch (e: Exception) {
+            Diagnostics.event("webview_ech_failure", mapOf(
+                "host" to host,
+                "error_type" to e.javaClass.simpleName,
+                "error" to (e.message ?: "unknown"),
+            ))
+            // 目标域名失败时返回错误响应，禁止 WebView 回落自己的明文网络栈。
+            WebResourceResponse(
+                "text/plain",
+                "utf-8",
+                599,
+                "ECH request failed",
+                emptyMap(),
+                ByteArrayInputStream("ECH request failed".toByteArray()),
+            )
         }
     }
 }

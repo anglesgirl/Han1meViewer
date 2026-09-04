@@ -582,9 +582,26 @@ object NetworkRepo {
         val postBody = postResponse.optString("body").let { encoded ->
             if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
         }
-        val success = postResponse.optInt("statusCode") in 200..399 &&
-            ("LogOut" in postBody || "logout" in postBody.lowercase() ||
-                "user-modal-trigger" in postBody)
+        // POST 返回 200 不能代表登录成功；用 POST 后最新 Cookie 复核主页。
+        val verifyResponse = parseResponse(EchHttpClient.request(
+            "GET", baseUrl,
+            arrayOf(
+                "User-Agent: $USER_AGENT",
+                "Cookie: ${cookieHeader(cookies)}",
+                "Referer: $loginUrl",
+            ),
+            null, dohUrl, dohResolve
+        ))
+        val verifyBody = verifyResponse.optString("body").let { encoded ->
+            if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
+        }
+        val verifyLower = verifyBody.lowercase()
+        val hasLoginForm = verifyLower.contains("name=\"password\"") ||
+            verifyLower.contains("name='password'") ||
+            verifyLower.contains("action=\"$loginUrl")
+        val hasLoggedInMarker = listOf("log out", "logout", "登出", "退出").any { verifyLower.contains(it) }
+        val success = verifyResponse.optInt("statusCode") in 200..299 &&
+            !hasLoginForm && hasLoggedInMarker
         if (!success) {
             Log.w("NetworkRepo", "JNI 登录失败 code=${postResponse.optInt("statusCode")} bodyLen=${postBody.length}")
             throw IllegalStateException(getString(R.string.account_or_password_wrong))

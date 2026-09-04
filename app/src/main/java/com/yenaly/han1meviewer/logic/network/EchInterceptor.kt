@@ -131,8 +131,8 @@ class EchInterceptor : Interceptor {
                     "error" to (e.message ?: "unknown")
                 ))
                 if (!isEch || attempt == 1) {
-                    // 非 ECH 错误或已重试，直接回落明文（热修复期间 fail-open）
-                    return chain.proceed(request)
+                    // fail-closed：目标请求失败时不回落系统网络，避免明文 SNI。
+                    throw lastError ?: IOException("ECH request failed")
                 }
                 // ECH 失败（公钥轮换/过期）：
                 // 1) 用同一 DoH 查 cloudflare-ech.com 强制刷新全局 ECH 缓存（绕 .so 30 分钟缓存）
