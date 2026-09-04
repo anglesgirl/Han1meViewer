@@ -4,7 +4,7 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "diagnostics-foundation" ]
+    branches: [ "main", "diagnostics-foundation", "ech-isolation" ]
     paths-ignore:
       - "**.md"
   workflow_dispatch:
