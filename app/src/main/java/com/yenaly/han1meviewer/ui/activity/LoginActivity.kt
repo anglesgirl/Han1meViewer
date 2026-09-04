@@ -128,35 +128,41 @@ class LoginActivity : FrameActivity() {
                 }
 
                 private fun installNativeLoginSubmit(view: WebView) {
-                    if (loginBridgeInstalled) return
-                    loginBridgeInstalled = true
-                    view.addJavascriptInterface(object {
-                        @JavascriptInterface
-                        fun submit(email: String, password: String, token: String) {
-                            runOnUiThread { handleLogin(email, password, token) }
-                        }
-                    }, "HanimeNativeLogin")
+                    if (!loginBridgeInstalled) {
+                        loginBridgeInstalled = true
+                        view.addJavascriptInterface(object {
+                            @JavascriptInterface
+                            fun submit(email: String, password: String, token: String) {
+                                runOnUiThread { handleLogin(email, password, token) }
+                            }
+                        }, "HanimeNativeLogin")
+                    }
                     view.evaluateJavascript("""
                         (function() {
-                          var forms = document.querySelectorAll('form');
-                          for (var i = 0; i < forms.length; i++) {
-                            var f = forms[i];
-                            if (f.dataset.hanimeNativeLogin === '1') continue;
-                            var action = (f.getAttribute('action') || '').toLowerCase();
-                            if (action.indexOf('login') < 0 && !f.querySelector('input[name=email]')) continue;
+                          function bind() {
+                            var f = document.querySelector('#loginModalForm') ||
+                                    Array.prototype.find.call(document.querySelectorAll('form'), function(x) {
+                                      return (x.getAttribute('action') || '').toLowerCase().indexOf('login') >= 0 && x.querySelector('input[name=email]');
+                                    });
+                            if (!f || f.dataset.hanimeNativeLogin === '1') return;
                             f.dataset.hanimeNativeLogin = '1';
-                            f.addEventListener('submit', function(e) {
+                            function submitNative(e) {
                               e.preventDefault();
                               e.stopImmediatePropagation();
-                              var email = this.querySelector('input[name=email]');
-                              var password = this.querySelector('input[name=password]');
-                              var token = this.querySelector('input[name=_token]');
+                              var email = f.querySelector('input[name=email]');
+                              var password = f.querySelector('input[name=password]');
+                              var token = f.querySelector('input[name=_token]');
                               if (email && password && token) {
                                 HanimeNativeLogin.submit(email.value, password.value, token.value);
                               }
                               return false;
-                            }, true);
+                            }
+                            f.addEventListener('submit', submitNative, true);
+                            var button = f.querySelector('button[type=submit],input[type=submit]');
+                            if (button) button.addEventListener('click', submitNative, true);
                           }
+                          bind();
+                          if (window.MutationObserver) new MutationObserver(bind).observe(document.documentElement, {childList:true, subtree:true});
                         })();
                     """.trimIndent(), null)
                 }
