@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -98,6 +99,7 @@ class LoginActivity : FrameActivity() {
     }
 
     private var webView: WebView? = null
+    private var loginBridgeInstalled = false
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun createWebView(): WebView {
@@ -122,6 +124,41 @@ class LoginActivity : FrameActivity() {
 
                 override fun onPageFinished(view: WebView, url: String) {
                     isRefreshing = false
+                    installNativeLoginSubmit(view)
+                }
+
+                private fun installNativeLoginSubmit(view: WebView) {
+                    if (loginBridgeInstalled) return
+                    loginBridgeInstalled = true
+                    view.addJavascriptInterface(object {
+                        @JavascriptInterface
+                        fun submit(email: String, password: String, token: String) {
+                            runOnUiThread { handleLogin(email, password, token) }
+                        }
+                    }, "HanimeNativeLogin")
+                    view.evaluateJavascript("""
+                        (function() {
+                          var forms = document.querySelectorAll('form');
+                          for (var i = 0; i < forms.length; i++) {
+                            var f = forms[i];
+                            if (f.dataset.hanimeNativeLogin === '1') continue;
+                            var action = (f.getAttribute('action') || '').toLowerCase();
+                            if (action.indexOf('login') < 0 && !f.querySelector('input[name=email]')) continue;
+                            f.dataset.hanimeNativeLogin = '1';
+                            f.addEventListener('submit', function(e) {
+                              e.preventDefault();
+                              e.stopImmediatePropagation();
+                              var email = this.querySelector('input[name=email]');
+                              var password = this.querySelector('input[name=password]');
+                              var token = this.querySelector('input[name=_token]');
+                              if (email && password && token) {
+                                HanimeNativeLogin.submit(email.value, password.value, token.value);
+                              }
+                              return false;
+                            }, true);
+                          }
+                        })();
+                    """.trimIndent(), null)
                 }
 
                 override fun shouldOverrideUrlLoading(
@@ -174,10 +211,10 @@ class LoginActivity : FrameActivity() {
         webView?.destroy()
     }
 
-    private fun handleLogin(username: String, password: String) {
+    private fun handleLogin(username: String, password: String, pageToken: String? = null) {
         isLoggingIn = true
         lifecycleScope.launch {
-            NetworkRepo.login(username, password).collect { state ->
+            NetworkRepo.login(username, password, pageToken).collect { state ->
                 when (state) {
                     WebsiteState.Loading -> Unit
 
