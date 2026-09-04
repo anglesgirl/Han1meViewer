@@ -5,10 +5,14 @@ import android.widget.Button
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.liar.han1meplus.EchHttpClient
+import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HCookieJar
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.json.JSONObject
+import android.util.Base64
 
 class VerifierActivity : AppCompatActivity() {
     private lateinit var tv: TextView
@@ -32,24 +36,17 @@ class VerifierActivity : AppCompatActivity() {
             addView(sv, android.widget.LinearLayout.LayoutParams(-1,0,1f))
         }
         setContentView(root)
-        tv.text = "点按钮开始\nGo ECH 代理端口=${io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager.port}\n长按日志可复制，导出的文件在 /sdcard/Download/verifier.log 也会自动保存\n"
+        tv.text = "点按钮开始\nBoringSSL+curl 全日志\n长按日志可复制，导出存 /sdcard/Download/verifier.log\n"
     }
     private fun log(s:String){ tv.append(s+"\n"); appendToFile(s) }
     private fun appendToFile(s:String){
-        try{
-            val f = java.io.File(getExternalFilesDir(null), "verifier.log")
-            f.appendText(s+"\n")
-        }catch(_:Exception){}
-        try{
-            val f2 = java.io.File("/sdcard/Download/verifier.log")
-            f2.appendText(s+"\n")
-        }catch(_:Exception){}
+        try{ java.io.File(getExternalFilesDir(null), "verifier.log").appendText(s+"\n") }catch(_:Exception){}
+        try{ java.io.File("/sdcard/Download/verifier.log").appendText(s+"\n") }catch(_:Exception){}
     }
     private fun shareLogs(){
         val text = tv.text.toString()
         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(android.content.Intent.EXTRA_TEXT, text)
+            type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, text)
         }
         startActivity(android.content.Intent.createChooser(intent, "分享验证器日志"))
     }
@@ -60,42 +57,61 @@ class VerifierActivity : AppCompatActivity() {
     }
     private fun runTest(){
         tv.text=""
-        log("=== javchu verifier Go-ECH 全日志 ===")
+        log("=== javchu verifier BoringSSL+curl 全日志 ===")
+        log("EchHttpClient.isLoaded=${EchHttpClient.isLoaded}")
         scope.launch(Dispatchers.IO){
-            val client = okhttp3.OkHttpClient.Builder()
-                .addInterceptor(io.github.daisukikaffuchino.han1meviewer.logic.network.EchInterceptor())
-                .addInterceptor(Interceptor { chain ->
-                    val req2 = chain.request().newBuilder().removeHeader("Expect").build()
-                    // log sync (cannot suspend)
-                    android.util.Log.d("Verifier","REQ ${req2.method} ${req2.url}")
-                    val resp = chain.proceed(req2)
-                    android.util.Log.d("Verifier","RESP ${resp.code}")
-                    resp
-                })
-                .build()
-            suspend fun doReq(method:String, url:String, body: RequestBody?){
+            val dohUrl = DohConfig.resolveUrl() ?: "https://82sew1c85i.cloudflare-gateway.com/dns-query"
+            val dohHost = try { dohUrl.toHttpUrl().host } catch (_: Exception) { "82sew1c85i.cloudflare-gateway.com" }
+            val ips = DohConfig.bootstrapIps().ifEmpty { listOf("162.159.36.20","162.159.36.5") }
+            val dohResolve = "$dohHost:443:${ips.joinToString(",")}"
+            suspend fun doCurl(method:String, url:String, headers:List<String>, body:ByteArray?){
                 try{
-                    val req = Request.Builder().url(url).method(method, body).header("User-Agent","Mozilla/5.0").build()
-                    val resp = client.newCall(req).execute()
-                    val b = resp.body?.string()?.take(600)?.replace("\n"," ") ?: ""
-                    withContext(Dispatchers.Main){ log("$method $url -> ${resp.code} bodyLen=${b.length} preview=${b.take(500)}") }
+                    withContext(Dispatchers.Main){ log(">> $method $url headers=${headers.take(2)} bodyLen=${body?.size ?: 0}") }
+                    val jsonStr = EchHttpClient.request(method, url, headers.toTypedArray(), body, dohUrl, dohResolve)
+                    val json = JSONObject(jsonStr)
+                    val code = json.optInt("statusCode", 0)
+                    val echStatus = json.optString("echStatus", "")
+                    val bodyB64 = json.optString("body","")
+                    val bodyBytes = if(bodyB64.isNotEmpty()) Base64.decode(bodyB64, Base64.DEFAULT) else ByteArray(0)
+                    val preview = String(bodyBytes).take(600).replace("\n"," ")
+                    val hdrs = json.optJSONArray("headers")
+                    var setCookie = ""
+                    if(hdrs!=null) for(i in 0 until hdrs.length()){
+                        val h = hdrs.optString(i) ?: continue
+                        if(h.startsWith("set-cookie\t", true) || h.startsWith("Set-Cookie\t")) setCookie += h.substringAfter("\t").take(120)+"; "
+                    }
+                    val echLogs = json.optJSONArray("echLogs")?.let{ arr ->
+                        (0 until arr.length()).joinToString("\n"){ arr.optString(it) }
+                    } ?: ""
+                    withContext(Dispatchers.Main){
+                        log("<< $code echStatus=$echStatus setCookie=${setCookie.take(200)}")
+                        if(echLogs.isNotBlank()) log("echLogs: $echLogs")
+                        log("bodyPreview: $preview")
+                    }
                 }catch(e:Exception){
-                    withContext(Dispatchers.Main){ log("FAIL $method $url ${e.message}") }
+                    withContext(Dispatchers.Main){ log("FAIL $method $url ${e.javaClass.simpleName}: ${e.message}") }
                 }
             }
-            doReq("GET","https://javchu.com/login", null)
-            // 取 _token
+            // 1. GET login
+            doCurl("GET","https://javchu.com/login", listOf("User-Agent: Mozilla/5.0"), null)
+            // 取 token 再 POST (用 curl 取 html 再解析)
             var token=""
             try{
-                val r = client.newCall(Request.Builder().url("https://javchu.com/login").build()).execute()
-                val html = r.body?.string() ?: ""
+                val jsonStr = EchHttpClient.request("GET","https://javchu.com/login", arrayOf("User-Agent: Mozilla/5.0"), null, dohUrl, dohResolve)
+                val bodyB64 = JSONObject(jsonStr).optString("body","")
+                val html = if(bodyB64.isNotEmpty()) String(Base64.decode(bodyB64, Base64.DEFAULT)) else ""
                 token = Regex("name=\"_token\" value=\"([^\"]+)\"").find(html)?.groupValues?.get(1) ?: ""
-                withContext(Dispatchers.Main){ log("token=${token.take(20)}...") }
-            }catch(_:Exception){}
-            val form = FormBody.Builder().add("_token", token).add("email","test@example.com").add("password","123456").build()
-            doReq("POST","https://javchu.com/login", form)
-            withContext(Dispatchers.Main){ log("=== 完成，对比 HAR 看 Cookie/_token/Expect ===")}
+                withContext(Dispatchers.Main){ log("token=${token.take(30)}... len=${token.length}") }
+                // 打印 cookie Jar
+                val cookies = HCookieJar().loadForRequest("https://javchu.com/login".toHttpUrl())
+                withContext(Dispatchers.Main){ log("CookieJar for javchu: ${cookies.joinToString(";"){it.name+"="+it.value.take(20)}}") }
+            }catch(e:Exception){
+                withContext(Dispatchers.Main){ log("token parse fail ${e.message}") }
+            }
+            // 2. POST login (假账号，看是否 419 还是 302)
+            val form = "_token=${java.net.URLEncoder.encode(token,"UTF-8")}&email=test@example.com&password=123456"
+            doCurl("POST","https://javchu.com/login", listOf("User-Agent: Mozilla/5.0","Content-Type: application/x-www-form-urlencoded"), form.toByteArray())
+            withContext(Dispatchers.Main){ log("=== 完成，请分享此日志对比 HAR (Cookie/_token/Expect) ===") }
         }
     }
-    private suspend fun logOnMain(s:String)=withContext(Dispatchers.Main){ log(s) }
 }
