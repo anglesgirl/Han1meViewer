@@ -83,6 +83,8 @@ class HanimeApplication : YenalyApplication() {
         runCatching { EchHttpClient.init(this) }
             .onSuccess { Diagnostics.event("ech_native_loaded", mapOf("abi" to Build.SUPPORTED_ABIS.firstOrNull())) }
             .onFailure { Diagnostics.event("ech_native_load_failure", mapOf("error_type" to it.javaClass.simpleName)) }
+        // 本地代理 127.0.0.1:23333 解决 WebView POST Body 丢失 + 全量 ECH
+        runCatching { com.yenaly.han1meviewer.logic.network.EchProxyServer.start() }
         val appContext = applicationContext
         thread(name = "ech-native-probe") {
             val native = runCatching {

@@ -128,16 +128,21 @@ class LoginActivity : FrameActivity() {
                     view: WebView,
                     request: WebResourceRequest,
                 ): Boolean {
-                    val isSameUrl = HANIME_URL.contains(request.url.toString())
+                    val raw = request.url.toString()
+                    val real = if (raw.startsWith("http://127.0.0.1:23333/http")) raw.substringAfter("http://127.0.0.1:23333/") else raw
+                    val isSameUrl = HANIME_URL.any { real.contains(it.removeSuffix("/")) }
                     if (request.isRedirect && isSameUrl) {
-                        val url = request.url
-                        val cookieManager = CookieManager.getInstance().getCookie(url.host)
+                        val cookieManager = CookieManager.getInstance().getCookie(real) ?: CookieManager.getInstance().getCookie(request.url.host)
                         Log.d("login_cookie", cookieManager.toString())
-                        login(cookieManager)
-                        setResult(RESULT_OK)
-                        finish()
-                        return true
+                        if (!cookieManager.isNullOrEmpty()) {
+                            login(cookieManager)
+                            setResult(RESULT_OK)
+                            finish()
+                            return true
+                        }
                     }
+                    // 代理地址让 WebView 自行加载
+                    if (raw.startsWith("http://127.0.0.1:23333/")) return false
                     return super.shouldOverrideUrlLoading(view, request)
                 }
 
@@ -152,7 +157,7 @@ class LoginActivity : FrameActivity() {
                     }
                 }
             }
-            loadUrl(HANIME_LOGIN_URL)
+            loadUrl(com.yenaly.han1meviewer.logic.network.EchProxyServer.proxyUrl(HANIME_LOGIN_URL))
         }
     }
 
