@@ -522,7 +522,7 @@ object NetworkRepo {
         }
     }.flowOn(Dispatchers.IO)
 
-    fun login(email: String, password: String) = flow {
+    fun login(email: String, password: String) = flow<WebsiteState<String>> {
         emit(WebsiteState.Loading)
         val baseUrl = com.yenaly.han1meviewer.HANIME_BASE_URL
         val loginUrl = "${baseUrl}login"
@@ -561,7 +561,7 @@ object NetworkRepo {
         val html = getResponse.optString("body").let { encoded ->
             if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
         }
-        val token = pageToken?.takeIf { it.isNotBlank() } ?: Parser.extractTokenFromLoginPage(html)
+        val token = Parser.extractTokenFromLoginPage(html)
         if (cookies.isEmpty()) throw IllegalStateException("登录会话 Cookie 为空")
 
         val form = "_token=${java.net.URLEncoder.encode(token, "UTF-8")}" +
