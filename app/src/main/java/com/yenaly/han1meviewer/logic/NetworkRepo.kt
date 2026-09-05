@@ -546,6 +546,7 @@ object NetworkRepo {
                 val pair = line.substringAfter('\t').substringBefore(';').trim()
                 val name = pair.substringBefore('=', "").trim()
                 if (name.isNotEmpty() && pair.contains('=')) {
+                    // 宽松解析：直接取 name=value，不做 Cookie.parse 校验，避免因域名/路径不匹配丢掉 remember_web
                     result[name] = pair.substringAfter('=')
                 }
             }
