@@ -620,9 +620,9 @@ object NetworkRepo {
         // 后备：用新 token 直连 302 补 remember_web（验证器已跑通链路）
         val needFallback = cookies.keys.none { it.contains("remember_web", true) } && postResponse.optInt("statusCode") in 200..399
         Diagnostics.event("jni_login_fallback_enter", mapOf(
-            "need_fallback" to needFallback,
-            "has_remember" to cookies.keys.any { it.contains("remember_web", true) },
-            "post_status" to postResponse.optInt("statusCode"),
+            "need_fallback" to needFallback.toString(),
+            "has_remember" to cookies.keys.any { it.contains("remember_web", true) }.toString(),
+            "post_status" to postResponse.optInt("statusCode").toString(),
             "host" to android.net.Uri.parse(loginUrl).host,
         ))
         if (needFallback) {
@@ -656,8 +656,8 @@ object NetworkRepo {
                     }
                     Diagnostics.event("jni_login_fallback_pre", mapOf(
                         "cookie_names" to fallbackCookies.keys.joinToString(","),
-                        "has_cf" to fallbackCookies.containsKey("cf_clearance"),
-                        "has_remember" to fallbackCookies.keys.any { it.contains("remember_web", true) },
+                        "has_cf" to fallbackCookies.containsKey("cf_clearance").toString(),
+                        "has_remember" to fallbackCookies.keys.any { it.contains("remember_web", true) }.toString(),
                     ))
                     val conn = (java.net.URL(loginUrl).openConnection() as java.net.HttpURLConnection).apply {
                         requestMethod = "POST"; doOutput = true; instanceFollowRedirects = false
@@ -685,20 +685,20 @@ object NetworkRepo {
                             if (n.isNotEmpty() && pair.contains('=')) cookies[n] = pair.substringAfter('=')
                         }
                     Diagnostics.event("jni_login_remember_fallback", mapOf(
-                        "code" to dCode, "loc" to dLoc,
-                        "has_remember" to cookies.keys.any { it.contains("remember_web", true) },
+                        "code" to dCode.toString(), "loc" to dLoc,
+                        "has_remember" to cookies.keys.any { it.contains("remember_web", true) }.toString(),
                         "cookie_names" to cookies.keys.joinToString(","),
                     ))
                 } else {
                     Diagnostics.event("jni_login_remember_fallback", mapOf(
-                        "code" to -1, "loc" to "",
-                        "has_remember" to false,
+                        "code" to "-1", "loc" to "",
+                        "has_remember" to "false",
                         "error" to "fresh_token_empty",
                     ))
                 }
             } catch (e: Exception) {
                 Diagnostics.event("jni_login_remember_fallback_error", mapOf(
-                    "error" to e.message ?: e.javaClass.simpleName,
+                    "error" to (e.message ?: e.javaClass.simpleName),
                     "host" to android.net.Uri.parse(loginUrl).host,
                 ))
             }
