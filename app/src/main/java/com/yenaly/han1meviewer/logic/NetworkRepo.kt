@@ -618,7 +618,14 @@ object NetworkRepo {
         ))
         cookies.putAll(cookiesFrom(postResponse))
         // 后备：用新 token 直连 302 补 remember_web（验证器已跑通链路）
-        if (cookies.keys.none { it.contains("remember_web", true) } && postResponse.optInt("statusCode") in 200..399) {
+        val needFallback = cookies.keys.none { it.contains("remember_web", true) } && postResponse.optInt("statusCode") in 200..399
+        Diagnostics.event("jni_login_fallback_enter", mapOf(
+            "need_fallback" to needFallback,
+            "has_remember" to cookies.keys.any { it.contains("remember_web", true) },
+            "post_status" to postResponse.optInt("statusCode"),
+            "host" to android.net.Uri.parse(loginUrl).host,
+        ))
+        if (needFallback) {
             try {
                 // 1) 重新 ECH GET 拿新 token/XSRF（避免旧 token 已消耗导致 419）
                 val freshGet = parseResponse(EchHttpClient.request(
@@ -627,6 +634,8 @@ object NetworkRepo {
                     null, dohUrl, dohResolve
                 ))
                 cookies.putAll(cookiesFrom(freshGet))
+                // 显式再合并一次 cloudFlareCookie（含 cf_clearance），防被覆盖
+                cookies.putAll(cookieMap(Preferences.cloudFlareCookie.cookie))
                 val freshHtml = freshGet.optString("body").let { e ->
                     if (e.isBlank()) "" else String(Base64.decode(e, Base64.DEFAULT))
                 }
@@ -640,15 +649,25 @@ object NetworkRepo {
                         "&password=${java.net.URLEncoder.encode(password, "UTF-8")}" +
                         "&remember=1"
                     // 2) 直连 POST，不跟跳转，拿 302 的 Set-Cookie（含 remember_web）
+                    // 完全复制验证器的头部，确保 cf_clearance 等随行
+                    val fallbackCookies = LinkedHashMap<String, String>().apply {
+                        putAll(cookies)
+                        putAll(cookieMap(Preferences.cloudFlareCookie.cookie)) // 强制带上 cf_clearance
+                    }
+                    Diagnostics.event("jni_login_fallback_pre", mapOf(
+                        "cookie_names" to fallbackCookies.keys.joinToString(","),
+                        "has_cf" to fallbackCookies.containsKey("cf_clearance"),
+                        "has_remember" to fallbackCookies.keys.any { it.contains("remember_web", true) },
+                    ))
                     val conn = (java.net.URL(loginUrl).openConnection() as java.net.HttpURLConnection).apply {
                         requestMethod = "POST"; doOutput = true; instanceFollowRedirects = false
                         connectTimeout = 15000; readTimeout = 15000
-                        setRequestProperty("User-Agent", USER_AGENT)
+                        setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36")
                         setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
                         setRequestProperty("Accept", "text/html,application/xhtml+xml")
-                        setRequestProperty("Origin", baseUrl.removeSuffix("/"))
+                        setRequestProperty("Origin", "https://${android.net.Uri.parse(loginUrl).host}")
                         setRequestProperty("Referer", loginUrl)
-                        setRequestProperty("Cookie", cookieHeader(cookies))
+                        setRequestProperty("Cookie", cookieHeader(fallbackCookies))
                         if (freshXsrf.isNotBlank()) {
                             setRequestProperty("X-XSRF-TOKEN", freshXsrf)
                             setRequestProperty("X-CSRF-TOKEN", freshToken)
@@ -670,8 +689,19 @@ object NetworkRepo {
                         "has_remember" to cookies.keys.any { it.contains("remember_web", true) },
                         "cookie_names" to cookies.keys.joinToString(","),
                     ))
+                } else {
+                    Diagnostics.event("jni_login_remember_fallback", mapOf(
+                        "code" to -1, "loc" to "",
+                        "has_remember" to false,
+                        "error" to "fresh_token_empty",
+                    ))
                 }
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                Diagnostics.event("jni_login_remember_fallback_error", mapOf(
+                    "error" to e.message ?: e.javaClass.simpleName,
+                    "host" to android.net.Uri.parse(loginUrl).host,
+                ))
+            }
         }
         val postFinalUrl = postResponse.optString("url", loginUrl)
         val postStatus = postResponse.optInt("statusCode")
