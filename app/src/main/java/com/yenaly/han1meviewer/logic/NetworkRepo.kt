@@ -617,11 +617,10 @@ object NetworkRepo {
             form.toByteArray(Charsets.UTF_8), dohUrl, dohResolve
         ))
         cookies.putAll(cookiesFrom(postResponse))
-        // 后备直连已被 CF 403（日志 code=403），拿不到持久标识反而暴露明文，只走加密链路；
-        // 等底层累积跳转全量饼干后删整段。
-        val ALLOW_DIRECT_FALLBACK = false
-        if (ALLOW_DIRECT_FALLBACK && cookies.keys.none { it.contains("remember_web", true) } && postResponse.optInt("statusCode") in 200..399) {
+        // 后备：用新 token 直连 302 补 remember_web（验证器已跑通链路）
+        if (cookies.keys.none { it.contains("remember_web", true) } && postResponse.optInt("statusCode") in 200..399) {
             try {
+                // 1) 重新 ECH GET 拿新 token/XSRF（避免旧 token 已消耗导致 419）
                 val freshGet = parseResponse(EchHttpClient.request(
                     "GET", loginUrl,
                     arrayOf("User-Agent: $USER_AGENT", "Cookie: ${cookieHeader(cookies)}"),
@@ -640,6 +639,7 @@ object NetworkRepo {
                         "&email=${java.net.URLEncoder.encode(email, "UTF-8")}" +
                         "&password=${java.net.URLEncoder.encode(password, "UTF-8")}" +
                         "&remember=1"
+                    // 2) 直连 POST，不跟跳转，拿 302 的 Set-Cookie（含 remember_web）
                     val conn = (java.net.URL(loginUrl).openConnection() as java.net.HttpURLConnection).apply {
                         requestMethod = "POST"; doOutput = true; instanceFollowRedirects = false
                         connectTimeout = 15000; readTimeout = 15000
