@@ -41,9 +41,11 @@ class EchInterceptor : Interceptor {
             headers.add("$name: $value")
         }
         // 手动注入 Cookie（因为我们短路了 OkHttp 的 CookieJar）
+        var injectedCookieNames = request.header("Cookie")?.split(";")?.map { it.substringBefore("=").trim() }?.joinToString(",").orEmpty()
         if (request.header("Cookie") == null) {
             val cookies = HCookieJar().loadForRequest(request.url)
             if (cookies.isNotEmpty()) {
+                injectedCookieNames = cookies.joinToString(",") { it.name }
                 val cookieHeader = cookies.joinToString("; ") { "${it.name}=${it.value}" }
                 headers.add("Cookie: $cookieHeader")
             }
@@ -112,7 +114,8 @@ class EchInterceptor : Interceptor {
                 "host" to host,
                 "status" to statusCode,
                 "ech_status" to echStatus,
-                "method" to method
+                "method" to method,
+                "cookie_names" to injectedCookieNames,
             ))
             PostHogManager.track("ech_success", mapOf("host" to host))
             if (echLogs != null && echLogs.length() > 0) {
