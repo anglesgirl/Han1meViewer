@@ -616,8 +616,10 @@ object NetworkRepo {
             form.toByteArray(Charsets.UTF_8), dohUrl, dohResolve
         ))
         cookies.putAll(cookiesFrom(postResponse))
-        // 后备：so 的 302 clear 会丢 remember_web，用新 token 直连 302 补抓
-        if (cookies.keys.none { it.contains("remember_web", true) } && postResponse.optInt("statusCode") in 200..399) {
+        // 后备直连已被 CF 403（日志 code=403），拿不到持久标识反而暴露明文，只走加密链路；
+        // 等底层累积跳转全量饼干后删整段。
+        val ALLOW_DIRECT_FALLBACK = false
+        if (ALLOW_DIRECT_FALLBACK && cookies.keys.none { it.contains("remember_web", true) } && postResponse.optInt("statusCode") in 200..399) {
             try {
                 val freshGet = parseResponse(EchHttpClient.request(
                     "GET", loginUrl,
