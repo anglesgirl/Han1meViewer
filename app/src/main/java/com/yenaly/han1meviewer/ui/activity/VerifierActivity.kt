@@ -19,6 +19,7 @@ import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 import android.util.Base64
+import java.security.MessageDigest
 
 class VerifierActivity : AppCompatActivity() {
     private lateinit var tv: TextView
@@ -107,6 +108,23 @@ class VerifierActivity : AppCompatActivity() {
             if (part.contains('=')) "$name=[REDACTED]" else part.trim()
         }
 
+    private fun responseFeatures(json: JSONObject, body: String): String {
+        val lower = body.lowercase()
+        val headers = json.optJSONArray("headers")
+        val locations = mutableListOf<String>()
+        if (headers != null) for (i in 0 until headers.length()) {
+            val raw = headers.optString(i)
+            if (raw.substringBefore('\t').equals("location", true)) locations += "present"
+        }
+        val hash = MessageDigest.getInstance("SHA-256")
+            .digest(body.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return "features bodyLen=${body.length} sha256=$hash " +
+            "authFailed=${lower.contains("auth.failed")} " +
+            "loginForm=${lower.contains("name=\"password\"") || lower.contains("name='password'")} " +
+            "userNode=${lower.contains("user-modal-name")} location=${locations.isNotEmpty()}"
+    }
+
     private fun runTest(email: String, password: String){
         if (email.isBlank() || password.isBlank()) {
             android.widget.Toast.makeText(this, "请填写电邮和密码", android.widget.Toast.LENGTH_SHORT).show()
@@ -186,7 +204,7 @@ class VerifierActivity : AppCompatActivity() {
                         log("POST响应 Set-Cookie=${extractCookies(postJson).keys.joinToString(",")}")
                         val postB64 = postJson.optString("body", "")
                         val postBody = if (postB64.isNotEmpty()) String(Base64.decode(postB64, Base64.DEFAULT)) else ""
-                        log("bodyPreview: ${postBody.take(600).replace("\\n", " ")}")
+                        log("${responseFeatures(postJson, postBody)}")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) { log("POST失败 ${e.javaClass.simpleName}: ${e.message}") }
