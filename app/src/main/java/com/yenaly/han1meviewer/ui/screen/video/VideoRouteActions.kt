@@ -191,10 +191,14 @@ class VideoRouteActions(
         withContext(Dispatchers.IO) {
             HCacheManager.saveHanimeVideoInfo(context, viewModel.videoCode, videoData)
         }
+        val downloadLink = videoData.videoUrls[quality]?.link?.replace(
+            Regex("https?://t\\d+\\.cdn2020\\.com", RegexOption.IGNORE_CASE),
+            "https://t33.cdn2020.com",
+        )
         HanimeDownloadManagerV2.addTask(
             HanimeDownloadWorker.Args(
                 quality = quality,
-                downloadUrl = videoData.videoUrls[quality]?.link,
+                downloadUrl = downloadLink,
                 videoType = videoData.videoUrls[quality]?.suffix,
                 hanimeName = videoData.title,
                 videoCode = viewModel.videoCode,

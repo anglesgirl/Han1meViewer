@@ -21,6 +21,7 @@ import com.yenaly.han1meviewer.logic.model.VideoCommentArgs
 import com.yenaly.han1meviewer.logic.model.VideoComments
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HUpdater
+import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.yenaly.han1meviewer.logic.network.HanimeNetwork
 import com.yenaly.han1meviewer.logic.state.PageLoadingState
 import com.yenaly.han1meviewer.logic.state.VideoLoadingState
@@ -558,6 +559,12 @@ object NetworkRepo {
             "GET", loginUrl, arrayOf("User-Agent: $USER_AGENT"), null, dohUrl, dohResolve
         ))
         val cookies = cookiesFrom(getResponse)
+        Diagnostics.event("jni_login_get", mapOf(
+            "host" to (android.net.Uri.parse(loginUrl).host ?: "unknown"),
+            "status" to getResponse.optInt("statusCode"),
+            "ech_status" to getResponse.optString("echStatus"),
+            "cookie_names" to cookies.keys.joinToString(","),
+        ))
         val html = getResponse.optString("body").let { encoded ->
             if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
         }

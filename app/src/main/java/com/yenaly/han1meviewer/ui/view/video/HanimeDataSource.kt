@@ -7,6 +7,9 @@ import com.yenaly.han1meviewer.USER_AGENT
 
 class HanimeDataSource : JZDataSource {
 
+    private fun normalizeCdnUrl(url: String): String =
+        url.replace(Regex("https?://t\\d+\\.cdn2020\\.com", RegexOption.IGNORE_CASE), "https://t33.cdn2020.com")
+
     private val urlsList = mutableListOf<Map.Entry<Any?, Any?>>()
 
     @Suppress("UNCHECKED_CAST")
@@ -15,7 +18,7 @@ class HanimeDataSource : JZDataSource {
         urlsList.clear()
         this.urlsMap.also { map ->
             map.clear()
-            resolutionLinkMap.mapValuesTo(map) { it.value.link }
+            resolutionLinkMap.mapValuesTo(map) { normalizeCdnUrl(it.value.link) }
             urlsList.addAll(map.entries as Set<Map.Entry<Any?, Any?>>)
         }
         this.title = title
