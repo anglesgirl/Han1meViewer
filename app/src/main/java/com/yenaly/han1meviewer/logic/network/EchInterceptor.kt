@@ -63,60 +63,60 @@ class EchInterceptor : Interceptor {
         repeat(2) { attempt ->
             try {
                 val jsonStr = EchHttpClient.request(method, request.url.toString(), headers.toTypedArray(), bodyBytes, dohUrl, dohResolve)
-            val json = JSONObject(jsonStr)
-            val statusCode = json.optInt("statusCode", 200)
-            val bodyBase64 = json.optString("body", "")
-            val echStatus = json.optString("echStatus", "")
-            val headersJson = json.optJSONArray("headers")
-            val echLogs = json.optJSONArray("echLogs")
+                        val json = JSONObject(jsonStr)
+                        val statusCode = json.optInt("statusCode", 200)
+                        val bodyBase64 = json.optString("body", "")
+                        val echStatus = json.optString("echStatus", "")
+                        val headersJson = json.optJSONArray("headers")
+                        val echLogs = json.optJSONArray("echLogs")
 
-            val bodyBytesDecoded = if (bodyBase64.isNotEmpty()) Base64.decode(bodyBase64, Base64.DEFAULT) else ByteArray(0)
-            val contentType = headersJson?.let { arr ->
-                for (i in 0 until arr.length()) {
-                    val h = arr.optString(i) ?: continue
-                    val idx = h.indexOf('\t')
-                    if (idx > 0 && h.substring(0, idx).equals("content-type", true)) return@let h.substring(idx+1)
-                }
-                null
-            }?.toMediaTypeOrNull()
+                        val bodyBytesDecoded = if (bodyBase64.isNotEmpty()) Base64.decode(bodyBase64, Base64.DEFAULT) else ByteArray(0)
+                        val contentType = headersJson?.let { arr ->
+                            for (i in 0 until arr.length()) {
+                                val h = arr.optString(i) ?: continue
+                                val idx = h.indexOf('\t')
+                                if (idx > 0 && h.substring(0, idx).equals("content-type", true)) return@let h.substring(idx+1)
+                            }
+                            null
+                        }?.toMediaTypeOrNull()
 
-            val responseBody = bodyBytesDecoded.toResponseBody(contentType)
+                        val responseBody = bodyBytesDecoded.toResponseBody(contentType)
 
-            val builder = Response.Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(statusCode)
-                .message(echStatus.ifEmpty { "OK" })
-                .body(responseBody)
+                        val builder = Response.Builder()
+                            .request(request)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(statusCode)
+                            .message(echStatus.ifEmpty { "OK" })
+                            .body(responseBody)
 
-            // 添加响应头并处理 Set-Cookie
-            val responseHeaders = Headers.Builder()
-            val cookiesToSave = mutableListOf<Cookie>()
-            if (headersJson != null) {
-                for (i in 0 until headersJson.length()) {
-                    val h = headersJson.optString(i) ?: continue
-                    val idx = h.indexOf('\t')
-                    if (idx <= 0) continue
-                    val name = h.substring(0, idx)
-                    val value = h.substring(idx+1)
-                    responseHeaders.add(name, value)
-                    if (name.equals("set-cookie", true)) {
-                        Cookie.parse(request.url, value)?.let { cookiesToSave.add(it) }
-                    }
-                }
-            }
-            if (cookiesToSave.isNotEmpty()) {
-                HCookieJar().saveFromResponse(request.url, cookiesToSave)
-            }
-            builder.headers(responseHeaders.build())
+                        // 添加响应头并处理 Set-Cookie（保留重定向链上的所有 set-cookie）
+                        val responseHeaders = Headers.Builder()
+                        val cookiesToSave = mutableListOf<Cookie>()
+                        if (headersJson != null) {
+                            for (i in 0 until headersJson.length()) {
+                                val h = headersJson.optString(i) ?: continue
+                                val idx = h.indexOf('\t')
+                                if (idx <= 0) continue
+                                val name = h.substring(0, idx)
+                                val value = h.substring(idx+1)
+                                responseHeaders.add(name, value)
+                                if (name.equals("set-cookie", true)) {
+                                    Cookie.parse(request.url, value)?.let { cookiesToSave.add(it) }
+                                }
+                            }
+                        }
+                        if (cookiesToSave.isNotEmpty()) {
+                            HCookieJar().saveFromResponse(request.url, cookiesToSave)
+                        }
+                        builder.headers(responseHeaders.build())
 
-            Diagnostics.event("ech_intercept", mapOf(
-                "host" to host,
-                "status" to statusCode,
-                "ech_status" to echStatus,
-                "method" to method,
-                "cookie_names" to injectedCookieNames,
-            ))
+                        Diagnostics.event("ech_intercept", mapOf(
+                            "host" to host,
+                            "status" to statusCode,
+                            "ech_status" to echStatus,
+                            "method" to method,
+                            "cookie_names" to injectedCookieNames,
+                        ))
             PostHogManager.track("ech_success", mapOf("host" to host))
             if (echLogs != null && echLogs.length() > 0) {
                 // 只取最后一条日志避免刷屏
