@@ -88,3 +88,14 @@ jobs:
           path: |
             app/build/outputs/apk/release/Han1meViewer-v*.apk
             app/build/outputs/apk/debug/Han1meViewer-v*.apk
+
+      - name: Notify build result
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          BUILD_STATUS: ${{ job.status }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash .github/scripts/notify-build-result.sh
