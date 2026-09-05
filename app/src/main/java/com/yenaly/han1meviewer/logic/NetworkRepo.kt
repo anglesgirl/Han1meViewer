@@ -569,11 +569,21 @@ object NetworkRepo {
             if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
         }
         val token = Parser.extractTokenFromLoginPage(html)
+        Diagnostics.event("jni_login_token", mapOf(
+            "host" to (android.net.Uri.parse(loginUrl).host ?: "unknown"),
+            "token_len" to token.length,
+            "body_len" to html.length,
+        ))
         if (cookies.isEmpty()) throw IllegalStateException("登录会话 Cookie 为空")
 
         val form = "_token=${java.net.URLEncoder.encode(token, "UTF-8")}" +
             "&email=${java.net.URLEncoder.encode(email, "UTF-8")}" +
             "&password=${java.net.URLEncoder.encode(password, "UTF-8")}"
+        Diagnostics.event("jni_login_post_start", mapOf(
+            "host" to (android.net.Uri.parse(loginUrl).host ?: "unknown"),
+            "body_len" to form.toByteArray(Charsets.UTF_8).size,
+            "cookie_names" to cookies.keys.joinToString(","),
+        ))
         val postResponse = parseResponse(EchHttpClient.request(
             "POST", loginUrl,
             arrayOf(
@@ -586,6 +596,12 @@ object NetworkRepo {
             form.toByteArray(Charsets.UTF_8), dohUrl, dohResolve
         ))
         cookies.putAll(cookiesFrom(postResponse))
+        Diagnostics.event("jni_login_post_result", mapOf(
+            "host" to (android.net.Uri.parse(loginUrl).host ?: "unknown"),
+            "status" to postResponse.optInt("statusCode"),
+            "ech_status" to postResponse.optString("echStatus"),
+            "cookie_names" to cookies.keys.joinToString(","),
+        ))
         val postBody = postResponse.optString("body").let { encoded ->
             if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
         }
@@ -607,6 +623,13 @@ object NetworkRepo {
             verifyLower.contains("name='password'") ||
             verifyLower.contains("action=\"$loginUrl")
         val hasLoggedInMarker = listOf("log out", "logout", "登出", "退出").any { verifyLower.contains(it) }
+        Diagnostics.event("jni_login_verify_result", mapOf(
+            "host" to (android.net.Uri.parse(baseUrl).host ?: "unknown"),
+            "status" to verifyResponse.optInt("statusCode"),
+            "body_len" to verifyBody.length,
+            "has_login_form" to hasLoginForm,
+            "has_logged_in_marker" to hasLoggedInMarker,
+        ))
         val success = verifyResponse.optInt("statusCode") in 200..299 &&
             !hasLoginForm && hasLoggedInMarker
         if (!success) {
@@ -616,6 +639,10 @@ object NetworkRepo {
         Log.i("NetworkRepo", "JNI 登录成功 code=${postResponse.optInt("statusCode")} cookieNames=${cookies.keys}")
         emit(WebsiteState.Success(cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }))
     }.catch { e ->
+        Diagnostics.event("jni_login_exception", mapOf(
+            "error_type" to e.javaClass.simpleName,
+            "error" to (e.message ?: "unknown"),
+        ))
         emit(WebsiteState.Error(handleException(e)))
     }.flowOn(Dispatchers.IO)
 
