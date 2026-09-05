@@ -554,16 +554,27 @@ object NetworkRepo {
         fun cookieHeader(cookies: Map<String, String>) =
             cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
 
+        fun cookieMap(raw: String): LinkedHashMap<String, String> {
+            val result = linkedMapOf<String, String>()
+            raw.split(';').forEach { item ->
+                val name = item.substringBefore('=', "").trim()
+                if (name.isNotEmpty() && item.contains('=')) result[name] = item.substringAfter('=')
+            }
+            return result
+        }
+
         if (!EchHttpClient.isLoaded) EchHttpClient.init(applicationContext)
         val getResponse = parseResponse(EchHttpClient.request(
             "GET", loginUrl, arrayOf("User-Agent: $USER_AGENT"), null, dohUrl, dohResolve
         ))
         val cookies = cookiesFrom(getResponse)
+        cookies.putAll(cookieMap(Preferences.cloudFlareCookie.cookie))
         Diagnostics.event("jni_login_get", mapOf(
             "host" to (android.net.Uri.parse(loginUrl).host ?: "unknown"),
             "status" to getResponse.optInt("statusCode"),
             "ech_status" to getResponse.optString("echStatus"),
             "cookie_names" to cookies.keys.joinToString(","),
+            "has_cf_clearance" to cookies.containsKey("cf_clearance"),
         ))
         val html = getResponse.optString("body").let { encoded ->
             if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
@@ -576,26 +587,89 @@ object NetworkRepo {
         ))
         if (cookies.isEmpty()) throw IllegalStateException("登录会话 Cookie 为空")
 
+        val xsrfDecoded = try {
+            java.net.URLDecoder.decode(cookies["XSRF-TOKEN"].orEmpty(), "UTF-8")
+        } catch (_: Exception) { cookies["XSRF-TOKEN"].orEmpty() }
         val form = "_token=${java.net.URLEncoder.encode(token, "UTF-8")}" +
             "&email=${java.net.URLEncoder.encode(email, "UTF-8")}" +
-            "&password=${java.net.URLEncoder.encode(password, "UTF-8")}"
+            "&password=${java.net.URLEncoder.encode(password, "UTF-8")}" +
+            "&remember=1"
         Diagnostics.event("jni_login_post_start", mapOf(
             "host" to (android.net.Uri.parse(loginUrl).host ?: "unknown"),
             "body_len" to form.toByteArray(Charsets.UTF_8).size,
             "cookie_names" to cookies.keys.joinToString(","),
         ))
+        val postHeaders = mutableListOf(
+            "User-Agent: $USER_AGENT",
+            "Content-Type: application/x-www-form-urlencoded",
+            "Cookie: ${cookieHeader(cookies)}",
+            "Referer: $loginUrl",
+            "Origin: ${baseUrl.removeSuffix("/")}",
+        )
+        if (xsrfDecoded.isNotBlank()) {
+            postHeaders += "X-XSRF-TOKEN: $xsrfDecoded"
+            postHeaders += "X-CSRF-TOKEN: $token"
+        }
         val postResponse = parseResponse(EchHttpClient.request(
             "POST", loginUrl,
-            arrayOf(
-                "User-Agent: $USER_AGENT",
-                "Content-Type: application/x-www-form-urlencoded",
-                "Cookie: ${cookieHeader(cookies)}",
-                "Referer: $loginUrl",
-                "Origin: ${baseUrl.removeSuffix("/")}",
-            ),
+            postHeaders.toTypedArray(),
             form.toByteArray(Charsets.UTF_8), dohUrl, dohResolve
         ))
         cookies.putAll(cookiesFrom(postResponse))
+        // 后备：so 的 302 clear 会丢 remember_web，用新 token 直连 302 补抓
+        if (cookies.keys.none { it.contains("remember_web", true) } && postResponse.optInt("statusCode") in 200..399) {
+            try {
+                val freshGet = parseResponse(EchHttpClient.request(
+                    "GET", loginUrl,
+                    arrayOf("User-Agent: $USER_AGENT", "Cookie: ${cookieHeader(cookies)}"),
+                    null, dohUrl, dohResolve
+                ))
+                cookies.putAll(cookiesFrom(freshGet))
+                val freshHtml = freshGet.optString("body").let { e ->
+                    if (e.isBlank()) "" else String(Base64.decode(e, Base64.DEFAULT))
+                }
+                val freshToken = Parser.extractTokenFromLoginPage(freshHtml)
+                if (freshToken.isNotBlank()) {
+                    val freshXsrf = try {
+                        java.net.URLDecoder.decode(cookies["XSRF-TOKEN"].orEmpty(), "UTF-8")
+                    } catch (_: Exception) { cookies["XSRF-TOKEN"].orEmpty() }
+                    val freshForm = "_token=${java.net.URLEncoder.encode(freshToken, "UTF-8")}" +
+                        "&email=${java.net.URLEncoder.encode(email, "UTF-8")}" +
+                        "&password=${java.net.URLEncoder.encode(password, "UTF-8")}" +
+                        "&remember=1"
+                    val conn = (java.net.URL(loginUrl).openConnection() as java.net.HttpURLConnection).apply {
+                        requestMethod = "POST"; doOutput = true; instanceFollowRedirects = false
+                        connectTimeout = 15000; readTimeout = 15000
+                        setRequestProperty("User-Agent", USER_AGENT)
+                        setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                        setRequestProperty("Accept", "text/html,application/xhtml+xml")
+                        setRequestProperty("Origin", baseUrl.removeSuffix("/"))
+                        setRequestProperty("Referer", loginUrl)
+                        setRequestProperty("Cookie", cookieHeader(cookies))
+                        if (freshXsrf.isNotBlank()) {
+                            setRequestProperty("X-XSRF-TOKEN", freshXsrf)
+                            setRequestProperty("X-CSRF-TOKEN", freshToken)
+                        }
+                    }
+                    conn.outputStream.use { it.write(freshForm.toByteArray(Charsets.UTF_8)) }
+                    val dCode = conn.responseCode
+                    val dLoc = conn.getHeaderField("Location").orEmpty()
+                    conn.headerFields.entries
+                        .filter { it.key?.equals("set-cookie", true) == true }
+                        .flatMap { it.value }
+                        .forEach { raw ->
+                            val pair = raw.substringBefore(';').trim()
+                            val n = pair.substringBefore('=', "").trim()
+                            if (n.isNotEmpty() && pair.contains('=')) cookies[n] = pair.substringAfter('=')
+                        }
+                    Diagnostics.event("jni_login_remember_fallback", mapOf(
+                        "code" to dCode, "loc" to dLoc,
+                        "has_remember" to cookies.keys.any { it.contains("remember_web", true) },
+                        "cookie_names" to cookies.keys.joinToString(","),
+                    ))
+                }
+            } catch (_: Exception) { }
+        }
         val postFinalUrl = postResponse.optString("url", loginUrl)
         val postStatus = postResponse.optInt("statusCode")
         Diagnostics.event("jni_login_post_result", mapOf(
