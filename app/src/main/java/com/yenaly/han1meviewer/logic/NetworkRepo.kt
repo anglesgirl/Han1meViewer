@@ -697,6 +697,9 @@ object NetworkRepo {
         }
         val finalPath = android.net.Uri.parse(postFinalUrl).path.orEmpty()
         val redirectedBackToLogin = finalPath == "/login" || finalPath.startsWith("/login?")
+        val verifyLower = verifyBody.lowercase()
+        val hasUserMarker = verifyLower.contains("logout") || verifyLower.contains("user-modal-name") ||
+            verifyLower.contains("user-modal-trigger") || verifyLower.contains("登出")
         val success = postStatus in 200..399 && !redirectedBackToLogin
         Diagnostics.event("jni_login_verify_result", mapOf(
             "host" to (android.net.Uri.parse(baseUrl).host ?: "unknown"),
@@ -704,6 +707,7 @@ object NetworkRepo {
             "body_len" to verifyBody.length,
             "post_final_path" to finalPath,
             "redirected_back_to_login" to redirectedBackToLogin,
+            "has_user_marker" to hasUserMarker,
         ))
         if (!success) {
             Log.w("NetworkRepo", "JNI 登录失败 code=${postResponse.optInt("statusCode")} bodyLen=${postBody.length}")
