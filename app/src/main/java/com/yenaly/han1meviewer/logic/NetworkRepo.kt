@@ -596,9 +596,12 @@ object NetworkRepo {
             form.toByteArray(Charsets.UTF_8), dohUrl, dohResolve
         ))
         cookies.putAll(cookiesFrom(postResponse))
+        val postFinalUrl = postResponse.optString("url", loginUrl)
+        val postStatus = postResponse.optInt("statusCode")
         Diagnostics.event("jni_login_post_result", mapOf(
             "host" to (android.net.Uri.parse(loginUrl).host ?: "unknown"),
-            "status" to postResponse.optInt("statusCode"),
+            "status" to postStatus,
+            "final_path" to (android.net.Uri.parse(postFinalUrl).path ?: "/"),
             "ech_status" to postResponse.optString("echStatus"),
             "cookie_names" to cookies.keys.joinToString(","),
         ))
@@ -618,20 +621,16 @@ object NetworkRepo {
         val verifyBody = verifyResponse.optString("body").let { encoded ->
             if (encoded.isBlank()) "" else String(Base64.decode(encoded, Base64.DEFAULT))
         }
-        val verifyLower = verifyBody.lowercase()
-        val hasLoginForm = verifyLower.contains("name=\"password\"") ||
-            verifyLower.contains("name='password'") ||
-            verifyLower.contains("action=\"$loginUrl")
-        val hasLoggedInMarker = listOf("log out", "logout", "登出", "退出").any { verifyLower.contains(it) }
+        val finalPath = android.net.Uri.parse(postFinalUrl).path.orEmpty()
+        val redirectedBackToLogin = finalPath == "/login" || finalPath.startsWith("/login?")
+        val success = postStatus in 200..399 && !redirectedBackToLogin
         Diagnostics.event("jni_login_verify_result", mapOf(
             "host" to (android.net.Uri.parse(baseUrl).host ?: "unknown"),
             "status" to verifyResponse.optInt("statusCode"),
             "body_len" to verifyBody.length,
-            "has_login_form" to hasLoginForm,
-            "has_logged_in_marker" to hasLoggedInMarker,
+            "post_final_path" to finalPath,
+            "redirected_back_to_login" to redirectedBackToLogin,
         ))
-        val success = verifyResponse.optInt("statusCode") in 200..299 &&
-            !hasLoginForm && hasLoggedInMarker
         if (!success) {
             Log.w("NetworkRepo", "JNI 登录失败 code=${postResponse.optInt("statusCode")} bodyLen=${postBody.length}")
             throw IllegalStateException(getString(R.string.account_or_password_wrong))
