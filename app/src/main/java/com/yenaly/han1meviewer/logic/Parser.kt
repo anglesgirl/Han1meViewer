@@ -8,6 +8,7 @@ import com.yenaly.han1meviewer.HanimeResolution
 import com.yenaly.han1meviewer.LOCAL_DATE_FORMAT
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.Preferences.isAlreadyLogin
+import com.yenaly.han1meviewer.diagnostics.Diagnostics
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.exception.LoginStateExpiredException
 import com.yenaly.han1meviewer.logic.exception.ParseException
@@ -68,6 +69,11 @@ object Parser {
         val userHomePageLink = parseBody.getElementById("user-modal-trigger")?.attr("href")?:""
 
         if (isAlreadyLogin && isLoginStateExpired(userHomePageLink, username)) {
+            Diagnostics.event("homepage_auth_check", mapOf(
+                "link_blank" to userHomePageLink.isBlank(),
+                "link_login" to userHomePageLink.contains("/login"),
+                "has_name" to !username.isNullOrBlank(),
+            ))
             return WebsiteState.Error(LoginStateExpiredException(getString(R.string.login_state_expired)))
         }
 
