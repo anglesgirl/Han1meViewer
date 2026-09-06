@@ -53,21 +53,6 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      - name: Build native libhan1me_ech.so
-        run: |
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          cd app/src/main/cpp/ssl
-          cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-                -DANDROID_ABI=arm64-v8a \
-                -DANDROID_PLATFORM=android-27 \
-                -DCMAKE_BUILD_TYPE=Release \
-                -B build
-          cmake --build build --target han1me_ech -j$(nproc)
-          mkdir -p ../../../assets/han1meplus/arm64-v8a
-          cp build/libhan1me_ech.so ../../../assets/han1meplus/arm64-v8a/
-          echo "Native lib copied to assets"
-          ls -la ../../../assets/han1meplus/arm64-v8a/
-
       - name: Build APK
         run: |
           set +e
