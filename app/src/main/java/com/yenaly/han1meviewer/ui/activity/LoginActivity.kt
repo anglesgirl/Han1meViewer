@@ -134,6 +134,20 @@ class LoginActivity : FrameActivity() {
                         finish()
                         return true
                     }
+                    // 防逃逸:主框架 GET 导航(链接/跳转)全部收进代理。
+                    // 污染内容曾把页面带向 hanime.tv,之后流量全走直连。
+                    // POST 表单提交放行(代理包法会丢 body,老坑)。
+                    val u = request.url
+                    if (u.host != "127.0.0.1" &&
+                        (u.scheme == "https" || u.scheme == "http") &&
+                        request.method == "GET" && request.isForMainFrame
+                    ) {
+                        val proxied = EchProxyManager.proxyUrl(u.toString())
+                        if (proxied != null) {
+                            view.loadUrl(proxied)
+                            return true
+                        }
+                    }
                     return super.shouldOverrideUrlLoading(view, request)
                 }
 
