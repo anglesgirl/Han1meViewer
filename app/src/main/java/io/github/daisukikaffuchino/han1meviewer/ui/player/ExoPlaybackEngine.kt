@@ -12,7 +12,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import io.github.daisukikaffuchino.han1meviewer.logic.network.HDns
+import okhttp3.OkHttpClient
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
@@ -183,7 +185,13 @@ class ExoPlaybackEngine(
     }
 
     private fun createMediaSource(request: PlaybackRequest): MediaSource {
-        val httpFactory = DefaultHttpDataSource.Factory()
+        // 播放器直连:DoH 去污染足够,不需要 ECH。
+        // NO_PROXY 绕过系统 ECH 代理,DNS 走 HDns(DoH),TLS 直连(真实 SNI)。
+        val directClient = OkHttpClient.Builder()
+            .proxy(java.net.Proxy.NO_PROXY)
+            .dns(HDns())
+            .build()
+        val httpFactory = OkHttpDataSource.Factory(directClient)
             .setUserAgent(USER_AGENT)
             .setDefaultRequestProperties(request.headers)
         val dataSourceFactory = DefaultDataSource.Factory(appContext, httpFactory)

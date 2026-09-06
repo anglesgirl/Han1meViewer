@@ -6,10 +6,9 @@
 // gomobile-exported surface (basic types only):
 //
 //	IsAs13335(doh, host) bool
-//	Start(listen, target, echB64, doh, ipList, cachePath string, insecure bool) error
+//	Start(listen, target, echB64, doh, cachePath string, insecure bool) error
 //	Stop() error
 //	LastStatus() string
-//	FetchTxt(doh, name) (string, error)
 package echproxy
 
 import (
@@ -56,9 +55,7 @@ var (
 	configInfo  string   // where the ECH config came from
 	dnsInfo     string   // how the upstream IPs were resolved
 	shakeInfo   string   // last TLS handshake result (ECHAccepted=…)
-	upstreamIPs []string // DoH-resolved upstream addresses, IPv4 first
-	customIPs   []string // user-supplied edge IPs, tried before everything else
-	fallbackECH []byte   // operator-published ECHConfigList for AS13335 targets
+	fallbackECH []byte // operator-published ECHConfigList for AS13335 targets
 
 	// Per-host state for secondary targets (translation API, mirrors, …) reached
 	// through the same proxy via the X-Ech-Target header.
@@ -154,11 +151,6 @@ func orNone(s string) string {
 
 // Start binds a reverse proxy on `listen` that forwards to https://`target`
 // over ECH, then serves in a background goroutine.
-//
-// ipList is an optional comma-separated list of upstream edge IPs to use
-// instead of DNS (e.g. hand-picked fast Cloudflare IPs). Because Cloudflare is
-// anycast, any edge IP serves the site — the SNI and the ECH config are
-// unaffected, so a custom IP changes only the route, never the encryption.
 // IsAs13335 resolves host through the configured DoH endpoints and returns true
 // only when it has at least one answer and every returned IP is in Cloudflare
 // AS13335. It performs no system-DNS fallback, so a failed/ambiguous lookup does
@@ -266,7 +258,7 @@ var cloudflareAS13335CIDRs = []string{
 	"2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
 }
 
-func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) error {
+func Start(listen, target, echB64, doh, cpArg string, insecure bool) error {
 	mu.Lock()
 	if server != nil {
 		mu.Unlock()
@@ -292,16 +284,8 @@ func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) err
 		fallback = decoded
 	}
 
-	custom := make([]string, 0)
-	for _, ip := range parseIPList(ipList) {
-		if isCloudflareAS13335(ip) {
-			custom = append(custom, ip)
-		}
-	}
 	mu.Lock()
-	customIPs = custom
 	fallbackECH = fallback
-	upstreamIPs = nil
 	mu.Unlock()
 	setDNSInfo("per-host DoH; ECH only for AS13335-qualified hosts")
 
@@ -332,6 +316,10 @@ func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) err
 	mu.Unlock()
 
 	setStatus("generic ECH proxy listening on http://%s", listen)
+	// 后台预热主 host 的解析+ECH 配置,首个真实请求不再冷启动等待。
+	go func() {
+		_, _ = transportFor(target)
+	}()
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			setStatus("server stopped: %v", err)
@@ -341,27 +329,6 @@ func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) err
 		mu.Unlock()
 	}()
 	return nil
-}
-
-// SetEndpoints 热更新 DoH 端点与优选 IP 列表(remote config 异步到达时调用,
-// 无需重启代理)。已建连的 host 保持原连接;新 host 使用新配置。
-func SetEndpoints(doh, ipList string) {
-	custom := make([]string, 0)
-	for _, ip := range parseIPList(ipList) {
-		if isCloudflareAS13335(ip) {
-			custom = append(custom, ip)
-		}
-	}
-	mu.Lock()
-	if strings.TrimSpace(doh) != "" {
-		hostsMu.Lock()
-		activeDoH = doh
-		hostsMu.Unlock()
-	}
-	customIPs = custom
-	mu.Unlock()
-	setDNSInfo("endpoints updated (doh=%s, ip=%d)", orNone(activeDoH), len(custom))
-	log.Printf("echproxy: endpoints updated via SetEndpoints")
 }
 
 // Stop shuts the proxy down. Safe to call when not running.
@@ -442,13 +409,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// 请求级日志:方法 路径 状态码(供日志页诊断 javchu.com 等打不开的问题)
-	statusText := resp.Status
-	loc := resp.Header.Get("Location")
-	if loc != "" {
-		statusText += " -> " + loc
-	}
-	setStatus("HTTP %s %s %s", r.Method, r.URL.Path, statusText)
 	if resp.StatusCode >= 400 {
 		setStatus("HTTP %d for %s (upstream %s)", resp.StatusCode, r.URL.Path, target)
 	}
@@ -648,7 +608,8 @@ func transportFor(host string) (*http.Transport, error) {
 	hc.transport = &http.Transport{
 		DialTLSContext:        hostDialContext(host, hc, insecure),
 		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          10,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   20,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   dialTimeout,
 		ExpectContinueTimeout: 1 * time.Second,
@@ -670,20 +631,9 @@ func hostDialContext(host string, hc *hostConf, insecure bool) func(ctx context.
 		if err != nil || port == "" {
 			port = "443"
 		}
-		mu.Lock()
-		custom := append([]string(nil), customIPs...)
-		mu.Unlock()
-		// Prefer the addresses published for this host. A manually curated
-		// Cloudflare edge can be useful as a fallback, but it is not guaranteed
-		// to serve every Cloudflare customer or application endpoint reliably.
-		cands := make([]string, 0, len(custom)+len(hc.ips))
+		cands := make([]string, 0, len(hc.ips))
 		for _, ip := range hc.ips {
 			cands = append(cands, net.JoinHostPort(ip, port))
-		}
-		if hc.as13335 {
-			for _, ip := range custom {
-				cands = append(cands, net.JoinHostPort(ip, port))
-			}
 		}
 
 		d := &net.Dialer{Timeout: dialTimeout}
@@ -813,112 +763,6 @@ func plainTLSHandshake(ctx context.Context, host string, d *net.Dialer, cands []
 	return nil, fmt.Errorf("plain TLS handshake failed: %w", lastErr)
 }
 
-// --- ECH transport --------------------------------------------------------
-
-func newECHTransport(sni string, echList []byte, cachePath string, insecure bool) *http.Transport {
-	return &http.Transport{
-		DialTLSContext:        echDialContext(sni, echList, cachePath, insecure),
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          20,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   dialTimeout,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-}
-
-// parseIPList splits a comma/space separated list into valid IP literals.
-func parseIPList(s string) []string {
-	var out []string
-	for _, f := range strings.FieldsFunc(s, func(r rune) bool {
-		return r == ',' || r == ' ' || r == '\n' || r == '\t' || r == ';'
-	}) {
-		f = strings.TrimSpace(f)
-		if net.ParseIP(f) != nil {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-// dialCandidates returns the addresses to try, in order:
-// user-supplied IPs, then DoH-resolved (IPv4 first), then system DNS.
-func dialCandidates(addr string) []string {
-	_, port, err := net.SplitHostPort(addr)
-	if err != nil || port == "" {
-		port = "443"
-	}
-	mu.Lock()
-	custom := append([]string(nil), customIPs...)
-	ips := append([]string(nil), upstreamIPs...)
-	mu.Unlock()
-
-	out := make([]string, 0, len(custom)+len(ips)+1)
-	for _, ip := range custom {
-		out = append(out, net.JoinHostPort(ip, port))
-	}
-	for _, ip := range ips {
-		out = append(out, net.JoinHostPort(ip, port))
-	}
-	return append(out, addr) // last resort: system DNS
-}
-
-// echDialContext dials the upstream and performs a TLS 1.3 handshake with ECH.
-func echDialContext(sni string, echList []byte, cachePath string, insecure bool) func(ctx context.Context, network, addr string) (net.Conn, error) {
-	var logged sync.Once
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		d := &net.Dialer{Timeout: dialTimeout}
-		candidates := dialCandidates(addr)
-		var lastErr error
-
-		// An edge can reset or reject an otherwise valid ECH connection. Try every
-		// configured edge before failing, but never downgrade this protected path to
-		// ordinary TLS (which would expose the real AO3 SNI).
-		for _, dialed := range candidates {
-			raw, err := d.DialContext(ctx, "tcp", dialed)
-			if err != nil {
-				lastErr = err
-				log.Printf("echproxy: dial %s failed: %v", dialed, err)
-				continue
-			}
-
-			cfg := &tls.Config{
-				ServerName:                     sni,
-				MinVersion:                     tls.VersionTLS13, // ECH requires TLS 1.3
-				NextProtos:                     []string{"h2", "http/1.1"},
-				EncryptedClientHelloConfigList: echList,
-				InsecureSkipVerify:             insecure,
-			}
-			hctx, cancel := context.WithTimeout(ctx, dialTimeout)
-			tc := tls.Client(raw, cfg)
-			err = tc.HandshakeContext(hctx)
-			cancel()
-
-			// Do not use server retry_configs. This proxy validates the ECH
-			// configuration obtained for the target host itself, without silently
-			// switching to a server-provided configuration.
-			var rej *tls.ECHRejectionError
-			if errors.As(err, &rej) && len(rej.RetryConfigList) > 0 {
-				setStatus("ECH rejected via %s; server retry_configs ignored", dialed)
-			}
-			if err != nil {
-				raw.Close()
-				lastErr = err
-				log.Printf("echproxy: ECH handshake via %s failed; trying next candidate: %v", dialed, err)
-				continue
-			}
-			st := tc.ConnectionState()
-			logged.Do(func() {
-				setShakeInfo("ok via %s ECHAccepted=%v TLS=%s ALPN=%q",
-					dialed, st.ECHAccepted, tlsVersionName(st.Version), st.NegotiatedProtocol)
-			})
-			return tc, nil
-		}
-		setShakeInfo("FAILED after %d ECH candidate(s): %v; downgrading to plain TLS", len(candidates), lastErr)
-		// 所有 ECH 候选都失败 → 降级普通 TLS(保护性降级,保证连通)。
-		return plainTLSHandshake(ctx, sni, d, candidates, insecure, true)
-	}
-}
-
 // --- DoH ------------------------------------------------------------------
 
 type dohResp struct {
@@ -933,6 +777,27 @@ type dohResp struct {
 // records. endpoint may be a comma-separated list of DoH endpoints, tried in
 // order. Binary POST is required: some providers (e.g. dns.alidns.com) only
 // accept application/dns-message and reject the JSON GET form.
+var (
+	dohTransportOnce sync.Once
+	dohTransport     *http.Transport
+)
+
+// sharedDoHTransport 复用同一条 DoH TLS 连接,不再每查询新建 Transport。
+func sharedDoHTransport() *http.Transport {
+	dohTransportOnce.Do(func() {
+		dohTransport = &http.Transport{
+			MaxIdleConns:        20,
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: dialTimeout,
+		}
+		if pool := loadAndroidCertPool(); pool != nil {
+			dohTransport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+		}
+	})
+	return dohTransport
+}
+
 func dohQuery(endpoint, name, qtype string) (*dohResp, error) {
 	qtypeNum, ok := map[string]uint16{"A": 1, "AAAA": 28, "TXT": 16, "HTTPS": 65}[qtype]
 	if !ok {
@@ -955,9 +820,7 @@ func dohQuery(endpoint, name, qtype string) (*dohResp, error) {
 		}
 		req.Header.Set("content-type", "application/dns-message")
 		req.Header.Set("accept", "application/dns-message")
-		transport := &http.Transport{}
-		if pool := loadAndroidCertPool(); pool != nil { transport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12} }
-		resp, err := (&http.Client{Timeout: dialTimeout, Transport: transport}).Do(req)
+		resp, err := (&http.Client{Timeout: dialTimeout, Transport: sharedDoHTransport()}).Do(req)
 		if err != nil {
 			lastErr = err
 			continue
@@ -1211,54 +1074,6 @@ func loadDnsCache() {
 	dnsCacheMu.Unlock()
 }
 
-// quotedRe extracts the quoted chunks of a TXT record. Long TXT values are
-// split into multiple 255-byte strings, which DoH returns as "a" "b".
-var quotedRe = regexp.MustCompile(`"([^"]*)"`)
-
-// FetchTxt looks up the TXT records of `name` over DoH and returns them, one
-// record per line, with quoting removed and split chunks re-joined.
-//
-// Used for remote configuration: the operator publishes a TXT record such as
-//
-//	v=co3ech1; doh=https://example.com/dns-query; ip=104.20.8.2,104.20.9.2
-//
-// so end users can pull working settings without knowing what DoH even is.
-// The lookup itself goes over DoH, so a poisoned system resolver can't spoof it.
-func FetchTxt(doh, name string) (string, error) {
-	if strings.TrimSpace(doh) == "" {
-		return "", errors.New("no DoH endpoint configured")
-	}
-	if strings.TrimSpace(name) == "" {
-		return "", errors.New("no config domain given")
-	}
-	dr, err := dohQuery(doh, name, "TXT")
-	if err != nil {
-		return "", err
-	}
-	var lines []string
-	for _, a := range dr.Answer {
-		if a.Type != 16 { // TXT
-			continue
-		}
-		s := a.Data
-		if m := quotedRe.FindAllStringSubmatch(s, -1); len(m) > 0 {
-			var b strings.Builder
-			for _, g := range m {
-				b.WriteString(g[1])
-			}
-			s = b.String()
-		}
-		s = strings.TrimSpace(s)
-		if s != "" {
-			lines = append(lines, s)
-		}
-	}
-	if len(lines) == 0 {
-		return "", errors.New("no TXT records found for " + name)
-	}
-	return strings.Join(lines, "\n"), nil
-}
-
 var echParamRe = regexp.MustCompile(`(?:^|\s)ech="?([A-Za-z0-9+/=]+)"?`)
 
 // fetchECHViaDoH queries HTTPS (type 65) and accepts both textual SVCB output
@@ -1390,23 +1205,6 @@ func loadECHConfigWithFallbacks(host, doh string) ([]byte, string) {
 		return b, "operator fallback"
 	}
 	return nil, "no ECHConfigList available"
-}
-
-func loadECHConfig(host, echB64, doh, cachePath string) ([]byte, string, error) {
-	if strings.TrimSpace(echB64) != "" {
-		b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(echB64))
-		if err != nil { return nil, "", fmt.Errorf("ech base64: %w", err) }
-		return b, "flag", nil
-	}
-	if strings.TrimSpace(doh) != "" {
-		if b, err := fetchECHViaDoH(host, doh); err == nil && len(b) > 0 {
-			if cachePath != "" { storePublicECHCache(cachePath, host, b) }
-			return b, "DoH", nil
-		} else if cachePath != "" {
-			if cached, ok := loadPublicECHCache(cachePath, host); ok { return cached, fmt.Sprintf("public cache (DoH failed: %v)", err), nil }
-		}
-	}
-	return nil, "", errors.New("no ECH HTTPS record available")
 }
 
 func tlsVersionName(v uint16) string {
