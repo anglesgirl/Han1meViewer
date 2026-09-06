@@ -56,10 +56,22 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = File(System.getProperty("user.home"), ".android/keystore.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEYSTORE_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // CI 恢复 keystore 后才有签名;本地无 keystore 时跳过签名(只打 debug)。
+            val ksFile = File(System.getProperty("user.home"), ".android/keystore.jks")
+            if (ksFile.exists()) signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

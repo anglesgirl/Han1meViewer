@@ -17,8 +17,15 @@ if [ "$STATUS" = "success" ]; then
 [查看运行](${RUN_URL})"
   APK=$(find app/build/outputs/apk -name "Han1meViewer-v*.apk" 2>/dev/null | head -n1 || true)
   if [ -n "$APK" ] && [ -f "$APK" ]; then
-    echo "sending APK $APK"
-    send_doc "Han1meViewer $SHORT_SHA run $RUN_ID" "$APK"
+    APK_MB=$(du -m "$APK" | cut -f1)
+    if [ "$APK_MB" -ge 50 ]; then
+      echo "APK ${APK_MB}MB 超过 Bot 50M 上限,跳过直发,请走 Artifact/Release 直链"
+      send_msg "⚠️ 包 ${APK_MB}MB 超 50M 上限未直发,请到运行页 Artifacts 或 Release 下载
+[查看运行](${RUN_URL})"
+    else
+      echo "sending APK $APK"
+      send_doc "Han1meViewer $SHORT_SHA run $RUN_ID" "$APK"
+    fi
   else
     echo "no Han1meViewer APK found"
   fi
