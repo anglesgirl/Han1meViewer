@@ -606,6 +606,8 @@ object NetworkRepo {
             "Cookie: ${cookieHeader(cookies)}",
             "Referer: $loginUrl",
             "Origin: ${baseUrl.removeSuffix("/")}",
+            "X-Requested-With: XMLHttpRequest",
+            "Accept: application/json, text/html",
         )
         if (xsrfDecoded.isNotBlank()) {
             postHeaders += "X-XSRF-TOKEN: $xsrfDecoded"
