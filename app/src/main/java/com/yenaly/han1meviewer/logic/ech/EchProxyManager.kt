@@ -135,6 +135,9 @@ object EchProxyManager {
         return "http://127.0.0.1:$p/$t"
     }
 
+    /** 表單捕獲開關(供 LoginActivity 開啟/關閉)。 */
+    var isFormCapture: Boolean = false
+
     /** 停止 ECH 代理。 */
     suspend fun stop() = withContext(Dispatchers.IO) {
         if (!isRunning) return@withContext
@@ -150,7 +153,7 @@ object EchProxyManager {
 
     /** 启动(非挂起版本,供 Application 使用)。 */
     fun startAsync(context: Context, doh: String? = null) {
-        scope.launch { start(context, doh) }
+        scope.launch { start(context, doh, formCaptureLog) }
     }
 
     /** 停止(非挂起版本)。 */
