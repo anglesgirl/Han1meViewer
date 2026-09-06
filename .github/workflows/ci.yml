@@ -99,7 +99,7 @@ jobs:
           # (分支构建加后缀,避免与 main 共用 tag 冲突)
           TAG="v${VER}"
           if [ "${GITHUB_REF:-}" != "refs/heads/main" ]; then
-            BRANCH_SUFFIX=$(echo "${GITHUB_REF:-}" | sed 's|refs/heads/||' | tr -c 'a-zA-Z0-9' '-')
+            BRANCH_SUFFIX=$(echo "${GITHUB_REF:-}" | tr -d '\n' | sed 's|refs/heads/||' | tr -c 'a-zA-Z0-9' '-')
             TAG="v${VER}-${BRANCH_SUFFIX}"
           fi
           APK_NAME=$(basename "$APK")
