@@ -33,3 +33,6 @@
 -keep class androidx.window.extensions.embedding.** { *; }
 -keep class is.xyz.mpv.** { *; }
 -keep class lis.xyz.mpv.** { *; }
+-keep class cn.jzvd.** { *; }
+# Go ECH 代理(gomobile):JNI 按名查找,禁止混淆
+-keep class echproxy.** { *; }

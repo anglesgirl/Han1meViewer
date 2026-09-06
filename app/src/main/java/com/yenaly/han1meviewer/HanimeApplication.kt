@@ -15,6 +15,7 @@ import com.google.firebase.database.database
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.ech.EchProxyManager
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.util.AnimeShaders
@@ -82,6 +83,8 @@ class HanimeApplication : YenalyApplication() {
         }
         ProxySelector.setDefault(HProxySelector())
         HProxySelector.rebuildNetwork()
+        // 启动本地 Go ECH 代理(失败则各请求直连兜底)
+        EchProxyManager.startAsync(this)
         initFirebase()
         initNotificationChannel()
         MPVLib.create(applicationContext)

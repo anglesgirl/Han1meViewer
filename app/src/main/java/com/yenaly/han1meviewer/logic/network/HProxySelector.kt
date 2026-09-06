@@ -74,6 +74,11 @@ class HProxySelector : ProxySelector() {
     }
 
     override fun select(uri: URI?): MutableList<Proxy> {
+        // 本地 ECH 代理流量永不二次代理(防递归)
+        val host = uri?.host
+        if (host == "127.0.0.1" || host == "localhost") {
+            return mutableListOf(Proxy.NO_PROXY)
+        }
         val type = Preferences.proxyType
         if (type == TYPE_HTTP || type == TYPE_SOCKS) {
             val ip = Preferences.proxyIp

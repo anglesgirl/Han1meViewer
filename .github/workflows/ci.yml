@@ -1,16 +1,16 @@
 permissions:
-  contents: read
+  contents: write
 name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "go-misaka" ]
     paths-ignore:
       - "**.md"
+  workflow_dispatch:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -20,38 +20,114 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: "21"
+          distribution: "temurin"
           cache: gradle
 
-      - name: Load Google Services File
-        env:
-          DATA: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
-        run: echo $DATA | base64 -di > app/google-services.json
+      - name: Set up Go (stable)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decode keystore
+      - name: Build ECH proxy AAR (gomobile, arm64)
         run: |
-          echo "${{ secrets.YOUR_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          cd ech
+          go get golang.org/x/mobile/bind@latest
+          mkdir -p ../app/libs
+          gomobile bind -v -target=android/arm64 -androidapi 29 \
+            -o ../app/libs/echproxy.aar ./echproxy
+          ls -la ../app/libs
 
-      - name: Set up keystore for signing
+      - name: Restore release keystore
+        if: env.KEYSTORE_BASE64 != ''
         run: |
-          mkdir -p $HOME/.android
-          mv keystore.jks $HOME/.android/keystore.jks
-
-      - name: Build and sign APK with Gradle
-        run: ./gradlew assembleRelease
+          mkdir -p ~/.android
+          echo "$KEYSTORE_BASE64" | base64 -d > ~/.android/keystore.jks
+          ls -lh ~/.android/keystore.jks
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN }}
-          HA1_VERSION_SOURCE: 'ci'
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: Upload APK Zip
+      - name: Build
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Building RELEASE with fixed signature"
+            ./gradlew assembleRelease -x lint
+          else
+            ./gradlew assembleDebug -x lint
+          fi
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+
+      - name: Verify ECH library in APK
+        run: |
+          APK=$(find app/build/outputs -name "*.apk" -type f | head -1)
+          echo "APK: $APK"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libgojni.so" && echo "libgojni.so present ✓" || echo "WARNING: libgojni.so missing"
+
+      - name: Find APK
+        run: find app/build/outputs -name "*.apk" -type f
+
+      - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-${{ github.sha }}
-          path: app/build/outputs/apk/release/Han1meViewer-v*.apk
+          name: han1meviewer-go-misaka
+          path: app/build/outputs/apk/
+          retention-days: 7
+
+      - name: Publish to GitHub Release
+        if: success() && github.event_name != 'pull_request' && github.ref == 'refs/heads/go-misaka'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          APK=$(find app/build/outputs -name "Han1meViewer-v*.apk" -type f | head -1)
+          SIZE_MB=$(du -m "$APK" | cut -f1)
+          echo "Publishing ${SIZE_MB}MB $APK to Releases"
+          APK_NAME=$(basename "$APK")
+          # tag 取自包名 + 分支后缀,避免与 main 共用 tag 冲突
+          TAG="$(basename "$APK" .apk)-go-misaka"
+          echo "TAG=$TAG"
+          # 加速下载直链(大陆用户下载快)
+          ACCEL1="https://gh-proxy.com/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          ACCEL2="https://ghfast.top/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          DIRECT="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          printf '%s\n' "arm64-only APK (${SIZE_MB}MB) misaka 基座 + Go ECH 代理." > /tmp/release_notes.md
+          printf '%s\n' "" >> /tmp/release_notes.md
+          printf '%s\n' "## Download acceleration (mainland China)" >> /tmp/release_notes.md
+          printf '%s\n' "- gh-proxy.com: ${ACCEL1}" >> /tmp/release_notes.md
+          printf '%s\n' "- ghfast.top: ${ACCEL2}" >> /tmp/release_notes.md
+          printf '%s\n' "" >> /tmp/release_notes.md
+          printf '%s\n' "Direct: ${DIRECT}" >> /tmp/release_notes.md
+          NOTES=$(cat /tmp/release_notes.md)
+          # 创建或更新 release(首次 draft,用户确认后公开)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" >/dev/null 2>&1 || true
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Han1meViewer (go-misaka ECH)" \
+              --notes "$NOTES" \
+              --draft
+          fi
+          echo "RELEASE_TAG=$TAG"
+
+      - name: Notify build result
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          BUILD_STATUS: ${{ job.status }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash .github/scripts/notify-build-result.sh

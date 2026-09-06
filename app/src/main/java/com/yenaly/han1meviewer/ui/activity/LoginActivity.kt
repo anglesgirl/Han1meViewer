@@ -23,10 +23,12 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import com.yenaly.han1meviewer.HANIME_LOGIN_URL
+import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.NetworkRepo
+import com.yenaly.han1meviewer.logic.ech.EchProxyManager
 import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.login
 import com.yenaly.han1meviewer.ui.screen.login.LoginDialog
@@ -85,7 +87,7 @@ class LoginActivity : FrameActivity() {
                 LoginScreen(
                     isRefreshing = isRefreshing,
                     onBack = { onBackPressedDispatcher.onBackPressed() },
-                    onRefresh = { webView?.loadUrl(HANIME_LOGIN_URL) },
+                    onRefresh = { webView?.loadUrl(loginPageUrl()) },
                     onShowLoginDialog = { showLoginDialog = true },
                     onOpenQrScanner = { openQrScanner() },
                     webViewFactory = { createWebView() },
@@ -118,8 +120,15 @@ class LoginActivity : FrameActivity() {
                     val isSameUrl = HANIME_URL.contains(request.url.toString())
                     if (request.isRedirect && isSameUrl) {
                         val url = request.url
-                        val cookieManager = CookieManager.getInstance().getCookie(url.host)
-                        Log.d("login_cookie", cookieManager.toString())
+                        // 代理形态下 host 是 127.0.0.1:合并代理域 + 真实站域的 cookie
+                        val cm = CookieManager.getInstance()
+                        val parts = mutableListOf<String>()
+                        cm.getCookie(url.host)?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+                        HANIME_HOSTNAME.forEach { h ->
+                            cm.getCookie(h)?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+                        }
+                        val cookieManager = parts.joinToString("; ")
+                        Log.d("login_cookie", cookieManager)
                         login(cookieManager)
                         setResult(RESULT_OK)
                         finish()
@@ -139,9 +148,13 @@ class LoginActivity : FrameActivity() {
                     }
                 }
             }
-            loadUrl(HANIME_LOGIN_URL)
+            loadUrl(loginPageUrl())
         }
     }
+
+    /** 登录页地址:代理就绪则走 127.0.0.1 内嵌形态(Body 全透传),否则直连。 */
+    private fun loginPageUrl(): String =
+        EchProxyManager.proxyUrl(HANIME_LOGIN_URL) ?: HANIME_LOGIN_URL
 
     private fun openQrScanner() {
         scannerLauncher.launch(Intent(this, ManualInputCookiesActivity::class.java))

@@ -6,6 +6,7 @@ import com.yenaly.han1meviewer.HA1_GITHUB_API_URL
 import com.yenaly.han1meviewer.HJson
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.network.interceptor.CloudflareInterceptor
+import com.yenaly.han1meviewer.logic.network.EchInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.GetchuInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.UrlLoggingInterceptor
@@ -86,6 +87,7 @@ object ServiceCreator {
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
+            .addInterceptor(EchInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
             .proxySelector(HProxySelector())
             .dns(dns)
@@ -98,6 +100,7 @@ object ServiceCreator {
             .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
+            .addInterceptor(EchInterceptor())
             .dns(dns)
             .build()
     }
@@ -111,6 +114,7 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
+            .addInterceptor(EchInterceptor())
             .cache(cache)
             .cookieJar(HCookieJar())
             .proxySelector(HProxySelector())
