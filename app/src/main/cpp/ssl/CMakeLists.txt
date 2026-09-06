@@ -4,12 +4,12 @@ project(han1me_ech LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Download and build boringssl
+# Download and build boringssl (use main branch, not master)
 include(FetchContent)
 FetchContent_Declare(
     boringssl
     GIT_REPOSITORY https://boringssl.googlesource.com/boringssl
-    GIT_TAG master
+    GIT_TAG main
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(boringssl)
