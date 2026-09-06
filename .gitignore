@@ -68,4 +68,4 @@ Thumbs.db
 **/*.apk
 
 # 忽略 debug 测试构建
-/app/build/outputs/apk/debug/
+/app/build/outputs/apk/debug/.hermes/

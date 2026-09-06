@@ -571,8 +571,14 @@ func rewriteLocation(loc, target string) string {
 		return loc
 	}
 	if u.Host == target || u.Host == "www."+target {
-		u.Scheme, u.Host = "", ""
-		return u.String()
+		// 保持内嵌形态返回(/https://host/path):调用方(WebView/OkHttp)
+		// 相对当前代理地址解析不丢目标;直接返回 "/" 会丢到默认 target,
+		// 非默认域(如 javchu)登录 302 就串站。
+		nu := &url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path, RawQuery: u.RawQuery}
+		if nu.Path == "" {
+			nu.Path = "/"
+		}
+		return "/" + nu.String()
 	}
 	return loc
 }

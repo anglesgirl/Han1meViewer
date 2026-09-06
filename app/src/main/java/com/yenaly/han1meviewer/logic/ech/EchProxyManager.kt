@@ -17,8 +17,8 @@ import java.net.ServerSocket
  * ECH 代理管理器:负责启动/停止 Go ECH 代理(gomobile 编译的 echproxy AAR)。
  *
  * 代理监听 127.0.0.1:<port>,把请求通过 ECH TLS 握手转发,
- * 隐藏 SNI 防止被 GFW 重置。ECH 公钥配置来自 cloudflare-ech.com(缓存5h),
- * 握手失败自动降级普通 TLS。
+ * 隐藏 SNI 防止被 GFW 重置。ECH 公钥配置来自 cloudflare-ech.com(缓存5h)。
+ * fail-closed:有 ECH 配置的主机握手失败直接报错,绝不降级明文暴露 SNI。
  *
  * DoH 端点:显式参数 > 用户本地 DoH 预设 > 内置网关兜底。
  * 远端 DNS TXT 配置已移除(DoH 解析结果由服务端直接控制,客户端只管解析)。
@@ -86,14 +86,21 @@ object EchProxyManager {
             )
             port = chosen
             Log.i(TAG, "ECH proxy started on 127.0.0.1:$chosen")
+            EchStats.event("ech_started", mapOf("doh" to dohHost(dohArg)))
             startStatusPolling()
             chosen
         } catch (e: Throwable) {
             Log.e(TAG, "ECH proxy start failed", e)
+            EchStats.event("ech_failed", mapOf("error" to (e.message ?: "unknown")))
             port = -1
             -1
         }
     }
+
+    /** DoH 地址只上报域名,不带路径参数(防敏感信息外流)。 */
+    private fun dohHost(doh: String): String = runCatching {
+        doh.substringAfter("://").substringBefore("/")
+    }.getOrDefault("unknown")
 
     /** 本地 DoH 预设(用户设置),显式参数缺失时的回退。 */
     private fun localPresetDoh(): String? = runCatching {

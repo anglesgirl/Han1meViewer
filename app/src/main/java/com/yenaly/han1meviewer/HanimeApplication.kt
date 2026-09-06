@@ -9,6 +9,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.color.DynamicColors
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.logic.ech.EchProxyManager
+import com.yenaly.han1meviewer.util.EchStats
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.util.AnimeShaders
@@ -78,6 +79,7 @@ class HanimeApplication : YenalyApplication() {
         HProxySelector.rebuildNetwork()
         // 启动本地 Go ECH 代理(失败则各请求直连兜底)
         EchProxyManager.startAsync(this)
+        EchStats.event("app_start")
         // 更新检查(原 Firebase RemoteConfig 触发,现直接触发)
         AppViewModel.getLatestVersion(delayMillis = 200)
         initNotificationChannel()

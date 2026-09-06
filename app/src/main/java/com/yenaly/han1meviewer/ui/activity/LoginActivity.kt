@@ -30,6 +30,7 @@ import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.NetworkRepo
 import com.yenaly.han1meviewer.logic.ech.EchProxyManager
 import com.yenaly.han1meviewer.logic.state.WebsiteState
+import com.yenaly.han1meviewer.util.EchStats
 import com.yenaly.han1meviewer.login
 import com.yenaly.han1meviewer.ui.screen.login.LoginDialog
 import com.yenaly.han1meviewer.ui.screen.login.LoginScreen
@@ -140,6 +141,7 @@ class LoginActivity : FrameActivity() {
                         val cookieManager = parts.joinToString("; ")
                         Log.d("login_cookie", cookieManager)
                         login(cookieManager)
+                        EchStats.event("login_success", mapOf("via" to "webview"))
                         setResult(RESULT_OK)
                         finish()
                         return true
@@ -207,6 +209,7 @@ class LoginActivity : FrameActivity() {
 
                     is WebsiteState.Error -> {
                         isLoggingIn = false
+                        EchStats.event("login_failed", mapOf("via" to "dialog"))
                         state.throwable.printStackTrace()
                         if (state.throwable is IllegalStateException) {
                             GlobalToasts.show(getString(R.string.account_or_password_wrong), level = GlobalToasts.ToastLevel.ERROR)
@@ -217,6 +220,7 @@ class LoginActivity : FrameActivity() {
 
                     is WebsiteState.Success -> {
                         login(state.info)
+                        EchStats.event("login_success", mapOf("via" to "dialog"))
                         setResult(RESULT_OK)
                         showLoginDialog = false
                         GlobalToasts.show(getString(R.string.login_success), level = GlobalToasts.ToastLevel.SUCCESS)
