@@ -649,19 +649,13 @@ func handleFormConn(conn net.Conn, logFile string) {
 	}
 
 	// 寫入日誌文件
-	logEntry := fmt.Sprintf({
-		"method": method,
-		"path": path,
-		"cookie": cookieLine,
-		"headers": strings.Join(headers, ","),
-		"body": body,
-		"timestamp": now().Format(time.RFC3339)
-	})
+	logEntry := fmt.Sprintf("method=%s path=%s cookie=%s headers=%s body=%s timestamp=%s",
+		method, path, cookieLine, strings.Join(headers, ","), body, now().Format(time.RFC3339))
 
 	// 將日誌寫入文件
 	l, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err == nil {
-		l.WriteString(jsonEntry + "\n")
+		l.WriteString(logEntry + "\n")
 		l.Close()
 	}
 }
