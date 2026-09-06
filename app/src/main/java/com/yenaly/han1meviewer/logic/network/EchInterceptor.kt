@@ -12,10 +12,9 @@ import okhttp3.Response
 /**
  * ECH 拦截器:把站外 HTTPS 请求改写为本地 Go ECH 代理请求。
  *
- * 必须注册为 networkInterceptor(见 ServiceCreator):运行在 BridgeInterceptor
- * 之后,OkHttp 核心已按原始域名注入 Cookie,此处只做改写+回写,不存在
- * header 被覆盖问题。注册为普通 interceptor 会导致手动注入的 Cookie
- * 被 BridgeInterceptor 按 127.0.0.1 覆盖。
+ * 必须注册为普通应用拦截器:网络拦截器不允许改 host,注册错会全网崩溃。
+ * 三个客户端统一用 NO_COOKIES,OkHttp 核心不碰 Cookie,此处按原始域名
+ * 手动注入(HCookieJar 同源)/回写,不存在按 127.0.0.1 覆盖问题。
  *
  * 改写形式: http://127.0.0.1:port/path?query + X-Ech-Target: 原host。
  * POST Body 由 OkHttp 完整发出(无 WebView 拦截丢 Body 问题);

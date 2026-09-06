@@ -87,7 +87,7 @@ object ServiceCreator {
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
-            .addNetworkInterceptor(EchInterceptor())
+            .addInterceptor(EchInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
             .proxySelector(HProxySelector())
             .dns(dns)
@@ -100,7 +100,7 @@ object ServiceCreator {
             .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
-            .addNetworkInterceptor(EchInterceptor())
+            .addInterceptor(EchInterceptor())
             .dns(dns)
             .build()
     }
@@ -114,9 +114,11 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
-            .addNetworkInterceptor(EchInterceptor())
+            .addInterceptor(EchInterceptor())
             .cache(cache)
-            .cookieJar(HCookieJar())
+            // NO_COOKIES:EchInterceptor 按原始域名手动注入/回写(HCookieJar 同源);
+            // 若用 HCookieJar,OkHttp 核心会按改写后的 127.0.0.1 读写覆盖手动头。
+            .cookieJar(CookieJar.NO_COOKIES)
             .proxySelector(HProxySelector())
             .dns(dns)
             .build()
