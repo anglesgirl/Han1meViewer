@@ -9,7 +9,7 @@ import com.yenaly.han1meviewer.util.EchStats
 import com.yenaly.han1meviewer.util.checkNeedUpdate
 import com.yenaly.han1meviewer.util.copyTo
 import com.yenaly.han1meviewer.util.runSuspendCatching
-import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okio.use
 import java.io.File
 import java.io.IOException
@@ -104,7 +104,7 @@ object HUpdater {
 
     /** github release 包的下载候选:镜像优先,直连兜底。 */
     private fun mirrorUrls(url: String): List<String> {
-        val host = runCatching { HttpUrl.get(url).host }.getOrNull()
+        val host = runCatching { url.toHttpUrlOrNull()?.host }.getOrNull()
         return if (host == "github.com") {
             listOf(MIRROR_PREFIX + url, url)
         } else {
@@ -154,8 +154,5 @@ object HUpdater {
             }
     }
 
-    companion object {
-        private const val MIRROR_PREFIX = "https://gh-proxy.com/"
-    }
-}
+    private const val MIRROR_PREFIX = "https://gh-proxy.com/"
 }
