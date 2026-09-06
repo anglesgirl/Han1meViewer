@@ -55,11 +55,22 @@ class EchInterceptor : Interceptor {
         url.encodedQuery?.let { proxyBuilder.encodedQuery(it) }
         val proxyUrl = proxyBuilder.build()
 
-        val proxied = request.newBuilder()
+        val builder = request.newBuilder()
             .url(proxyUrl)
             .header("X-Ech-Target", originHost)
             .header("Host", originHost)
-            .build()
+        // 手动注入原始域名的 cookie(客户端全是 NO_COOKIES,核心不碰)。
+        // 按 name 去重:内存最新响应覆盖持久化旧会话,同名多份必 419。
+        val originCookies = HCookieJar().loadForRequest(url)
+        if (originCookies.isNotEmpty()) {
+            val deduped = LinkedHashMap<String, String>()
+            originCookies.forEach { deduped[it.name] = it.value }
+            builder.header(
+                "Cookie",
+                deduped.entries.joinToString("; ") { "${it.key}=${it.value}" }
+            )
+        }
+        val proxied = builder.build()
         if (BuildConfig.DEBUG) {
             Log.d("EchProxy", "ECH route $originHost${url.encodedPath} -> 127.0.0.1:$echPort")
         }

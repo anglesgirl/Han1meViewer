@@ -315,13 +315,22 @@ func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) err
 			return http.ErrUseLastResponse
 		},
 	}
+	// OkHttp 专用客户端(无 jar):App 层已按原始域名带全 Cookie,
+	// 若再叠加 jar 里的旧会话 Cookie,同名多份会导致 419。
+	clientNoJar := &http.Client{
+		Transport: &hostRouter{},
+		Timeout:   60 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 
 	ln, err := net.Listen("tcp", listen)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", listen, err)
 	}
 
-	srv := &http.Server{Handler: &proxyHandler{target: target, client: client}}
+	srv := &http.Server{Handler: &proxyHandler{target: target, client: client, clientNoJar: clientNoJar}}
 	mu.Lock()
 	server = srv
 	mu.Unlock()
@@ -362,6 +371,8 @@ func Stop() error {
 type proxyHandler struct {
 	target string
 	client *http.Client
+	// OkHttp 路径专用(无 jar),WebView 内嵌路径用带 jar 的 client。
+	clientNoJar *http.Client
 }
 
 var hopByHop = map[string]bool{
@@ -422,7 +433,13 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.Host = target
 	req.Header.Del("Accept-Encoding")
 
-	resp, err := h.client.Do(req)
+	// OkHttp 路径走无 jar 客户端(App 头已带全 Cookie,jar 会叠加旧会话);
+	// WebView 内嵌路径走带 jar 客户端(靠 jar 维持会话)。
+	cl := h.client
+	if h.clientNoJar != nil && strings.TrimSpace(r.Header.Get("X-Ech-Target")) != "" {
+		cl = h.clientNoJar
+	}
+	resp, err := cl.Do(req)
 	if err != nil {
 		setStatus("upstream error %s %s: %v", r.Method, r.URL.Path, err)
 		http.Error(w, "echproxy: upstream error: "+err.Error(), http.StatusBadGateway)
