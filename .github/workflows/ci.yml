@@ -24,10 +24,10 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      - name: Set up Go 1.24
+      - name: Set up Go (stable)
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "stable"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
