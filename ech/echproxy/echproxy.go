@@ -627,6 +627,18 @@ func transportFor(host string) (*http.Transport, error) {
 	hc.ech, _ = loadECHConfigWithFallbacks(host, doh)
 	if len(hc.ech) > 0 {
 		setConfigInfo("%d bytes for %s", len(hc.ech), host)
+		// 有 ECH 配置 = Cloudflare 系主机:毒答案一定不在 CF 段内,直接丢弃非 CF IP。
+		// 否则会拨到污染 IP 被掉包(曾串到 hanime.tv 挑战页)。
+		cfOnly := make([]string, 0, len(hc.ips))
+		for _, ip := range hc.ips {
+			if isCloudflareAS13335(ip) {
+				cfOnly = append(cfOnly, ip)
+			}
+		}
+		if len(hc.ips) > 0 && len(cfOnly) == 0 {
+			setDNSInfo("%s: DoH 答案全为非 CF IP(疑似污染),全部丢弃,只用本地边缘 IP", host)
+		}
+		hc.ips = cfOnly
 	} else {
 		setConfigInfo("no ECHConfigList for %s; will use plain TLS if handshake is rejected", host)
 	}
@@ -685,8 +697,9 @@ func hostDialContext(host string, hc *hostConf, insecure bool) func(ctx context.
 			NextProtos:         []string{"h2", "http/1.1"},
 			InsecureSkipVerify: insecure,
 		}
-		// ECH 可用则优先 ECH 握手;失败兜底一次(retry_configs)并缓存;
-		// 再失败降级普通 TLS(保护性降级,至少保证连通性)。
+		// ECH 可用则优先 ECH 握手;失败兜底一次(retry_configs)并缓存。
+		// fail-closed:有 ECH 配置的主机绝不降级普通 TLS(降级会明文暴露 SNI
+		// 并可能拿到污染内容),直接报错;无 ECH 配置的非 CF 主机才走普通 TLS。
 		// 不预判 AS13335:有配置就试,服务器支持 ECH 自然接受。
 		if len(hc.ech) > 0 {
 			cfg.EncryptedClientHelloConfigList = hc.ech
@@ -731,23 +744,20 @@ func hostDialContext(host string, hc *hostConf, insecure bool) func(ctx context.
 					return retryConn, nil
 				}
 				raw.Close()
-				// 兜底也失败 → 降级普通 TLS。
-				setShakeInfo("ECH retry failed for %s; downgrading to plain TLS: %v", host, retryErr)
-				return plainTLSHandshake(ctx, host, d, cands, insecure, len(hc.ech) > 0)
+				// 兜底也失败 → 硬错,不降级(防 SNI 泄露与污染内容)。
+				return nil, fmt.Errorf("%s ECH retry failed, fail-closed: %w", host, retryErr)
 			}
 			raw.Close()
-			// ECH 握手失败(非 retry 场景)→ 降级普通 TLS。
+			// ECH 握手失败(非 retry 场景)→ 硬错,不降级。
 			if len(hc.ech) > 0 {
-				setShakeInfo("ECH handshake failed for %s; downgrading to plain TLS: %v", host, err)
-				return plainTLSHandshake(ctx, host, d, cands, insecure, true)
+				return nil, fmt.Errorf("%s ECH handshake failed, fail-closed: %w", host, err)
 			}
 			return nil, fmt.Errorf("%s handshake failed: %w", host, err)
 		}
 		if len(hc.ech) > 0 && !tc.ConnectionState().ECHAccepted {
 			raw.Close()
-			// ECH 配置被服务器忽略(未接受)→ 降级普通 TLS。
-			setShakeInfo("ECH not accepted for %s; downgrading to plain TLS", host)
-			return plainTLSHandshake(ctx, host, d, cands, insecure, true)
+			// ECH 配置被服务器忽略(未接受)→ 硬错,不降级。
+			return nil, fmt.Errorf("%s ECH not accepted, fail-closed", host)
 		}
 		if len(hc.ech) > 0 {
 			setShakeInfo("ok via DoH ECHAccepted=true source=%s", orNone(configInfo))
