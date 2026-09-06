@@ -274,6 +274,9 @@ func Start(listen, target, echB64, doh, cpArg string, insecure bool) error {
 	cachePath = cpArg
 	dnsCachePath = filepath.Join(filepath.Dir(cpArg), "ech-dns-cache.json")
 	cachePathMu.Unlock()
+	// DoH 端点变化则丢弃旧 DNS 缓存:不同服务商答案可能一边干净一边污染,
+	// 沿用旧答案会把毒 IP 带到新链路。
+	flushDnsCacheIfEndpointChanged(filepath.Join(filepath.Dir(cpArg), "ech-doh-endpoint.txt"), doh)
 	loadDnsCache()
 	fallback := []byte(nil)
 	if strings.TrimSpace(echB64) != "" {
@@ -1053,6 +1056,20 @@ func persistDnsCache() {
 		_ = os.MkdirAll(dir, 0o755)
 	}
 	_ = os.WriteFile(p, data, 0o600)
+}
+
+// flushDnsCacheIfEndpointChanged 在 DoH 端点变化时清空 DNS 缓存并更新标记。
+func flushDnsCacheIfEndpointChanged(markerPath, doh string) {
+	prev, _ := os.ReadFile(markerPath)
+	if strings.TrimSpace(string(prev)) == strings.TrimSpace(doh) {
+		return
+	}
+	dnsCacheMu.Lock()
+	dnsCache = map[string]dnsCacheEntry{}
+	dnsCacheMu.Unlock()
+	_ = os.Remove(dnsCachePath)
+	_ = os.WriteFile(markerPath, []byte(strings.TrimSpace(doh)), 0600)
+	setDNSInfo("endpoint changed, dns cache flushed")
 }
 
 // loadDnsCache 启动时把磁盘缓存载入内存。
