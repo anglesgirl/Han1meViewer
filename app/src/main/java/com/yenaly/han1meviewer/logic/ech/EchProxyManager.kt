@@ -77,7 +77,7 @@ object EchProxyManager {
 
             Echproxy.start(
                 "127.0.0.1:$chosen",          // listen
-                "hanime.tv",                  // target
+                "hanime1.me",                 // target (默认上游+预热,内嵌/X-Ech-Target 可覆盖)
                 "",                           // echB64 (空 → DoH/cloudflare-ech.com + fallback)
                 dohArg,                       // DoH endpoint
                 EDGE_IP_FALLBACK,             // ipList (本地边缘 IP,优先直拨)

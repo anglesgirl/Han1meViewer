@@ -393,6 +393,16 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if host := r.URL.Hostname(); isTargetHost(host) {
 			target = strings.ToLower(host)
 		}
+	} else if strings.HasPrefix(r.URL.Path, "/http://") || strings.HasPrefix(r.URL.Path, "/https://") {
+		// WebView 内嵌形态:http://127.0.0.1:port/https://host/path。
+		// 不解析就会用 Start 的默认 target(曾残留 hanime.tv 导致串站)。
+		if eu, err := url.Parse(strings.TrimPrefix(r.URL.Path, "/")); err == nil && isTargetHost(eu.Hostname()) {
+			target = strings.ToLower(eu.Hostname())
+			r.URL.Path = eu.EscapedPath()
+			if r.URL.Path == "" {
+				r.URL.Path = "/"
+			}
+		}
 	}
 
 	outURL := &url.URL{Scheme: "https", Host: target, Path: r.URL.Path, RawQuery: r.URL.RawQuery}

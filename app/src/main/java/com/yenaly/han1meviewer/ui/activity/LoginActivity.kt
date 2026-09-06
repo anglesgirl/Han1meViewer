@@ -117,7 +117,17 @@ class LoginActivity : FrameActivity() {
                     view: WebView,
                     request: WebResourceRequest,
                 ): Boolean {
-                    val isSameUrl = HANIME_URL.contains(request.url.toString())
+                    // 代理内嵌形态还原真实地址再判定:
+                    // http://127.0.0.1:port/https://hanime1.me/ → https://hanime1.me/
+                    val rawU = request.url
+                    val effective = if (rawU.host == "127.0.0.1" &&
+                        (rawU.path?.startsWith("/http") == true)
+                    ) {
+                        rawU.path!!.removePrefix("/")
+                    } else {
+                        rawU.toString()
+                    }
+                    val isSameUrl = HANIME_URL.contains(effective)
                     if (request.isRedirect && isSameUrl) {
                         val url = request.url
                         // 代理形态下 host 是 127.0.0.1:合并代理域 + 真实站域的 cookie
