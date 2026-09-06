@@ -6,7 +6,7 @@
 // gomobile-exported surface (basic types only):
 //
 //	IsAs13335(doh, host) bool
-//	Start(listen, target, echB64, doh, cachePath string, insecure bool) error
+//	Start(listen, target, echB64, doh, ipList, cachePath string, insecure bool) error
 //	Stop() error
 //	LastStatus() string
 package echproxy
@@ -56,6 +56,7 @@ var (
 	dnsInfo     string   // how the upstream IPs were resolved
 	shakeInfo   string   // last TLS handshake result (ECHAccepted=…)
 	fallbackECH []byte // operator-published ECHConfigList for AS13335 targets
+	customIPs   []string // local edge-IP override (tried first), no remote fetch
 
 	// Per-host state for secondary targets (translation API, mirrors, …) reached
 	// through the same proxy via the X-Ech-Target header.
@@ -258,7 +259,7 @@ var cloudflareAS13335CIDRs = []string{
 	"2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
 }
 
-func Start(listen, target, echB64, doh, cpArg string, insecure bool) error {
+func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) error {
 	mu.Lock()
 	if server != nil {
 		mu.Unlock()
@@ -287,8 +288,15 @@ func Start(listen, target, echB64, doh, cpArg string, insecure bool) error {
 		fallback = decoded
 	}
 
+	custom := make([]string, 0)
+	for _, ip := range parseIPList(ipList) {
+		if isCloudflareAS13335(ip) {
+			custom = append(custom, ip)
+		}
+	}
 	mu.Lock()
 	fallbackECH = fallback
+	customIPs = custom
 	mu.Unlock()
 	setDNSInfo("per-host DoH; ECH only for AS13335-qualified hosts")
 
@@ -559,6 +567,20 @@ func rewriteLocation(loc, target string) string {
 	return loc
 }
 
+// parseIPList splits a comma/space separated list into valid IP literals.
+func parseIPList(s string) []string {
+	var out []string
+	for _, f := range strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\n' || r == '\t' || r == ';'
+	}) {
+		f = strings.TrimSpace(f)
+		if net.ParseIP(f) != nil {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // --- multi-host routing ---------------------------------------------------
 
 // hostRouter sends each request through a transport built for its own hostname.
@@ -634,7 +656,13 @@ func hostDialContext(host string, hc *hostConf, insecure bool) func(ctx context.
 		if err != nil || port == "" {
 			port = "443"
 		}
-		cands := make([]string, 0, len(hc.ips))
+		mu.Lock()
+		custom := append([]string(nil), customIPs...)
+		mu.Unlock()
+		cands := make([]string, 0, len(custom)+len(hc.ips))
+		for _, ip := range custom {
+			cands = append(cands, net.JoinHostPort(ip, port))
+		}
 		for _, ip := range hc.ips {
 			cands = append(cands, net.JoinHostPort(ip, port))
 		}

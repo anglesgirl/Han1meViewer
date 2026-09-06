@@ -46,6 +46,13 @@ object EchProxyManager {
     /** 兜底 DoH 端点(本地预设不可用时)。 */
     const val DEFAULT_DOH = "https://dns.alidns.com/dns-query"
 
+    /**
+     * 本地边缘 IP 兜底(实测可用的 Cloudflare anycast)。
+     * DNS 不可信时(污染/网关策略误伤)直接连这些 IP,ECH+SNI 认证。
+     * 纯本地常量,不走任何远程下发。
+     */
+    const val EDGE_IP_FALLBACK = "104.26.9.104,104.26.8.104,172.67.74.156,172.64.146.66"
+
     /** 状态轮询任务。 */
     private var statusJob: kotlinx.coroutines.Job? = null
 
@@ -75,6 +82,7 @@ object EchProxyManager {
                 "hanime.tv",                  // target
                 "",                           // echB64 (空 → DoH/cloudflare-ech.com + fallback)
                 dohArg,                       // DoH endpoint
+                EDGE_IP_FALLBACK,             // ipList (本地边缘 IP,优先直拨)
                 cachePath!!,                  // ECH 公钥配置缓存(5h)
                 false,                        // insecure
             )
