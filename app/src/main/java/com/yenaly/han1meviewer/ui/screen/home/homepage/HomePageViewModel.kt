@@ -6,8 +6,6 @@ import androidx.core.content.edit
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.database.FirebaseDatabase
-import com.yenaly.han1meviewer.FIREBASE_REALTIME_DATABASE
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.SAVED_USER_ID
@@ -46,7 +44,7 @@ class HomePageViewModel: ViewModel() {
     private val _homePageFlow = MutableStateFlow<PageState<HomeData>>(PageState.Loading)
     val homePageFlow = _homePageFlow.asStateFlow()
 
-    private val database = FirebaseDatabase.getInstance(FIREBASE_REALTIME_DATABASE)
+    // 公告不再走 Firebase(恒空,不断首页流程)
 
     private val _sessionExpiredMessage = MutableSharedFlow<SessionExpiredMessage>()
     val sessionExpiredMessage = _sessionExpiredMessage
@@ -106,40 +104,8 @@ class HomePageViewModel: ViewModel() {
             }
         }
     }
-    private suspend fun fetchAnnouncementsFromFirebase(): List<Announcement> =
-        suspendCancellableCoroutine { continuation ->
-            val lastDismissTime = getSpValue("last_dismiss_time", 0L, "setting_pref")
-            val shouldShowAnno = System.currentTimeMillis() - lastDismissTime > 24 * 60 * 60 * 1000L
-            if (!shouldShowAnno) {
-                continuation.resume(emptyList())
-                return@suspendCancellableCoroutine
-            }
-
-            database.getReference("announcements").get()
-                .addOnSuccessListener { snapshot ->
-                    val list = mutableListOf<Announcement>()
-                    if (snapshot.exists()) {
-                        for (announceSnap in snapshot.children) {
-                            val announcement = announceSnap.getValue(Announcement::class.java)
-                            if (announcement != null && announcement.isActive) {
-                                list.add(announcement)
-                            }
-                        }
-                        if (continuation.isActive) {
-                            continuation.resume(list.sortedBy { it.priority })
-                        }
-                    } else {
-                        if (continuation.isActive) {
-                            continuation.resume(emptyList())
-                        }
-                    }
-                }.addOnFailureListener { e ->
-                    Log.e("Announcement", "读取失败: ${e.message}")
-                    if (continuation.isActive) {
-                        continuation.resume(emptyList()) // 失败也容错返回空列表
-                    }
-                }
-        }
+    // 公告改由自有渠道下发,此处保留入口恒返回空(不断首页流程)
+    private suspend fun fetchAnnouncementsFromFirebase(): List<Announcement> = emptyList()
 
     private companion object {
         const val ANNOUNCEMENTS_TIMEOUT_MILLIS = 5_000L

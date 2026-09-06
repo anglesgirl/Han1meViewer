@@ -7,13 +7,6 @@ import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.color.DynamicColors
-import com.google.firebase.Firebase
-import com.google.firebase.analytics.analytics
-import com.google.firebase.crashlytics.crashlytics
-import com.google.firebase.crashlytics.setCustomKeys
-import com.google.firebase.database.database
-import com.google.firebase.remoteconfig.remoteConfig
-import com.google.firebase.remoteconfig.remoteConfigSettings
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.logic.ech.EchProxyManager
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
@@ -85,7 +78,8 @@ class HanimeApplication : YenalyApplication() {
         HProxySelector.rebuildNetwork()
         // 启动本地 Go ECH 代理(失败则各请求直连兜底)
         EchProxyManager.startAsync(this)
-        initFirebase()
+        // 更新检查(原 Firebase RemoteConfig 触发,现直接触发)
+        AppViewModel.getLatestVersion(delayMillis = 200)
         initNotificationChannel()
         MPVLib.create(applicationContext)
         MPVLib.init()
@@ -98,37 +92,6 @@ class HanimeApplication : YenalyApplication() {
         }
         val selected = Preferences.fakeLauncherIcon
         switchLauncher(selected)
-    }
-
-    private fun initFirebase() {
-        // 用于处理 Firebase Analytics 初始化
-        Firebase.analytics.setAnalyticsCollectionEnabled(Preferences.isAnalyticsEnabled)
-        // 用于处理 Firebase Crashlytics 初始化
-        Firebase.crashlytics.apply {
-            isCrashlyticsCollectionEnabled = !BuildConfig.DEBUG
-            setCustomKeys {
-                key(
-                    FirebaseConstants.APP_LANGUAGE,
-                    LanguageHelper.preferredLanguage.toLanguageTag()
-                )
-                key(
-                    FirebaseConstants.VERSION_SOURCE,
-                    BuildConfig.VERSION_SOURCE
-                )
-            }
-        }
-        // 用于处理 Firebase Remote Config 初始化
-        Firebase.remoteConfig.apply {
-            setConfigSettingsAsync(remoteConfigSettings {
-                minimumFetchIntervalInSeconds = if (BuildConfig.DEBUG) 0 else 3 * 60 * 60
-                fetchTimeoutInSeconds = 10
-            })
-            setDefaultsAsync(FirebaseConstants.remoteConfigDefaults)
-            fetchAndActivate().addOnCompleteListener {
-                AppViewModel.getLatestVersion(delayMillis = 200)
-            }
-        }
-        Firebase.database.setPersistenceEnabled(true)
     }
 
     private fun initNotificationChannel() {
