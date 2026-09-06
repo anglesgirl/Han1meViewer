@@ -132,6 +132,11 @@ androidComponents {
 }
 
 dependencies {
+    // Go ECH 代理 AAR(CI 现场 gomobile 生成 app/libs/echproxy.aar)。文件不存在时跳过,普通构建依然成功。
+    val echproxyAar = file("libs/echproxy.aar")
+    if (echproxyAar.exists()) {
+        implementation(files(echproxyAar))
+    }
     implementation(libs.appcompat)
     implementation(libs.androidx.window)
     implementation(libs.androidx.window.java)
