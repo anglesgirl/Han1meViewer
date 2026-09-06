@@ -61,6 +61,7 @@ import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.component.ConfirmDialog
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
+import com.yenaly.han1meviewer.util.LogExporter
 import com.yenaly.han1meviewer.ui.screen.settings.HomeSettingsScreen
 import com.yenaly.han1meviewer.ui.screen.settings.dialog.LicenseDialog
 import com.yenaly.han1meviewer.ui.screen.settings.model.HomeSettingsUiState
@@ -377,6 +378,19 @@ fun HomeSettingsRouteScreen(
         },
         onOpenFakeLauncherIcon = { showLauncherPicker = true },
         onOpenOpenSourceLicense = { showLicenseScreen = true },
+        onExportLog = {
+            coroutineScope.launch {
+                runCatching {
+                    val file = LogExporter.collect(context)
+                    LogExporter.share(context, file)
+                }.onFailure {
+                    GlobalToasts.show(
+                        context.getString(R.string.export_log_failed),
+                        level = GlobalToasts.ToastLevel.ERROR
+                    )
+                }
+            }
+        },
         onOpenAbout = {},
         onClearCache = {
             val cacheDir = context.cacheDir

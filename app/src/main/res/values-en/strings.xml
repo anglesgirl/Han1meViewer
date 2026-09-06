@@ -909,4 +909,7 @@ Recommendations are as follows:\n
         <item>Excitedly rubbing hands together in anticipation…</item>
         <item>◝(⑅•ᴗ•⑅)◜..°♡ Teleporting…</item>
     </string-array>
+    <string name="export_log">Export diagnostic log</string>
+    <string name="export_log_summary">Capture runtime logs and share (no accounts or cookies)</string>
+    <string name="export_log_failed">Export log failed</string>
 </resources>

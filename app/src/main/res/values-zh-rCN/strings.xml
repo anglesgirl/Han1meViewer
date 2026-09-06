@@ -914,4 +914,7 @@
         <item>搓手手期待ing……</item>
         <item>◝(⑅•ᴗ•⑅)◜..°♡ 传送中……</item>
     </string-array>
+    <string name="export_log">导出诊断日志</string>
+    <string name="export_log_summary">抓取本机运行日志并分享（不含账号与 Cookie）</string>
+    <string name="export_log_failed">导出日志失败</string>
 </resources>

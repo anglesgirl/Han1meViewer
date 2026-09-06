@@ -79,6 +79,7 @@ fun HomeSettingsScreen(
     onOpenApplyDeepLinks: () -> Unit,
     onOpenFakeLauncherIcon: () -> Unit,
     onOpenOpenSourceLicense: () -> Unit,
+    onExportLog: () -> Unit,
     onOpenAbout: () -> Unit,
     onClearCache: () -> Unit,
     onExportBackup: () -> Unit,
@@ -533,6 +534,14 @@ fun HomeSettingsScreen(
         }
         item {
             SettingNavigationItem(
+                title = stringResource(R.string.export_log),
+                summary = stringResource(R.string.export_log_summary),
+                iconRes = R.drawable.baseline_bug_report_24,
+                onClick = onExportLog,
+            )
+        }
+        item {
+            SettingNavigationItem(
                 title = stringResource(R.string.open_source_license),
                 iconRes = R.drawable.ic_oss,
                 onClick = onOpenOpenSourceLicense,
@@ -640,6 +649,7 @@ private fun HomeSettingsScreenPreview() {
             onOpenApplyDeepLinks = {},
             onOpenFakeLauncherIcon = {},
             onOpenOpenSourceLicense = {},
+            onExportLog = {},
             onOpenAbout = {},
             onClearCache = {},
             onExportBackup = {},
