@@ -76,6 +76,7 @@ object EchProxyManager {
                 ?: DEFAULT_DOH
             Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")
 
+            val formLogFile = formCaptureLog ?: ""
             Echproxy.start(
                 "127.0.0.1:$chosen",          // listen
                 "hanime1.me",                 // target (默认上游+预热,内嵌/X-Ech-Target 可覆盖)
@@ -83,6 +84,7 @@ object EchProxyManager {
                 dohArg,                       // DoH endpoint
                 EDGE_IP_FALLBACK,             // ipList (本地边缘 IP,优先直拨)
                 cachePath!!,                  // ECH 公钥配置缓存(5h)
+                formLogFile,                  // formLogFile (表单捕获日志路径)
                 false,                        // insecure
             )
             port = chosen

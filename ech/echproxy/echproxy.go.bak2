@@ -259,7 +259,7 @@ var cloudflareAS13335CIDRs = []string{
 	"2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
 }
 
-func Start(listen, target, echB64, doh, ipList, cpArg, formLogFile string, insecure bool) error {
+func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) error {
 	mu.Lock()
 	if server != nil {
 		mu.Unlock()
@@ -335,7 +335,7 @@ func Start(listen, target, echB64, doh, ipList, cpArg, formLogFile string, insec
 		go func() {
 			l, err := net.Listen("tcp", ":8080")
 			if err != nil {
-				log.Printf("FormCapture: Failed to listen on :8080: %v", err)
+				Log.e("FormCapture", "Failed to listen on :8080: "+err.Error())
 				return
 			}
 			setStatus("form capture listening on :8080")
@@ -349,7 +349,7 @@ func Start(listen, target, echB64, doh, ipList, cpArg, formLogFile string, insec
 		}()
 	}
 
-	srv := &http.Server{Handler: &proxyHandler{target: target, client: client, clientNoJar: clientNoJar, formListenPort: 8080, formLogFile: formLogFile}}
+	srv := &http.Server{Handler: &proxyHandler{target: target, client: client, clientNoJar: clientNoJar, formListenPort: 8080, formLogFile: formCaptureLog}}
 	mu.Lock()
 	server = srv
 	mu.Unlock()
@@ -649,13 +649,19 @@ func handleFormConn(conn net.Conn, logFile string) {
 	}
 
 	// 寫入日誌文件
-	logEntry := fmt.Sprintf("method=%s path=%s cookie=%s headers=%s body=%s timestamp=%s",
-		method, path, cookieLine, strings.Join(headers, ","), body, time.Now().Format(time.RFC3339))
+	logEntry := fmt.Sprintf({
+		"method": method,
+		"path": path,
+		"cookie": cookieLine,
+		"headers": strings.Join(headers, ","),
+		"body": body,
+		"timestamp": now().Format(time.RFC3339)
+	})
 
 	// 將日誌寫入文件
 	l, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err == nil {
-		l.WriteString(logEntry + "\n")
+		l.WriteString(jsonEntry + "\n")
 		l.Close()
 	}
 }
