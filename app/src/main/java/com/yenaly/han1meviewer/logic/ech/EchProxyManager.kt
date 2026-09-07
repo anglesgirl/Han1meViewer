@@ -15,25 +15,23 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.ServerSocket
 
-/** 
+/**
  * ECH 代理管理器:负责启动/停止 Go ECH 代理(gomobile 编译的 echproxy AAR)。
- * 
+ *
  * 代理监听 127.0.0.1:<port>,把请求通过 ECH TLS 握手转发,
  * 隐藏 SNI 防止被 GFW 重置。ECH 公钥配置来自 cloudflare-ech.com(缓存5h)。
  * fail-closed:有 ECH 配置的主机握手失败直接报错,绝不降级明文暴露 SNI。
- * 
- * 代理目标固定为 hanime.tv (兼容原版),运行时通过 X-Ech-Target header
- * 或内嵌 URL 格式 (/https://host/path) 动态路由到实际目标。
- * 这样所有站点(hanime1.me, javchu.com 等)都能复用同一个代理。
- * 
+ *
+ * 代理目标根據當前選擇的站點動態設置，簡單路徑模式：http://127.0.0.1:port/path。
+ *
  * DoH 端点:显式参数 > 用户本地 DoH 预设 > 内置网关兜底。
  * DNS 缓存与 DoH 端点绑定,端点一切换自动冲掉旧缓存(防毒 IP 跨端点复活)。
- * 
+ *
  * 用法:
  *   EchProxyManager.start(context)   // 启动,返回本地代理端口
  *   EchProxyManager.stop()           // 停止
  *   EchProxyManager.isRunning        // 是否在运行
- *   EchProxyManager.proxyUrl(url)    // WebView 登录用的代理内嵌 URL
+ *   EchProxyManager.proxyUrl(url)    // WebView 登录用的代理路径 URL
  */
 object EchProxyManager {
     private const val TAG = "EchProxy"
@@ -52,21 +50,27 @@ object EchProxyManager {
         try {
             cachePath = File(context.filesDir, "ech-public-config.json").absolutePath
             val chosen = freePort()
+
             val dohArg = doh
                 ?: localPresetDoh()
                 ?: DEFAULT_DOH
-            Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")
+            
+            // 根據當前 baseUrl 確定 target
+            val target = currentTarget()
+            
+            Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (target=$target, doh=$dohArg)")
+
             Echproxy.start(
                 "127.0.0.1:$chosen",          // listen
-                "hanime.tv",                  // target (固定,兼容原版,运行时动态路由)
-                "",                           // echB64 (空 -> DoH/cloudflare-ech.com + fallback)
+                target,                        // target (根據站點動態)
+                "",                            // echB64 (空 → DoH/cloudflare-ech.com + fallback)
                 dohArg,                       // DoH endpoint
                 EDGE_IP_FALLBACK,             // ipList (本地边缘 IP,优先直拨)
                 cachePath!!,                  // ECH 公钥配置缓存(5h)
                 false,                        // insecure
             )
             port = chosen
-            Log.i(TAG, "ECH proxy started on 127.0.0.1:$chosen")
+            Log.i(TAG, "ECH proxy started on 127.0.0.1:$chosen (target=$target)")
             // 关键:启动代理后重建系统网络,让 HttpURLConnection/WebView/ExoPlayer 都走 ECH 代理
             HProxySelector.rebuildNetwork()
             startStatusPolling()
@@ -76,6 +80,18 @@ object EchProxyManager {
             EchStats.event("ech_failed", mapOf("error" to (e.message ?: "unknown")))
             port = -1
             -1
+        }
+    }
+
+    /** 根據當前 baseUrl 確定代理 target。 */
+    private fun currentTarget(): String {
+        val base = Preferences.baseUrl
+        return when {
+            base.contains("hanime1.me") -> "hanime1.me"
+            base.contains("javchu.com") -> "javchu.com"
+            base.contains("hanime1.com") -> "hanime1.com"
+            base.contains("hanimeone.me") -> "hanimeone.me"
+            else -> "hanime1.me"  // 默認
         }
     }
 
