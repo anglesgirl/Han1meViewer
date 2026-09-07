@@ -76,7 +76,6 @@ object EchProxyManager {
                 ?: DEFAULT_DOH
             Log.i(TAG, "starting ECH proxy on 127.0.0.1:$chosen (doh=$dohArg)")
 
-            val formLogFile = formCaptureLog ?: ""
             Echproxy.start(
                 "127.0.0.1:$chosen",          // listen
                 "hanime1.me",                 // target (默认上游+预热,内嵌/X-Ech-Target 可覆盖)
@@ -84,7 +83,6 @@ object EchProxyManager {
                 dohArg,                       // DoH endpoint
                 EDGE_IP_FALLBACK,             // ipList (本地边缘 IP,优先直拨)
                 cachePath!!,                  // ECH 公钥配置缓存(5h)
-                formLogFile,                  // formLogFile (表单捕获日志路径)
                 false,                        // insecure
             )
             port = chosen
@@ -137,9 +135,6 @@ object EchProxyManager {
         return "http://127.0.0.1:$p/$t"
     }
 
-    /** 表單捕獲開關(供 LoginActivity 開啟/關閉)。 */
-    var isFormCapture: Boolean = false
-
     /** 停止 ECH 代理。 */
     suspend fun stop() = withContext(Dispatchers.IO) {
         if (!isRunning) return@withContext
@@ -155,7 +150,7 @@ object EchProxyManager {
 
     /** 启动(非挂起版本,供 Application 使用)。 */
     fun startAsync(context: Context, doh: String? = null) {
-        scope.launch { start(context, doh, formCaptureLog) }
+        scope.launch { start(context, doh) }
     }
 
     /** 停止(非挂起版本)。 */
