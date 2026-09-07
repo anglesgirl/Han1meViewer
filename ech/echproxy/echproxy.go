@@ -50,7 +50,7 @@ const (
 type dnsCacheEntry struct {
 	IPs    []string `json:"ips"`
 	Expire int64    `json:"expire"`
-)
+}
 
 // LastStatus returns status summary.
 func LastStatus() string {
