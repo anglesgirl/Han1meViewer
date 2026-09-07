@@ -108,12 +108,12 @@ object EchProxyManager {
         }
     }
 
-    /** 代理内嵌 URL(WebView 登录用): http://127.0.0.1:port/https://host/path。 */
+    /** 代理簡單路徑 URL(WebView 登錄用): http://127.0.0.1:port/path。
+     * 代理啟動時已配置 target，直接按 path 轉發，無需內嵌 host。 */
     fun proxyUrl(targetUrl: String): String? {
         val p = port
         if (p <= 0) return null
-        val t = if (targetUrl.startsWith("http")) targetUrl else "https://$targetUrl"
-        return "http://127.0.0.1:$p/$t"
+        return "http://127.0.0.1:$p$targetUrl"
     }
 
     /** 停止 ECH 代理。 */

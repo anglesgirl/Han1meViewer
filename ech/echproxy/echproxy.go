@@ -35,8 +35,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/net/html"
 )
 
 var androidCertPool *x509.CertPool
@@ -332,11 +330,7 @@ func Start(listen, target, echB64, doh, ipList, cpArg string, insecure bool) err
 		return fmt.Errorf("listen %s: %w", listen, err)
 	}
 
-	// 提取端口號
-	_, portStr, _ := net.SplitHostPort(ln.Addr().String())
-	portInt, _ := strconv.Atoi(portStr)
-
-	srv := &http.Server{Handler: &proxyHandler{target: target, client: client, clientNoJar: clientNoJar, port: portInt}}
+	srv := &http.Server{Handler: &proxyHandler{target: target, client: client, clientNoJar: clientNoJar}}
 	mu.Lock()
 	server = srv
 	mu.Unlock()
@@ -379,8 +373,6 @@ type proxyHandler struct {
 	client *http.Client
 	// OkHttp 路径专用(无 jar),WebView 内嵌路径用带 jar 的 client。
 	clientNoJar *http.Client
-	// 本地代理端口(用於 HTML 重寫生成代理前綴)
-	port int
 }
 
 var hopByHop = map[string]bool{
@@ -397,9 +389,12 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// X-Ech-Target lets the app route other hosts (e.g. a translation API)
-	// through the same DoH + ECH path instead of the poisoned system resolver.
+	// 簡單路徑模式：WebView 載入 http://127.0.0.1:port/login
+	// 直接用 h.target + r.URL.Path 轉發
+	// 無需 X-Ech-Target、內嵌 URL 解析等複雜邏輯
 	target := h.target
+
+	// 如果有 X-Ech-Target header(OkHttp 路徑)，優先使用
 	if t := strings.TrimSpace(r.Header.Get("X-Ech-Target")); t != "" {
 		if !isTargetHost(t) {
 			http.Error(w, "echproxy: invalid target host", http.StatusBadRequest)
@@ -407,20 +402,9 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		target = strings.ToLower(t)
 	} else if r.URL.IsAbs() && r.URL.Host != "" {
-		// 标准 HTTP 代理的绝对 URL 形式:GET http://host/path
-		// 目标来自 URL 本身(如 http 明文请求、非 CONNECT 隧道)。
+		// 標準 HTTP 代理的絕對 URL 形式:GET http://host/path
 		if host := r.URL.Hostname(); isTargetHost(host) {
 			target = strings.ToLower(host)
-		}
-	} else if strings.HasPrefix(r.URL.Path, "/http://") || strings.HasPrefix(r.URL.Path, "/https://") {
-		// WebView 内嵌形态:http://127.0.0.1:port/https://host/path。
-		// 不解析就会用 Start 的默认 target(曾残留 hanime.tv 导致串站)。
-		if eu, err := url.Parse(strings.TrimPrefix(r.URL.Path, "/")); err == nil && isTargetHost(eu.Hostname()) {
-			target = strings.ToLower(eu.Hostname())
-			r.URL.Path = eu.EscapedPath()
-			if r.URL.Path == "" {
-				r.URL.Path = "/"
-			}
 		}
 	}
 
@@ -474,17 +458,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-
-	// 內嵌模式下：HTML 回應需要重寫相對路徑為代理絕對路徑
-	ct := w.Header().Get("Content-Type")
-	if strings.HasPrefix(strings.ToLower(ct), "text/html") {
-		body, _ := io.ReadAll(resp.Body)
-		rewritten := rewriteHTMLForProxy(string(body), target, fmt.Sprintf("http://127.0.0.1:%d", h.port))
-		w.Header().Set("Content-Length", strconv.Itoa(len(rewritten)))
-		_, _ = w.Write([]byte(rewritten))
-	} else {
-		_, _ = io.Copy(w, resp.Body)
-	}
+	_, _ = io.Copy(w, resp.Body)
 }
 
 // isTargetHost accepts DNS host names only. The header is intentionally not a
@@ -616,90 +590,6 @@ func rewriteLocation(loc, target string) string {
 		return "/" + nu.String()
 	}
 	return loc
-}
-
-// rewriteHTMLForProxy 重寫 HTML 中的相對路徑為代理絕對路徑
-// 處理：<link href="/css/app.css"> → /https://target/css/app.css
-//      <a href="/user/profile"> → /https://target/user/profile
-//      <form action="/login"> → /https://target/login
-//      <script src="/js/app.js"> → /https://target/js/app.js
-//      <img src="/images/logo.png"> → /https://target/images/logo.png
-func rewriteHTMLForProxy(htmlStr, target, proxyBase string) string {
-	doc, err := html.Parse(strings.NewReader(htmlStr))
-	if err != nil {
-		return htmlStr
-	}
-
-	baseURL := "https://" + target
-	proxyPrefix := proxyBase + "/" + baseURL
-
-	var rewrite func(*html.Node)
-	rewrite = func(n *html.Node) {
-		if n.Type == html.ElementNode {
-			attrsToRewrite := []string{}
-			switch n.Data {
-			case "a", "link":
-				attrsToRewrite = []string{"href"}
-			case "form":
-				attrsToRewrite = []string{"action"}
-			case "script", "img", "iframe", "embed", "source", "video", "audio":
-				attrsToRewrite = []string{"src"}
-			case "area":
-				attrsToRewrite = []string{"href"}
-			case "base":
-				attrsToRewrite = []string{"href"}
-			}
-
-			for _, attrName := range attrsToRewrite {
-				for i, attr := range n.Attr {
-					if attr.Key == attrName {
-						val := attr.Val
-						if strings.HasPrefix(val, "/") && !strings.HasPrefix(val, "//") {
-							// 絕對路徑 → 代理絕對路徑
-							n.Attr[i].Val = proxyPrefix + val
-						} else if strings.HasPrefix(val, "./") || strings.HasPrefix(val, "../") ||
-							(!strings.HasPrefix(val, "http://") && !strings.HasPrefix(val, "https://") &&
-								!strings.HasPrefix(val, "//") && !strings.HasPrefix(val, "/") &&
-								!strings.HasPrefix(val, "mailto:") && !strings.HasPrefix(val, "javascript:") &&
-								!strings.HasPrefix(val, "data:") && val != "") {
-							// 相對路徑 → 代理絕對路徑 (相對於當前頁面路徑)
-							// 簡化：直接加上代理前綴 + 目標基礎路徑
-							n.Attr[i].Val = proxyBase + "/" + baseURL + "/" + val
-						} else if (strings.HasPrefix(val, "http://") || strings.HasPrefix(val, "https://")) && strings.Contains(val, target) {
-							// 同域絕對 URL → 代理絕對路徑
-							// https://javchu.com/login → /https://javchu.com/login
-							if u, err := url.Parse(val); err == nil && (u.Host == target || u.Host == "www."+target) {
-								nu := &url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path, RawQuery: u.RawQuery}
-								if nu.Path == "" {
-									nu.Path = "/"
-								}
-								n.Attr[i].Val = proxyBase + "/" + nu.String()
-							}
-						}
-					}
-				}
-			}
-
-			// 特殊處理 <base> 標籤
-			if n.Data == "base" {
-				for i, attr := range n.Attr {
-					if attr.Key == "href" {
-						n.Attr[i].Val = proxyPrefix
-					}
-				}
-			}
-		}
-
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			rewrite(c)
-		}
-	}
-
-	rewrite(doc)
-
-	var buf strings.Builder
-	_ = html.Render(&buf, doc)
-	return buf.String()
 }
 
 // parseIPList splits a comma/space separated list into valid IP literals.
