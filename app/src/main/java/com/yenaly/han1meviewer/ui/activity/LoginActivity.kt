@@ -144,22 +144,7 @@ class LoginActivity : FrameActivity() {
                         return true
                     }
 
-                    // 關鍵：攔截所有直連站點請求 → 強制走代理
-                    // POST 表單提交放行(代理模式下 POST 給 127.0.0.1 由代理轉發，Body 全透傳)
-                    val u = request.url
-                    val isLoginPage = u.path?.contains("/login") ?: false
-                    val isSiteHost = HANIME_HOSTNAME.any { u.host == it || u.host?.endsWith(".$it") == true }
-                    
-                    if ((isSiteHost || isLoginPage) && u.host != "127.0.0.1" &&
-                        ((u.scheme == "https" || u.scheme == "http")) &&
-                        (request.method == "GET" || request.method == "POST") && request.isForMainFrame
-                    ) {
-                        val proxied = EchProxyManager.proxyUrl(u.toString())
-                        if (proxied != null) {
-                            view.loadUrl(proxied)
-                            return true
-                        }
-                    }
+                    // 系統代理已處理路由，WebView 直接加載，無需攔截
                     return super.shouldOverrideUrlLoading(view, request)
                 }
 
@@ -184,13 +169,15 @@ class LoginActivity : FrameActivity() {
         }
     }
 
-    /** 登录页地址:代理就绪則走 127.0.0.1 内嵌形態(Body 全透傳),否則直連。
-     * 使用當前選擇的站點 baseUrl (hanime1.me / javchu.com 等)。 */
-    private fun loginPageUrl(): String {
-        val base = Preferences.baseUrl
-        val loginUrl = if (base.endsWith("/")) base + "login" else base + "/login"
-        return EchProxyManager.proxyUrl(loginUrl) ?: loginUrl
-    }
+    /** 登录页地址：走系統代理，直接用直連 URL。代理根據 Host 動態路由。 */
+    private fun loginPageUrl(): String =
+        if (EchProxyManager.isRunning) {
+            val base = Preferences.baseUrl
+            if (base.endsWith("/")) base + "login" else base + "/login"
+        } else {
+            val base = Preferences.baseUrl
+            if (base.endsWith("/")) base + "login" else base + "/login"
+        }
 
     private fun openQrScanner() {
         scannerLauncher.launch(Intent(this, ManualInputCookiesActivity::class.java))
