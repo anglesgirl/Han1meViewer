@@ -34,7 +34,7 @@ android {
 
 
     defaultConfig {
-        applicationId = "com.yenaly.han1meviewer"
+        applicationId = "com.yenaly.han1meviewer.ech"
         minSdk = property("min.sdk")?.toString()?.toIntOrNull()
         targetSdk = property("target.sdk")?.toString()?.toIntOrNull()
         val (code, name) = createVersion(major = 1, minor = 0, patch = 8)
