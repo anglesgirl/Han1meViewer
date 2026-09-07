@@ -52,7 +52,7 @@ jobs:
 
       - name: 校验 ECH 原生库
         run: |
-          APK=$(find app/build/outputs -type f -name '*debug.apk' | head -1)
+          APK=$(find app/build/outputs -type f -name '*.apk' | head -1)
           test -n "$APK"
           unzip -l "$APK" | grep -q 'lib/arm64-v8a/libgojni.so'
 
@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Han1meViewer-ech-${{ github.sha }}
-          path: app/build/outputs/apk/**/*debug.apk
+          path: app/build/outputs/**/*.apk
 
       - name: 回传构建结果
         if: always()

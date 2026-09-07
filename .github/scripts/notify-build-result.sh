@@ -3,7 +3,7 @@ set -uo pipefail
 
 api="https://api.telegram.org/bot${TG_BOT_TOKEN}"
 short_sha="${HEAD_SHA:0:12}"
-apk="$(find app/build/outputs/apk -type f -name '*.apk' -print -quit 2>/dev/null || true)"
+apk="$(find app/build/outputs -type f -name '*.apk' -print -quit 2>/dev/null || true)"
 
 send_message() {
   curl -fsS --max-time 30 -X POST "$api/sendMessage" \
