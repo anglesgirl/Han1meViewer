@@ -665,6 +665,16 @@ func rewriteHTMLForProxy(htmlStr, target, proxyBase string) string {
 							// 相對路徑 → 代理絕對路徑 (相對於當前頁面路徑)
 							// 簡化：直接加上代理前綴 + 目標基礎路徑
 							n.Attr[i].Val = proxyBase + "/" + baseURL + "/" + val
+						} else if (strings.HasPrefix(val, "http://") || strings.HasPrefix(val, "https://")) && strings.Contains(val, target) {
+							// 同域絕對 URL → 代理絕對路徑
+							// https://javchu.com/login → /https://javchu.com/login
+							if u, err := url.Parse(val); err == nil && (u.Host == target || u.Host == "www."+target) {
+								nu := &url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path, RawQuery: u.RawQuery}
+								if nu.Path == "" {
+									nu.Path = "/"
+								}
+								n.Attr[i].Val = proxyBase + "/" + nu.String()
+							}
 						}
 					}
 				}
