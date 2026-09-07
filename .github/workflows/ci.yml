@@ -40,7 +40,7 @@ jobs:
           cd ech
           go get golang.org/x/mobile/bind@latest
           mkdir -p ../app/libs
-          gomobile bind -v -target=android/arm64 -androidapi 29 -javapkg echproxy \
+          gomobile bind -v -target=android/arm64 -androidapi 29 -javapkg com.yenaly.han1meviewer.echproxy \
             -o ../app/libs/echproxy.aar ./echproxy
           ls -la ../app/libs
 
