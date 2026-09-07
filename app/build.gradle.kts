@@ -132,6 +132,7 @@ androidComponents {
 }
 
 dependencies {
+    implementation(files("libs/echproxy.aar"))
     implementation(libs.appcompat)
     implementation(libs.androidx.window)
     implementation(libs.androidx.window.java)
