@@ -106,78 +106,81 @@ class LoginActivity : FrameActivity() {
             settings.userAgentString = USER_AGENT
 
             webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView, url: String) {
-                                isRefreshing = false
-                            }
+                override fun onPageFinished(view: WebView, url: String) {
+                    isRefreshing = false
+                }
 
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView,
-                                request: WebResourceRequest,
-                            ): Boolean {
-                                // 代理内嵌形態还原真实地址再判定:
-                                // http://127.0.0.1:port/https://hanime1.me/ → https://hanime1.me/
-                                val rawU = request.url
-                                val effective = if (rawU.host == "127.0.0.1" &&
-                                    (rawU.path?.startsWith("/http") == true)
-                                ) {
-                                    rawU.path!!.removePrefix("/")
-                                } else {
-                                    rawU.toString()
-                                }
-                                val isSameUrl = HANIME_URL.contains(effective)
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): Boolean {
+                    // 代理内嵌形態还原真实地址再判定:
+                    // http://127.0.0.1:port/https://hanime1.me/ → https://hanime1.me/
+                    val rawU = request.url
+                    val effective = if (rawU.host == "127.0.0.1" &&
+                        (rawU.path?.startsWith("/http") == true)
+                    ) {
+                        rawU.path!!.removePrefix("/")
+                    } else {
+                        rawU.toString()
+                    }
+                    val isSameUrl = HANIME_URL.contains(effective)
 
-                                // 登錄成功：302 重定向到首頁（非 /login）
-                                if (request.isRedirect && isSameUrl) {
-                                    val url = request.url
-                                    val cm = CookieManager.getInstance()
-                                    val parts = mutableListOf<String>()
-                                    cm.getCookie(url.host)?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
-                                    HANIME_HOSTNAME.forEach { h ->
-                                        cm.getCookie(h)?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
-                                    }
-                                    val cookieManager = parts.joinToString("; ")
-                                    Log.d("login_cookie", cookieManager)
-                                    login(cookieManager)
-                                    EchStats.event("login_success", mapOf("via" to "webview"))
-                                    setResult(RESULT_OK)
-                                    finish()
-                                    return true
-                                }
-
-                                // 防逃逸:主框架 GET 导航全部收进代理
-                                // POST 表单提交放行(代理模式下 POST 给 127.0.0.1 由代理转发，Body 全透传)
-                                val u = request.url
-                                if (u.host != "127.0.0.1" &&
-                                    (u.scheme == "https" || u.scheme == "http") &&
-                                    request.method == "GET" && request.isForMainFrame
-                                ) {
-                                    val proxied = EchProxyManager.proxyUrl(u.toString())
-                                    if (proxied != null) {
-                                        view.loadUrl(proxied)
-                                        return true
-                                    }
-                                }
-                                return super.shouldOverrideUrlLoading(view, request)
-                            }
-
-                            override fun onReceivedError(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                                error: WebResourceError?,
-                            ) {
-                                if (request?.isForMainFrame == true && !isDestroyed && !isFinishing) {
-                                    isRefreshing = false
-                                    GlobalToasts.show(getString(R.string.load_failed_retry), level = GlobalToasts.ToastLevel.ERROR)
-                                }
-                            }
+                    // 登錄成功：302 重定向到首頁（非 /login）
+                    if (request.isRedirect && isSameUrl) {
+                        val url = request.url
+                        val cm = CookieManager.getInstance()
+                        val parts = mutableListOf<String>()
+                        cm.getCookie(url.host)?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+                        HANIME_HOSTNAME.forEach { h ->
+                            cm.getCookie(h)?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
                         }
-                        // 等待代理就绪再载入
-                        lifecycleScope.launch {
-                            while (!EchProxyManager.isRunning) {
-                                kotlinx.coroutines.delay(200)
-                            }
-                            loadUrl(loginPageUrl())
+                        val cookieManager = parts.joinToString("; ")
+                        Log.d("login_cookie", cookieManager)
+                        login(cookieManager)
+                        EchStats.event("login_success", mapOf("via" to "webview"))
+                        setResult(RESULT_OK)
+                        finish()
+                        return true
+                    }
+
+                    // 關鍵：攔截所有直連站點請求 → 強制走代理
+                    // POST 表單提交放行(代理模式下 POST 給 127.0.0.1 由代理轉發，Body 全透傳)
+                    val u = request.url
+                    val isLoginPage = u.path?.contains("/login") == true
+                    val isSiteHost = HANIME_HOSTNAME.any { u.host == it || u.host.endsWith(".$it") }
+                    
+                    if ((isSiteHost || isLoginPage) && u.host != "127.0.0.1" &&
+                        (u.scheme == "https" || u.scheme == "http") &&
+                        (request.method == "GET" || request.method == "POST") && request.isForMainFrame
+                    ) {
+                        val proxied = EchProxyManager.proxyUrl(u.toString())
+                        if (proxied != null) {
+                            view.loadUrl(proxied)
+                            return true
                         }
+                    }
+                    return super.shouldOverrideUrlLoading(view, request)
+                }
+
+                override fun onReceivedError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    error: WebResourceError?,
+                ) {
+                    if (request?.isForMainFrame == true && !isDestroyed && !isFinishing) {
+                        isRefreshing = false
+                        GlobalToasts.show(getString(R.string.load_failed_retry), level = GlobalToasts.ToastLevel.ERROR)
+                    }
+                }
+            }
+            // 等待代理就緒再載入登錄頁
+            lifecycleScope.launch {
+                while (!EchProxyManager.isRunning) {
+                    kotlinx.coroutines.delay(200)
+                }
+                loadUrl(loginPageUrl())
+            }
         }
     }
 
