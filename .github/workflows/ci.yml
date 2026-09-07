@@ -43,6 +43,12 @@ jobs:
           gomobile bind -v -target=android/arm64 -androidapi 29 -javapkg com.yenaly.han1meviewer.echproxy \
             -o ../app/libs/echproxy.aar ./echproxy
           ls -la ../app/libs
+          echo "=== AAR 内容 ==="
+          unzip -l ../app/libs/echproxy.aar | head -60
+          echo "=== classes.jar 内类 ==="
+          mkdir -p /tmp/aar-inspect && rm -rf /tmp/aar-inspect/* && unzip -o -q ../app/libs/echproxy.aar -d /tmp/aar-inspect
+          find /tmp/aar-inspect -name "*.jar" | head
+          unzip -l /tmp/aar-inspect/classes.jar | grep -E "class|Class" | head -40
 
       - name: Restore release keystore
         if: env.KEYSTORE_BASE64 != ''
