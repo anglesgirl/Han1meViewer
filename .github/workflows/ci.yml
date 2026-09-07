@@ -4,7 +4,7 @@ name: CI
 
 on:
   push:
-    branches: [ "go-misaka" ]
+    branches: [ "ech-pr456" ]
     paths-ignore:
       - "**.md"
   workflow_dispatch:
