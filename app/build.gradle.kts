@@ -17,7 +17,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.daisukikaffuchino.han1meviewer"
+        applicationId = "io.github.daisukikaffuchino.han1meviewer.ech"
         minSdk = 29
         targetSdk = 37
         versionCode = 260805
