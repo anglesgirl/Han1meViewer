@@ -670,17 +670,22 @@ func hostDialContext(host string, hc *hostConf, insecure bool) func(ctx context.
 		mu.Lock()
 		custom := append([]string(nil), customIPs...)
 		mu.Unlock()
-		// Prefer the addresses published for this host. A manually curated
-		// Cloudflare edge can be useful as a fallback, but it is not guaranteed
-		// to serve every Cloudflare customer or application endpoint reliably.
-		cands := make([]string, 0, len(custom)+len(hc.ips))
+
+		// 先過濾 DoH 解析結果：只保留 Cloudflare AS13335 IP
+		cfOnly := make([]string, 0, len(hc.ips))
 		for _, ip := range hc.ips {
+			if isCloudflareAS13335(ip) {
+				cfOnly = append(cfOnly, ip)
+			}
+		}
+
+		// 撥號順序：優先 customIPs（乾淨 edge IP），再 cfOnly（過濾後的 DoH IP）
+		cands := make([]string, 0, len(custom)+len(cfOnly))
+		for _, ip := range custom {
 			cands = append(cands, net.JoinHostPort(ip, port))
 		}
-		if hc.as13335 {
-			for _, ip := range custom {
-				cands = append(cands, net.JoinHostPort(ip, port))
-			}
+		for _, ip := range cfOnly {
+			cands = append(cands, net.JoinHostPort(ip, port))
 		}
 
 		d := &net.Dialer{Timeout: dialTimeout}
