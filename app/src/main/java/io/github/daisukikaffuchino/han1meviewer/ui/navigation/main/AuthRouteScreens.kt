@@ -241,7 +241,7 @@ private fun createLoginWebView(
         ): Boolean {
             val localLoginRedirect = request.url.host == "127.0.0.1" &&
                 request.url.encodedPath != "/login" &&
-                !request.url.encodedPath.startsWith("/login/")
+                !(request.url.encodedPath ?: "").startsWith("/login/")
             if (request.isRedirect && (HANIME_URL.contains(request.url.toString()) || localLoginRedirect)) {
                 val cookies = CookieManager.getInstance().getCookie(request.url.host).orEmpty()
                 LogUtil.d("login_cookie", "Captured login cookies: ${cookies.isNotBlank()}")

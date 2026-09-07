@@ -21,6 +21,10 @@ import io.github.daisukikaffuchino.utils.applicationContext as globalApplication
 import `is`.xyz.mpv.MPVLib
 import java.lang.ref.WeakReference
 import java.net.ProxySelector
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * @project Hanime1
@@ -50,7 +54,7 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         initNotificationChannel()
         MPVLib.create(applicationContext)
         MPVLib.init()
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             EchProxyManager.start(this@HanimeApplication)
         }
 
