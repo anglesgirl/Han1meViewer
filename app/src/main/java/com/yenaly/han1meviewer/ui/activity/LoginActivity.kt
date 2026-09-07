@@ -22,15 +22,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
-import com.yenaly.hanimeviewer.HANIME_LOGIN_URL
-import com.yenaly.hanimeviewer.HanimeConstants.HANIME_HOSTNAME
-import com.yenaly.hanimeviewer.HanimeConstants.HANIME_URL
-import com.yenaly.hanimeviewer.R
-import com.yenaly.hanimeviewer.USER_AGENT
-import com.yenaly.hanimeviewer.logic.ech.EchProxyManager
-import com.yenaly.hanimeviewer.ui.screen.login.LoginScreen
-import com.yenaly.hanimeviewer.ui.theme.HanimeTheme
-import com.yenaly.hanimeviewer.ui.component.GlobalToasts
+import com.yenaly.han1meviewer.HANIME_LOGIN_URL
+import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
+import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
+import com.yenaly.han1meviewer.HanimeManager.login
+import com.yenaly.han1meviewer.R
+import com.yenaly.han1meviewer.USER_AGENT
+import com.yenaly.han1meviewer.logic.ech.EchProxyManager
+import com.yenaly.han1meviewer.ui.screen.login.LoginScreen
+import com.yenaly.han1meviewer.ui.theme.HanimeTheme
+import com.yenaly.han1meviewer.ui.component.GlobalToasts
+import com.yenaly.han1meviewer.util.EchStats
 import com.yenaly.yenaly_libs.base.frame.FrameActivity
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -134,7 +136,7 @@ class LoginActivity : FrameActivity() {
                         Log.d("login_cookie", cookieManager)
                         login(cookieManager)
                         // 記錄登錄成功統計
-                        com.yenaly.hanimeviewer.util.EchStats.event("login_success", mapOf("via" to "webview"))
+                        EchStats.event("login_success", mapOf("via" to "webview"))
                         setResult(RESULT_OK)
                         finish()
                         return true
