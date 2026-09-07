@@ -10,6 +10,7 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository
 import io.github.daisukikaffuchino.han1meviewer.logic.datastore.DataStoreManager
+import io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager
 import io.github.daisukikaffuchino.han1meviewer.logic.network.HProxySelector
 import io.github.daisukikaffuchino.han1meviewer.ui.crash.CrashHandler
 import io.github.daisukikaffuchino.han1meviewer.util.AnimeShaders
@@ -49,6 +50,9 @@ class HanimeApplication : Application(), Application.ActivityLifecycleCallbacks 
         initNotificationChannel()
         MPVLib.create(applicationContext)
         MPVLib.init()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+            EchProxyManager.start(this@HanimeApplication)
+        }
 
         if (AnimeShaders.copyShaderAssets(applicationContext) <= 0) {
             LogUtil.w(TAG, "Shader 复制失败")

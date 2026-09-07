@@ -1,0 +1,63 @@
+name: 构建 ECH Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["ech-rebuild"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ech-rebuild
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: 配置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 生成 Go ECH AAR
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          cd ech
+          go get golang.org/x/mobile/bind@latest
+          mkdir -p ../app/libs
+          gomobile bind -v -target=android/arm64 -androidapi 29 -o ../app/libs/echproxy.aar ./echproxy
+          test -s ../app/libs/echproxy.aar
+
+      - name: 构建调试包
+        run: |
+          chmod +x gradlew
+          ./gradlew buildDebug -x lint
+
+      - name: 校验 ECH 原生库
+        run: |
+          APK=$(find app/build/outputs/apk -name '*debug.apk' | head -1)
+          test -n "$APK"
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libgojni.so'
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Han1meViewer-ech-${{ github.sha }}
+          path: app/build/outputs/apk/**/*debug.apk

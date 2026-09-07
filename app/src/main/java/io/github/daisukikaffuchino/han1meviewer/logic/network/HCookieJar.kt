@@ -27,22 +27,25 @@ class HCookieJar : CookieJar {
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
         val host = url.host
-        val cookies = mutableListOf<Cookie>()
-        cookieMap[host]?.let { cookies.addAll(it) }
-
-        cookies.addAll(CookieString(SettingsRepository.current.loginCookie).toLoginCookieList(host))
+        val cookies = LinkedHashMap<String, Cookie>()
+        cookieMap[host]?.forEach { cookies[it.name] = it }
+        CookieString(SettingsRepository.current.loginCookie).toLoginCookieList(host)
+            .forEach { cookies[it.name] = it }
         if (SettingsRepository.cloudFlareCookieHost == host) {
-            cookies.addAll(CookieString(SettingsRepository.current.cloudFlareCookie).toLoginCookieList(host))
+            CookieString(SettingsRepository.current.cloudFlareCookie).toLoginCookieList(host)
+                .forEach { cookies[it.name] = it }
         }
 
-        LogUtil.d("HCookieJar", "loadForRequest for $host: $cookies")
+        LogUtil.d("HCookieJar", "loadForRequest for $host: ${cookies.keys}")
 
-        return cookies
+        return cookies.values.toList()
     }
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        cookieMap[url.host] = cookies.toMutableList().also {
-            it += CookieString(SettingsRepository.current.loginCookie).toLoginCookieList(url.host)
-        }
+        val merged = (cookieMap[url.host] ?: emptyList()).associateBy { it.name }.toMutableMap()
+        cookies.forEach { merged[it.name] = it }
+        CookieString(SettingsRepository.current.loginCookie).toLoginCookieList(url.host)
+            .forEach { merged[it.name] = it }
+        cookieMap[url.host] = merged.values.toMutableList()
     }
 }

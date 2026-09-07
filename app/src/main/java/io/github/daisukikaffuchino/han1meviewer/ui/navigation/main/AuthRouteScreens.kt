@@ -25,6 +25,7 @@ import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository
 import io.github.daisukikaffuchino.han1meviewer.R
 import io.github.daisukikaffuchino.han1meviewer.USER_AGENT
 import io.github.daisukikaffuchino.han1meviewer.logic.NetworkRepo
+import io.github.daisukikaffuchino.han1meviewer.logic.ech.EchProxyManager
 import io.github.daisukikaffuchino.han1meviewer.logic.network.CloudflareVerificationCoordinator
 import io.github.daisukikaffuchino.han1meviewer.logic.state.WebsiteState
 import io.github.daisukikaffuchino.han1meviewer.login
@@ -77,6 +78,11 @@ fun LoginRouteScreen(
             onLogin = { username, password ->
                 isLoggingIn = true
                 scope.launch {
+                    if (!EchProxyManager.ensureStarted(activity)) {
+                        isLoggingIn = false
+                        SonnerToast.error(R.string.login_failed)
+                        return@launch
+                    }
                     NetworkRepo.login(username, password).collect { state ->
                         when (state) {
                             WebsiteState.Loading -> Unit
@@ -106,7 +112,7 @@ fun LoginRouteScreen(
     LoginScreen(
         isRefreshing = isRefreshing,
         onBack = ::navigateBack,
-        onRefresh = { webViewState.value?.loadUrl(HANIME_LOGIN_URL) },
+        onRefresh = { EchProxyManager.proxyUrl(HANIME_LOGIN_URL)?.let(webViewState.value!!::loadUrl) },
         onOpenQrScanner = onOpenManualCookies,
         webViewFactory = {
             createLoginWebView(
@@ -233,7 +239,10 @@ private fun createLoginWebView(
             view: WebView,
             request: WebResourceRequest,
         ): Boolean {
-            if (request.isRedirect && HANIME_URL.contains(request.url.toString())) {
+            val localLoginRedirect = request.url.host == "127.0.0.1" &&
+                request.url.encodedPath != "/login" &&
+                !request.url.encodedPath.startsWith("/login/")
+            if (request.isRedirect && (HANIME_URL.contains(request.url.toString()) || localLoginRedirect)) {
                 val cookies = CookieManager.getInstance().getCookie(request.url.host).orEmpty()
                 LogUtil.d("login_cookie", "Captured login cookies: ${cookies.isNotBlank()}")
                 onLoginSucceeded(cookies)
@@ -250,7 +259,17 @@ private fun createLoginWebView(
             if (request?.isForMainFrame == true) onLoadFailed()
         }
     }
-    loadUrl(HANIME_LOGIN_URL)
+    fun loadLoginWhenReady(attempt: Int = 0) {
+        val proxied = EchProxyManager.proxyUrl(HANIME_LOGIN_URL)
+        if (proxied != null) {
+            loadUrl(proxied)
+        } else if (attempt < 40) {
+            postDelayed({ loadLoginWhenReady(attempt + 1) }, 250)
+        } else {
+            onLoadFailed()
+        }
+    }
+    loadLoginWhenReady()
 }
 
 @SuppressLint("SetJavaScriptEnabled")
