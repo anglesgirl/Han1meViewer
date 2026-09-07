@@ -129,7 +129,8 @@ object EchProxyManager {
     fun proxyUrl(targetUrl: String): String? {
         val p = port
         if (p <= 0) return null
-        return "http://127.0.0.1:$p$targetUrl"
+        val path = if (targetUrl.startsWith("/")) targetUrl else "/$targetUrl"
+        return "http://127.0.0.1:$p$path"
     }
 
     /** 停止 ECH 代理。 */
