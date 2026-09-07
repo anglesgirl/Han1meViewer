@@ -169,15 +169,13 @@ class LoginActivity : FrameActivity() {
         }
     }
 
-    /** 登录页地址：走系統代理，直接用直連 URL。代理根據 Host 動態路由。 */
-    private fun loginPageUrl(): String =
-        if (EchProxyManager.isRunning) {
-            val base = Preferences.baseUrl
-            if (base.endsWith("/")) base + "login" else base + "/login"
-        } else {
-            val base = Preferences.baseUrl
-            if (base.endsWith("/")) base + "login" else base + "/login"
-        }
+    /** 登录页地址：代理就绪則走 127.0.0.1 內嵌格式(Body 全透傳)，否則直連。
+     * 使用當前選擇的站點 baseUrl (hanime1.me / javchu.com 等)。 */
+    private fun loginPageUrl(): String {
+        val base = Preferences.baseUrl
+        val loginUrl = if (base.endsWith("/")) base + "login" else base + "/login"
+        return EchProxyManager.proxyUrl(loginUrl) ?: loginUrl
+    }
 
     private fun openQrScanner() {
         scannerLauncher.launch(Intent(this, ManualInputCookiesActivity::class.java))
