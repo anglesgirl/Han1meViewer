@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.network.DohConfig
-import echproxy.Echproxy
+import go.echproxy.gojni.Echproxy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
