@@ -75,8 +75,8 @@ class HanimeApplication : YenalyApplication() {
         if (Preferences.useDynamicColor){
             DynamicColors.applyToActivitiesIfAvailable(this)
         }
+        // 設置系統代理選擇器（ECH 代理啟動後會自動 rebuildNetwork）
         ProxySelector.setDefault(HProxySelector())
-        HProxySelector.rebuildNetwork()
         // 启动本地 Go ECH 代理(失败则各请求直连兜底)
         EchProxyManager.startAsync(this)
         EchStats.event("app_start")
