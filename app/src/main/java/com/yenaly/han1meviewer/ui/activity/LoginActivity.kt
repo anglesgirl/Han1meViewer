@@ -147,11 +147,11 @@ class LoginActivity : FrameActivity() {
                     // 關鍵：攔截所有直連站點請求 → 強制走代理
                     // POST 表單提交放行(代理模式下 POST 給 127.0.0.1 由代理轉發，Body 全透傳)
                     val u = request.url
-                    val isLoginPage = u.path?.contains("/login") == true
-                    val isSiteHost = HANIME_HOSTNAME.any { u.host == it || u.host.endsWith(".$it") }
+                    val isLoginPage = u.path?.contains("/login") ?: false
+                    val isSiteHost = HANIME_HOSTNAME.any { u.host == it || u.host?.endsWith(".$it") == true }
                     
                     if ((isSiteHost || isLoginPage) && u.host != "127.0.0.1" &&
-                        (u.scheme == "https" || u.scheme == "http") &&
+                        ((u.scheme == "https" || u.scheme == "http")) &&
                         (request.method == "GET" || request.method == "POST") && request.isForMainFrame
                     ) {
                         val proxied = EchProxyManager.proxyUrl(u.toString())
