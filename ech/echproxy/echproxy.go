@@ -409,7 +409,25 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			req.Header.Add(k, v)
 		}
 	}
+	localLogin := r.Header.Get("X-Ech-Target") == "" &&
+		(r.Host == "127.0.0.1" || strings.HasPrefix(r.Host, "127.0.0.1:") ||
+			r.Host == "localhost" || strings.HasPrefix(r.Host, "localhost:"))
+
 	req.Host = target
+	if localLogin {
+		if v := req.Header.Get("Referer"); v != "" {
+			if u, err := url.Parse(v); err == nil && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost") {
+				u.Scheme, u.Host = "https", target
+				req.Header.Set("Referer", u.String())
+			}
+		}
+		if v := req.Header.Get("Origin"); v != "" {
+			if u, err := url.Parse(v); err == nil && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost") {
+				u.Scheme, u.Host = "https", target
+				req.Header.Set("Origin", u.String())
+			}
+		}
+	}
 	req.Header.Del("Accept-Encoding")
 
 	resp, err := h.client.Do(req)
@@ -419,6 +437,13 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	if localLogin && strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/html") {
+		body, _ := io.ReadAll(resp.Body)
+		body = rewriteHTMLForLocalProxy(body, target)
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		resp.ContentLength = int64(len(body))
+		resp.Header.Del("Content-Length")
+	}
 
 	if resp.StatusCode >= 400 {
 		setStatus("HTTP %d for %s (upstream %s)", resp.StatusCode, r.URL.Path, target)
@@ -432,6 +457,12 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if resp.Uncompressed && (k == "Content-Encoding" || k == "Content-Length") {
+			continue
+		}
+		if localLogin && strings.EqualFold(k, "Set-Cookie") {
+			for _, v := range vv {
+				w.Header().Add(k, rewriteCookieForLocalProxy(v))
+			}
 			continue
 		}
 		for _, v := range vv {
@@ -560,11 +591,40 @@ func rewriteLocation(loc, target string) string {
 	if err != nil {
 		return loc
 	}
-	if u.Host == target || u.Host == "www."+target {
+	if u.Hostname() == target || u.Hostname() == "www."+target {
 		u.Scheme, u.Host = "", ""
 		return u.String()
 	}
 	return loc
+}
+
+func rewriteHTMLForLocalProxy(body []byte, target string) []byte {
+	s := string(body)
+	for _, origin := range []string{
+		"https://" + target,
+		"http://" + target,
+		"//" + target,
+		"https://www." + target,
+		"http://www." + target,
+		"//www." + target,
+	} {
+		s = strings.ReplaceAll(s, origin, "")
+	}
+	return []byte(s)
+}
+
+func rewriteCookieForLocalProxy(sc string) string {
+	parts := strings.Split(sc, ";")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "domain=") || lower == "secure" || strings.HasPrefix(lower, "samesite=") {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return strings.Join(out, "; ")
 }
 
 // parseIPList splits a comma/space separated list into valid IP literals.

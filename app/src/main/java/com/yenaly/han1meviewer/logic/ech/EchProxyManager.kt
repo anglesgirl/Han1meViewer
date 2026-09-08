@@ -77,7 +77,7 @@ object EchProxyManager {
 
             Echproxy.start(
                 "127.0.0.1:$chosen",          // listen
-                "hanime.tv",                  // target
+                "hanime1.me",                  // target
                 "",                           // echB64 (空 → DoH/cloudflare-ech.com + fallback)
                 dohArg,                       // DoH endpoint
                 EDGE_IP_FALLBACK,             // ipList (本地边缘 IP,优先直拨)
@@ -125,6 +125,22 @@ object EchProxyManager {
         if (p <= 0) return null
         val t = if (targetUrl.startsWith("http")) targetUrl else "https://$targetUrl"
         return "http://127.0.0.1:$p/$t"
+    }
+
+    /** 等待本地代理真正监听，避免登录页启动时错误直连真实域名。 */
+    suspend fun awaitProxy(timeoutMs: Long = 15_000): Boolean {
+        val deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs
+        while (!isRunning && android.os.SystemClock.elapsedRealtime() < deadline) {
+            kotlinx.coroutines.delay(100)
+        }
+        return isRunning
+    }
+
+    /** 登录页使用的本地地址: http://127.0.0.1:port/login */
+    fun loginUrl(): String? {
+        val p = port
+        if (p <= 0) return null
+        return "http://127.0.0.1:$p/login"
     }
 
     /** 停止 ECH 代理。 */

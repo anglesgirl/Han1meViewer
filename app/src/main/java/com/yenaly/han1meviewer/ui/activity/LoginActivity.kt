@@ -117,8 +117,9 @@ class LoginActivity : FrameActivity() {
                     view: WebView,
                     request: WebResourceRequest,
                 ): Boolean {
-                    val isSameUrl = HANIME_URL.contains(request.url.toString())
-                    if (request.isRedirect && isSameUrl) {
+                    val isLocalRedirect = request.url.host == "127.0.0.1" &&
+                        request.url.encodedPath != "/login"
+                    if (request.isRedirect && isLocalRedirect) {
                         val url = request.url
                         // 代理形态下 host 是 127.0.0.1:合并代理域 + 真实站域的 cookie
                         val cm = CookieManager.getInstance()
@@ -148,13 +149,20 @@ class LoginActivity : FrameActivity() {
                     }
                 }
             }
-            loadUrl(loginPageUrl())
+            lifecycleScope.launch {
+                if (EchProxyManager.awaitProxy()) {
+                    loadUrl(loginPageUrl())
+                } else {
+                    isRefreshing = false
+                    Log.e("LoginActivity", "ECH proxy unavailable; refusing direct login URL")
+                }
+            }
         }
     }
 
-    /** 登录页地址:代理就绪则走 127.0.0.1 内嵌形态(Body 全透传),否则直连。 */
+    /** 登录页只走本地反向代理，不直连真实域名。 */
     private fun loginPageUrl(): String =
-        EchProxyManager.proxyUrl(HANIME_LOGIN_URL) ?: HANIME_LOGIN_URL
+        EchProxyManager.loginUrl() ?: "about:blank"
 
     private fun openQrScanner() {
         scannerLauncher.launch(Intent(this, ManualInputCookiesActivity::class.java))
