@@ -38,15 +38,6 @@ class HDns : Dns {
 
         private val getchuIps = listOf("210.155.150.166", "210.155.150.145")
 
-        /**
-         * 视频 CDN 强制 IP 映射（绕过 NXDOMAIN 的权威 DNS）。
-         * t33.cdn2020.com 在部分 resolver 上 NXDOMAIN，直接给边缘 IP。
-         * 注意：CDN 边缘 IP 可能轮换，失效时需更新此表。
-         */
-        private val videoCdnIps = mapOf(
-            "t33.cdn2020.com" to listOf("103.143.178.6", "103.143.179.2", "103.143.178.7", "103.143.179.1"),
-        )
-
         private const val GETCHU_HOSTNAME = "www.getchu.com"
 
         /**
@@ -99,13 +90,6 @@ class HDns : Dns {
     }
 
     override fun lookup(hostname: String): List<InetAddress> {
-        // 视频 CDN 强制 IP：t33.cdn2020.com 的权威 DNS 对部分 resolver 返回 NXDOMAIN，
-        // 不指定则播放器拿不到 IP。若不命中下表则走正常流程。
-        videoCdnIps[hostname]?.let { ips ->
-            return ips.map {
-                InetAddress.getByAddress(hostname, InetAddress.getByName(it).address)
-            }
-        }
         if (hostname == GETCHU_HOSTNAME) {
             return getchuIps.map {
                 InetAddress.getByAddress(hostname, InetAddress.getByName(it).address)
