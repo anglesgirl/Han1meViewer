@@ -22,9 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
-import com.yenaly.han1meviewer.HANIME_LOGIN_URL
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
-import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.NetworkRepo

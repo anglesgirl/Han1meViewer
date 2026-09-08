@@ -37,6 +37,8 @@ android {
         applicationId = "com.yenaly.han1meviewer.ech"
         minSdk = property("min.sdk")?.toString()?.toIntOrNull()
         targetSdk = property("target.sdk")?.toString()?.toIntOrNull()
+        // 只保留中英日资源,裁掉依赖库带来的其他语言(省体积,缺失时回退英文)
+        resConfigs("en", "zh-rCN", "ja")
         val (code, name) = createVersion(major = 1, minor = 0, patch = 8)
         versionCode = code
         versionName = name

@@ -28,7 +28,7 @@ import java.net.ServerSocket
  *   EchProxyManager.start(context)   // 启动,返回本地代理端口
  *   EchProxyManager.stop()           // 停止
  *   EchProxyManager.isRunning        // 是否在运行
- *   EchProxyManager.proxyUrl(url)    // WebView 登录用的代理内嵌 URL
+ *   EchProxyManager.loginUrl()     // 登录页本地地址 http://127.0.0.1:port/login
  */
 object EchProxyManager {
 
@@ -117,14 +117,6 @@ object EchProxyManager {
                 kotlinx.coroutines.delay(3000)
             }
         }
-    }
-
-    /** 代理内嵌 URL(WebView 登录用): http://127.0.0.1:port/https://host/path。 */
-    fun proxyUrl(targetUrl: String): String? {
-        val p = port
-        if (p <= 0) return null
-        val t = if (targetUrl.startsWith("http")) targetUrl else "https://$targetUrl"
-        return "http://127.0.0.1:$p/$t"
     }
 
     /** 等待本地代理真正监听，避免登录页启动时错误直连真实域名。 */

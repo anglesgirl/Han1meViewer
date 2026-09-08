@@ -66,11 +66,12 @@ class EchInterceptor : Interceptor {
         val elapsedMs = SystemClock.elapsedRealtime() - startMs
         Log.d("EchProxy", "route $originHost${url.encodedPath} -> ${elapsedMs}ms ${response.code}")
 
-        // 响应里的 Set-Cookie 存回原始域名
+        // 响应里的 Set-Cookie 按原始域名解析(代理 URL 是 127.0.0.1,
+        // 用它解析 Domain=真实域 的 Cookie 会返回 null 整轮丢弃)
         val setCookies = response.headers("Set-Cookie")
         if (setCookies.isNotEmpty()) {
             val parsed = setCookies.mapNotNull { raw ->
-                runCatching { Cookie.parse(proxyUrl, raw) }.getOrNull()
+                runCatching { Cookie.parse(url, raw) }.getOrNull()
             }
             if (parsed.isNotEmpty()) {
                 HCookieJar().saveFromResponse(url, parsed)
