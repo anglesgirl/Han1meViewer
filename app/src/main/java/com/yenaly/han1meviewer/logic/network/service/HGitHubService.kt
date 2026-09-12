@@ -23,6 +23,15 @@ interface HGitHubService {
     suspend fun getLatestVersion(): Release
 
     /**
+     * 列出发布（按创建时间倒序，含预发布）。
+     *
+     * CI 通道用它：**不用 workflow artifacts** —— 下载 artifact 需要带 token，而 App 里
+     * 没有可用 token（公开仓库匿名只读 API 反而畅通）。Release 资产是匿名可下的。
+     */
+    @GET("releases?per_page=10")
+    suspend fun getReleases(): List<Release>
+
+    /**
      * What is Workflow Runs?
      *
      * List all workflow runs for a repository. You can use parameters to filter the list of results. For example, you

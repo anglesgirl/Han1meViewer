@@ -19,6 +19,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # 需要 tag/history 才能生成"自上一个构建以来的变更"列表
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -77,8 +80,8 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD != '' && secrets.KEYSTORE_PASSWORD || secrets.YOUR_KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD != '' && secrets.KEYSTORE_PASSWORD || secrets.YOUR_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          # 上游用自定义 PAT；本 fork 未设置时回落到内置 token（仅用于版本查询）
-          HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN != '' && secrets.HA_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          # ⚠️ 故意不注入 HA_GITHUB_TOKEN：CI 的临时 token 编进包里早就过期，
+          # App 带着它请求 GitHub 会 401（公开仓库匿名请求反而正常）→ 更新检查会静默失效。
           HA1_VERSION_SOURCE: 'ci'
 
       - name: Verify APK (Conscrypt ECH, arm64, 无 Go 残留)
@@ -106,7 +109,10 @@ jobs:
           path: app/build/outputs/apk/release/Han1meViewer-v*.apk
 
       - name: Publish to GitHub Release
-        # 大陆用户直链下载 + 留档；tag 带分支后缀，避免与上游 main 的 tag 冲突
+        # CI 出的包一律发成「预发布」：
+        #   · 稳定通道（App 默认读 releases/latest）只认正式版 → 用户不会被自动推到每次构建
+        #   · 设置里的「CI 更新频道」读 releases 列表（含预发布）→ 这才是它"更快但不保证稳定"的语义
+        # tag 直接用 APK 名（**不要加分支后缀**）：App 端要从 tag 里取出 `+<版本号>` 判断要不要更新
         if: success() && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -116,32 +122,46 @@ jobs:
           [ -n "$APK" ] || { echo "::error::没有找到 release APK"; exit 1; }
           SIZE_MB=$(du -m "$APK" | cut -f1)
           APK_NAME=$(basename "$APK")
-          TAG="$(basename "$APK" .apk)-ech-conscrypt"
+          TAG="$(basename "$APK" .apk)"
           echo "Publishing ${SIZE_MB}MB $APK as $TAG"
           ACCEL1="https://gh-proxy.com/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
           ACCEL2="https://ghfast.top/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
           DIRECT="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          PREV=$(git describe --tags --abbrev=0 --match 'Han1meViewer-*' 2>/dev/null || true)
+          if [ -n "$PREV" ]; then
+            CHANGELOG=$(git log --pretty=format:'- %s' "${PREV}..HEAD" | head -40)
+          else
+            CHANGELOG=$(git log --pretty=format:'- %s' -20)
+          fi
           {
             echo "arm64-only APK (${SIZE_MB}MB) — misaka 基座 + Conscrypt in-process ECH。"
             echo ""
-            echo "## Download acceleration (mainland China)"
-            echo "- gh-proxy.com: ${ACCEL1}"
-            echo "- ghfast.top: ${ACCEL2}"
+            echo "## 本次变更"
+            echo "${CHANGELOG}"
             echo ""
-            echo "Direct: ${DIRECT}"
+            echo "## 大陆加速下载"
+            echo "- gh-proxy: ${ACCEL1}"
+            echo "- ghfast: ${ACCEL2}"
+            echo ""
+            echo "直连: ${DIRECT}"
           } > /tmp/release_notes.md
           NOTES=$(cat /tmp/release_notes.md)
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" >/dev/null 2>&1 || true
             gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" >/dev/null 2>&1 || true
           else
             gh release create "$TAG" "$APK" \
               --repo "$GITHUB_REPOSITORY" \
-              --title "Han1meViewer (Conscrypt ECH)" \
+              --title "Han1meViewer (Conscrypt ECH) ${TAG}" \
               --notes "$NOTES" \
-              --draft
+              --prerelease
           fi
           echo "RELEASE_TAG=$TAG"
+          # 预发布只留最近 5 个（正式版不动），别把 release 列表堆爆
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName,isPrerelease \
+            --jq '.[] | select(.isPrerelease) | .tagName' | tail -n +6 | while read -r t; do
+              if [ -n "$t" ]; then gh release delete "$t" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true; fi
+            done
 
       - name: Notify build result
         # 无论成败都要回传（用户明确要求：CI 成败都通知，附上产物下载入口）

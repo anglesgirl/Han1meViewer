@@ -1,9 +1,7 @@
 package com.yenaly.han1meviewer.logic.network
 
 import android.util.Log
-import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.Preferences
-import com.yenaly.han1meviewer.logic.model.github.CommitComparison
 import com.yenaly.han1meviewer.logic.model.github.Latest
 import com.yenaly.han1meviewer.util.checkNeedUpdate
 import com.yenaly.han1meviewer.util.copyTo
@@ -27,11 +25,6 @@ object HUpdater {
     const val DEFAULT_BRANCH = "ech-conscrypt"
 
     /**
-     * Regex to match multiple line feeds to a single line feed
-     */
-    private val linefeedRegex = Regex("\\n{2,}")
-
-    /**
      * Check for update
      *
      * @param forceCheck force check
@@ -40,36 +33,32 @@ object HUpdater {
         if (forceCheck || Preferences.isUpdateDialogVisible) {
             // Firebase 已移除：原来由 Remote Config 下发的开关，现在恒为 true
             if (Preferences.useCIUpdateChannel) {
-                val curSha = BuildConfig.COMMIT_SHA
-                // 特殊情况下才用注释部分，一般情况下 branch 都是固定的，要不然多一次
-                // request 会对我的 API Token 造成负担。
-                // val apiReq = request(HA1_GITHUB_API_URL)
-                // val branch = apiReq.body?.string()?.let(::JSONObject)?.getString("default_branch")
-                //     ?: return null
-                val workflowRun = HanimeNetwork.githubService.getWorkflowRuns()
-                    .workflowRuns.firstOrNull() ?: return null
-                val shortSha = workflowRun.headSha.take(7)
-                if (shortSha != curSha) {
-                    val artifacts =
-                        HanimeNetwork.githubService.getArtifacts(workflowRun.artifactsUrl)
-                    val archiveUrl = artifacts.downloadLink
-                    val nodeId = artifacts.nodeId
-                    val changelog = runSuspendCatching {
-                        HanimeNetwork.githubService.getCommitComparison(
-                            curSha = curSha,
-                            latestSha = shortSha
-                        ).commits.toChangelogPrettyString()
-                    }.getOrNull() ?: workflowRun.title
-                    return Latest("$shortSha (CI)", changelog, archiveUrl, nodeId)
-                }
+                // CI 通道：取最新一次构建（CI 每次成功构建都会发一个发布，预发布也算）。
+                //
+                // ⚠️ 不再走 workflow artifacts：下载 artifact 需要带 token，App 里没有可用
+                // token（旧版把 CI 的临时 GITHUB_TOKEN 编进包里，跑起来早过期 → 401）。
+                // 发布资产是**匿名可下**的，还能直接用 gh-proxy / ghfast 镜像加速。
+                val releases = runSuspendCatching {
+                    HanimeNetwork.githubService.getReleases()
+                }.getOrNull().orEmpty()
+                val rel = releases.firstOrNull { !it.draft && it.assets.isNotEmpty() } ?: return null
+                if (!checkNeedUpdate(rel.tagName)) return null
+                val asset = rel.assets.first()
+                return Latest(
+                    version = rel.tagName,
+                    changelog = rel.body.ifBlank { rel.name },
+                    downloadLink = asset.browserDownloadURL,
+                    nodeId = asset.nodeID,
+                )
             } else {
                 val ver = HanimeNetwork.githubService.getLatestVersion()
-                val isNeeded = checkNeedUpdate(ver.tagName)
-                if (isNeeded) {
+                val asset = ver.assets.firstOrNull() ?: return null
+                if (checkNeedUpdate(ver.tagName)) {
                     return Latest(
-                        ver.tagName, ver.body,
-                        ver.assets.first().browserDownloadURL,
-                        ver.assets.first().nodeID
+                        version = ver.tagName,
+                        changelog = ver.body.ifBlank { ver.name },
+                        downloadLink = asset.browserDownloadURL,
+                        nodeId = asset.nodeID,
                     )
                 }
             }
@@ -98,10 +87,10 @@ object HUpdater {
     }
 
     /** github release 包的下载候选：国内镜像优先，直连兜底。
-     *  其他地址（artifact zip 等）保持原链路不动。 */
+     *  其他地址（不带 github.com 的）保持原链路不动。 */
     private fun mirrorUrls(url: String): List<String> {
         val host = runCatching { url.toHttpUrlOrNull()?.host }.getOrNull()
-        return if (host == "github.com") listOf(MIRROR_PREFIX + url, url) else listOf(url)
+        return if (host == "github.com") MIRROR_PREFIXES.map { it + url } + url else listOf(url)
     }
 
     private suspend fun File.downloadInto(url: String, progress: (suspend (Int, Long, Long) -> Unit)? = null) {
@@ -133,20 +122,11 @@ object HUpdater {
     }
 
     /**
-     * This function is used to filter out commits that are not authored by the user.
+     * 国内加速镜像前缀（下载 github.com 的 release 包用）。
+     * 依次尝试，最后一个直连兜底 —— 大陆网络下这两个镜像实测可用。
      */
-    private val CommitComparison.Commit.CommitDetail.CommitAuthor.isAuthorShouldIgnore: Boolean
-        get() = name.contains("dependabot")
-
-    /** gh-proxy 镜像前缀（下载 github.com 的 release 包用） */
-    private const val MIRROR_PREFIX = "https://gh-proxy.com/"
-
-    private fun List<CommitComparison.Commit>.toChangelogPrettyString(): String {
-        return filterNot { commit ->
-            commit.commit.author.isAuthorShouldIgnore
-        }.distinct().reversed().joinToString("\n\n") { commit ->
-            val message = commit.commit.message.replace(linefeedRegex, "\n")
-            "↓ (@${commit.commit.author.name})\n$message"
-        }
-    }
+    private val MIRROR_PREFIXES = listOf(
+        "https://gh-proxy.com/",
+        "https://ghfast.top/",
+    )
 }

@@ -126,10 +126,15 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor { chain ->
-                val request = chain.request().newBuilder().addHeader(
-                    "Authorization", "Bearer ${BuildConfig.HA_GITHUB_TOKEN}"
-                ).build()
-                return@addInterceptor chain.proceed(request)
+                // ⚠️ 只有真的拿到 token 才带这个头。编进包里的 token 来自 CI 的临时
+                // GITHUB_TOKEN，App 跑起来时早已过期 —— 带着过期 token 请求 GitHub 会
+                // 直接 401（公开仓库匿名请求本来是正常的），表现为"更新检查永远查不到"。
+                val token = BuildConfig.HA_GITHUB_TOKEN
+                val request = if (token.isBlank()) chain.request()
+                else chain.request().newBuilder()
+                    .header("Authorization", "Bearer $token")
+                    .build()
+                chain.proceed(request)
             }
             .build()
     }
