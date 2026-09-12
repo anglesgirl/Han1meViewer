@@ -1,6 +1,7 @@
 package com.yenaly.han1meviewer.logic.network
 
 import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.logic.network.ech.EchHosts
 import okhttp3.internal.proxy.NullProxySelector
 import java.io.IOException
 import java.net.InetAddress
@@ -88,10 +89,18 @@ class HProxySelector : ProxySelector() {
     }
 
     override fun select(uri: URI?): MutableList<Proxy> {
-        // ⚠️ 这里原先有一段「ECH 本地代理就绪 → 整个 App 直连」的判断，换 Conscrypt 后已删除。
-        // 不要再加任何 ECH 相关的分支：ECH 现在完全在 OkHttp 传输层完成（见 logic/network/ech/），
-        // 与 ProxySelector 无关。而且一旦在这里对某些域名强制直连，用户为翻墙设的代理
-        // 就会对它们失效，反而连不上 —— 尊重用户的代理设置即可。
+        // 受保护域名（ECH 名单）**直连**。三条理由，缺一不可：
+        //   ① 直连不会明文外泄 SNI —— 这是唯一必须守住的底线，也是删掉 Go 反代后
+        //      由 Conscrypt 在传输层保证的（见 logic/network/ech/）
+        //   ② 直连就是最快路径：不经代理、没有 CONNECT 往返
+        //   ③ 反过来走代理反而更差：HTTP 代理会把目标域名原样写进 CONNECT 请求行，
+        //      等于把封锁域名换个地方暴露
+        // 其余域名照常尊重用户在设置里选的代理。
+        val host = uri?.host
+        if (host != null && EchHosts.isProtected(host)) {
+            return mutableListOf(Proxy.NO_PROXY)
+        }
+
         val type = Preferences.proxyType
         if (type == TYPE_HTTP || type == TYPE_SOCKS) {
             val ip = Preferences.proxyIp
