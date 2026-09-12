@@ -62,21 +62,40 @@ Analytics / Crashlytics / Remote Config / RealtimeDatabase 全部保留。
 - `Parser.kt` 的 CDN 修正 —— 上游自己有 `avCdnHost`（只对 AV 站生效），结果一致、并存不冲突
 - Go 本地反代整套、登录流程改造 —— 见下
 
-## 四、⚠️ 已知缺口：WebView 的登录 POST（必须用户拍板）
+## 四、WebView 非 GET 传输桥（B 方案，已实现并入库）
 
-`shouldInterceptRequest` **拿不到 POST body**，所以 `HyWebViewHelper.intercept()` 对非 GET
-**返回 null 放行** —— 也就是登录表单提交会走 WebView 自己的 TLS 栈，**明文 SNI**。
+### 为什么需要
+`shouldInterceptRequest` **拿不到 POST body**（`WebResourceRequest` 没有 body 字段），
+所以受保护域名上的表单提交 / 页面内 fetch、XHR 只能放行 = WebView 用自己的 TLS 栈
+明文发 SNI。Go 反代时代看不到这个缺口（本地端口能读到明文 body），换进程内 Conscrypt
+后才暴露。
 
-- Go 时代没有这个问题：整个 WebView 都在本地反代后面，POST 也走代理
-- 换成 Conscrypt 后这条缺口冒出来，而它恰恰是**唯一一条含凭据**的流量
-- 受保护域名（`hanime1.me` / `hanime1.com` / `hanimeone.me` / `javchu.com`）都被 SNI 阻断，
-  所以**在被墙站点上登录会失败**（连接被 RST），不只是"泄露"而已
+**覆盖范围（别夸大）**：本 App 只有**登录页**与 **CF 挑战页**用 WebView；
+点赞/收藏/评论/播放上报都是原生 UI 发 API，走 OkHttp + ECH，**不经 WebView**。
 
-三条出路（用户曾明确否决过 ②，换 Conscrypt 后它的必要性变了，需重新拍板）：
-1. **保持现状**：登录 POST 走 WebView 明文 SNI（被墙站点登录会失败）
-2. **JS 拦表单 → 原生代发**（CO3 的做法）：只注入登录页，用「含 `input[type=password]` 的表单」
-   作判据、`MutationObserver` 兜异步插入、成功用凭据 cookie 名判定、成功后 `loadUrl` 真实地址
-3. **只给登录这一条链路留窄通道**（登录时临时起本地反代，用完即停）
+### 实现
+- `ech/EchWebBridgeJs.kt`：注入受保护域名页面，只接管**非 GET**
+  - `fetch` → 转原生代发，返回真实 `Response`
+  - `XHR` → 包装 open/send/setRequestHeader，结果伪装成已完成 XHR（含 readystatechange/load/loadend）
+  - 表单 submit → **只劫持含 `input[type=password]` 的表单**（CO3 用的是 AO3 专用 id，不能照抄）
+  - GET/HEAD 一律不碰 —— 那条路归 `shouldInterceptRequest`，两条路不重叠
+- `ech/EchWebBridge.kt`：原生落地端（Conscrypt + ECH）
+  - Cookie：**网络拦截器逐跳**读写 CookieManager（重定向中间跳的 Set-Cookie 才不丢）
+  - 表单：`followRedirects(false)` 读 302 的 Location → 再 `loadUrl` 真实地址
+  - **fail-closed**：ECH 未就绪 / 网络失败 → 502，绝不回落明文
+  - `onFormLoginSuccess` 回调：表单被代发后 WebView 不会自己跳转，原
+    `shouldOverrideUrlLoading(isRedirect)` 判成功那条路永不触发 → 成功后必须调用 App
+    原有的登录完成逻辑（两处调同一个 `login()`）
+- 注入时机：`onPageCommitVisible` + `onPageFinished`（尽量早）
+- `addJavascriptInterface` 必须在 `loadUrl` **之前**；原生侧对 URL 再判一次受保护域名
+
+### 验证
+- 本地（不用 Android）：`bash .github/scripts/verify-ech-bridge-js.sh` → node 断言 15 条，
+  CI 编译前会自动跑（JS 写坏属于静默失效，最难查）
+- 真机：`adb logcat | grep -E "HY-ECH-BRIDGE|HY-ECH-WEBVIEW|\[js\]"`
+  - 登录成功：`表单提交成功 → 交回 App 的登录完成逻辑`
+  - 页面 POST：`bridge POST xxx -> 200`
+  - 出现 `保持原样（body 类型不可序列化）` = 该请求仍走明文（Blob/File body），需处理
 
 ## 五、验证节奏
 

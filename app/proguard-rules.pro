@@ -38,3 +38,9 @@
 # ⚠️ ECH 总开关：Conscrypt 用反射调用 PolicyTrustManager.getNetworkSecurityPolicy()，
 # 被 R8 改名/裁掉的话，release 包会「日志全绿但一个字节 ECH 都不发」（ECH 静默失效）。
 -keep class com.yenaly.han1meviewer.logic.network.ech.ConscryptEch$PolicyTrustManager { *; }
+
+# WebView 传输桥：`@JavascriptInterface` 的方法由 JS **按名字**调用（send/postForm/log），
+# 被混淆就变成"桥静默失效"——签名里核过 class 名可混淆，但方法名必须留
+-keepclassmembers class com.yenaly.han1meviewer.logic.network.ech.EchWebBridge {
+    public *;
+}
