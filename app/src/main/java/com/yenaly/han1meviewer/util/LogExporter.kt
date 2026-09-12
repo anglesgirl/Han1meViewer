@@ -8,6 +8,8 @@ import androidx.core.content.FileProvider
 import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.FILE_PROVIDER_AUTHORITY
 import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.logic.network.ech.EchHosts
+import com.yenaly.han1meviewer.logic.network.ech.EchHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

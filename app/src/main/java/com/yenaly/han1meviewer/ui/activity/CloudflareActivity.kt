@@ -19,7 +19,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.preference.PreferenceManager
 import com.yenaly.han1meviewer.Preferences
-import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.cloudFlareCookie
+import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
+import com.yenaly.han1meviewer.Preferences.cloudFlareCookie
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.ui.screen.web.CloudflareScreen
