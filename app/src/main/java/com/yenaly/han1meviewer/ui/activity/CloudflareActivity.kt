@@ -93,6 +93,17 @@ class CloudflareActivity : AppCompatActivity() {
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): Boolean = false
+
+                override fun onPageFinished(view: WebView, url: String?) {
+                    super.onPageFinished(view, url)
+                    // 非 GET（挑战页里的 XHR/表单）走原生 ECH 通道，别让它们明文发出去
+                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.injectBridge(view, url)
+                }
+
+                override fun onPageCommitVisible(view: WebView, url: String?) {
+                    super.onPageCommitVisible(view, url)
+                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.injectBridge(view, url)
+                }
             }
 
             evaluateJavascript("navigator.userAgent") { output ->
@@ -146,6 +157,8 @@ class CloudflareActivity : AppCompatActivity() {
                     }
                 }
             }
+            // 挂载非 GET 传输桥（必须在 loadUrl 之前；挑战页里的 XHR/表单靠它走 ECH）
+            com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.installWebView(this)
             loadUrl(url)
         }
     }

@@ -107,6 +107,18 @@ class LoginActivity : FrameActivity() {
             settings.domStorageEnabled = true
             settings.userAgentString = USER_AGENT
 
+            // 非 GET 传输桥：登录表单提交 / 页面里的 fetch、XHR 交给原生走 ECH。
+            // 必须在 loadUrl 之前挂载；只对受保护域名生效（原生侧与 JS 侧都判一次）
+            com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.installWebView(this)
+            // 表单被原生代发后 WebView 不会自己跳转，原 shouldOverrideUrlLoading(isRedirect)
+            // 那条判成功的路永远不触发 —— 这里接上同一套登录完成逻辑（两处调同一个 login()）
+            com.yenaly.han1meviewer.logic.network.ech.EchWebBridge.onFormLoginSuccess = { cookie ->
+                isLoggingIn = false
+                login(cookie)
+                setResult(RESULT_OK)
+                finish()
+            }
+
             webViewClient = object : WebViewClient() {
                 // WebView 的子请求在这里接管，交给 OkHttp（Conscrypt + ECH）去发。
                 // 这是"WebView 用上 ECH"的唯一入口 —— 换掉 Go 本地反代后不再需要任何转发层。
@@ -119,8 +131,16 @@ class LoginActivity : FrameActivity() {
                     return super.shouldInterceptRequest(view, request)
                 }
 
+                override fun onPageCommitVisible(view: WebView, url: String?) {
+                    super.onPageCommitVisible(view, url)
+                    // 尽早注入（页面还在渲染时），别等 onPageFinished —— 页面自己的 XHR 可能更早发出
+                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.injectBridge(view, url)
+                }
+
                 override fun onPageFinished(view: WebView, url: String) {
                     isRefreshing = false
+                    // 页面加载完注入非 GET 传输桥（登录表单提交/页面 fetch、XHR 走原生 ECH）
+                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.injectBridge(view, url)
                 }
 
                 override fun shouldOverrideUrlLoading(
@@ -168,6 +188,8 @@ class LoginActivity : FrameActivity() {
     }
 
     override fun onDestroy() {
+        // 别让静态回调持有已销毁的 Activity
+        com.yenaly.han1meviewer.logic.network.ech.EchWebBridge.onFormLoginSuccess = null
         super.onDestroy()
         webView?.removeAllViews()
         webView?.destroy()

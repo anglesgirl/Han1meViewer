@@ -30,6 +30,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Verify WebView ECH bridge JS
+        # 传输桥的 JS 断言（语法 + 接管逻辑）。放在编译前跑：JS 写坏了是静默失效，最难查
+        run: bash .github/scripts/verify-ech-bridge-js.sh
+
       - name: Decode keystore
         # ⚠️ 上游用的是 YOUR_KEYSTORE_BASE64，本 fork 的 secret 叫 KEYSTORE_BASE64
         # （fallback 保留上游名字，两边都能用）

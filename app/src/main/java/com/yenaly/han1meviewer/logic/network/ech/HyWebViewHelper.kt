@@ -4,6 +4,8 @@ import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayInputStream
@@ -26,6 +28,29 @@ import java.util.concurrent.TimeUnit
 object HyWebViewHelper {
 
     private const val TAG = "HY-ECH-WEBVIEW"
+
+    /**
+     * 给 WebView 挂上非 GET 传输桥（[EchWebBridge]）。
+     * **必须在 loadUrl 之前调用一次** —— JavaScriptInterface 只在页面加载前注册才对这个页面可见。
+     */
+    fun installWebView(webView: WebView) {
+        runCatching {
+            webView.addJavascriptInterface(EchWebBridge(webView), EchWebBridge.NAME)
+        }.onFailure { Log.e(TAG, "挂载传输桥失败: ${it.message}") }
+    }
+
+    /**
+     * 页面加载完成后注入 JS 桥（`onPageFinished` 里调用）。
+     * 只对受保护域名注入，其余页面一概不碰。
+     */
+    fun injectBridge(webView: WebView, url: String?) {
+        if (url == null || !EchHosts.isProtected(runCatching { java.net.URI(url).host ?: "" }.getOrDefault(""))) {
+            return
+        }
+        runCatching {
+            webView.evaluateJavascript(EchWebBridgeJs.script(HANIME_HOSTNAME), null)
+        }.onFailure { Log.w(TAG, "注入传输桥失败: ${it.message}") }
+    }
 
     /**
      * WebView 子请求专用客户端。
