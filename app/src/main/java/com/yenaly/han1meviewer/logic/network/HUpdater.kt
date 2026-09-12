@@ -1,18 +1,17 @@
 package com.yenaly.han1meviewer.logic.network
 
 import android.util.Log
-import com.google.firebase.Firebase
-import com.google.firebase.remoteconfig.remoteConfig
 import com.yenaly.han1meviewer.BuildConfig
-import com.yenaly.han1meviewer.FirebaseConstants
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.model.github.CommitComparison
 import com.yenaly.han1meviewer.logic.model.github.Latest
 import com.yenaly.han1meviewer.util.checkNeedUpdate
 import com.yenaly.han1meviewer.util.copyTo
 import com.yenaly.han1meviewer.util.runSuspendCatching
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okio.use
 import java.io.File
+import java.io.IOException
 import java.util.zip.ZipInputStream
 
 /**
@@ -24,7 +23,8 @@ object HUpdater {
 
     const val TAG = "HUpdater"
 
-    const val DEFAULT_BRANCH = "main"
+    // 本分支才是 CI 出包分支（上游 main 没有出包工作流，查不到会永远提示无更新）
+    const val DEFAULT_BRANCH = "ech-conscrypt"
 
     /**
      * Regex to match multiple line feeds to a single line feed
@@ -38,7 +38,8 @@ object HUpdater {
      */
     suspend fun checkForUpdate(forceCheck: Boolean = false): Latest? {
         if (forceCheck || Preferences.isUpdateDialogVisible) {
-            if (Preferences.useCIUpdateChannel && Firebase.remoteConfig.getBoolean(FirebaseConstants.ENABLE_CI_UPDATE)) {
+            // Firebase 已移除：原来由 Remote Config 下发的开关，现在恒为 true
+            if (Preferences.useCIUpdateChannel) {
                 val curSha = BuildConfig.COMMIT_SHA
                 // 特殊情况下才用注释部分，一般情况下 branch 都是固定的，要不然多一次
                 // request 会对我的 API Token 造成负担。
@@ -82,7 +83,30 @@ object HUpdater {
      * @param url update url
      */
     suspend fun File.injectUpdate(url: String, progress: (suspend (Int, Long, Long) -> Unit)? = null) {
+        var lastErr: Throwable? = null
+        for (u in mirrorUrls(url)) {
+            try {
+                downloadInto(u, progress)
+                if (u != url) Log.i(TAG, "update downloaded via mirror: $u")
+                return
+            } catch (e: Throwable) {
+                Log.w(TAG, "update download via $u failed: ${e.message}, try next")
+                lastErr = e
+            }
+        }
+        throw lastErr ?: IOException("update download failed: $url")
+    }
+
+    /** github release 包的下载候选：国内镜像优先，直连兜底。
+     *  其他地址（artifact zip 等）保持原链路不动。 */
+    private fun mirrorUrls(url: String): List<String> {
+        val host = runCatching { url.toHttpUrlOrNull()?.host }.getOrNull()
+        return if (host == "github.com") listOf(MIRROR_PREFIX + url, url) else listOf(url)
+    }
+
+    private suspend fun File.downloadInto(url: String, progress: (suspend (Int, Long, Long) -> Unit)? = null) {
         val res = HanimeNetwork.githubService.request(url)
+        if (!res.isSuccessful) throw IOException("HTTP ${res.code()}: $url")
         if (url.endsWith("zip")) {
             Log.d(TAG, "Injecting update from zip ($url)")
             res.body()?.use { body ->
@@ -113,6 +137,9 @@ object HUpdater {
      */
     private val CommitComparison.Commit.CommitDetail.CommitAuthor.isAuthorShouldIgnore: Boolean
         get() = name.contains("dependabot")
+
+    /** gh-proxy 镜像前缀（下载 github.com 的 release 包用） */
+    private const val MIRROR_PREFIX = "https://gh-proxy.com/"
 
     private fun List<CommitComparison.Commit>.toChangelogPrettyString(): String {
         return filterNot { commit ->

@@ -28,6 +28,15 @@ class HanimeResolution {
         const val RES_480P = "480P"
         const val RES_240P = "240P"
         const val RES_UNKNOWN = "Unknown"
+
+        // 坏 CDN 节点换到 t33（实测可播）。只动 cdn2020 系 1~2 位数字节点：
+        // 已经是 t33 的不动，其他域名/节点一概不碰。
+        // （上游 Parser 里另有一套只对 AV 站生效的同类修正，两条路径结果一致、互不冲突。）
+        private val BAD_CDN_HOST =
+            Regex("""://t(?!33\\.)(\\d{1,2})\\.cdn2020\\.com""", RegexOption.IGNORE_CASE)
+
+        fun normalizeCdnHost(url: String): String =
+            url.replace(BAD_CDN_HOST, "://t33.cdn2020.com")
     }
 
     /**
@@ -41,7 +50,7 @@ class HanimeResolution {
         val mediaType = type?.toMediaTypeOrNull()?.takeIf {
             it.type.equals("video", ignoreCase = true)
         }
-        val link = HanimeLink(resLink, mediaType?.subtype)
+        val link = HanimeLink(normalizeCdnHost(resLink), mediaType?.subtype)
         when (resString) {
             RES_1080P -> resArray[0] = RES_1080P to link
             RES_720P -> resArray[1] = RES_720P to link

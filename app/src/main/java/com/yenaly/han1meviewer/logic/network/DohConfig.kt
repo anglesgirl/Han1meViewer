@@ -11,6 +11,14 @@ data class DohPreset(
 
 object DohConfig {
     val presets = listOf(
+        // 自建 CF 网关：直控解析结果，绕开大陆 DNS 污染。
+        // 默认预设就是它（见 Preferences.dohPreset），ECH 的配置查询也走它。
+        DohPreset(
+            key = "gateway",
+            title = "Gateway",
+            url = "https://tgxjjdszvu.cloudflare-gateway.com/dns-query",
+            bootstrapIps = listOf("162.159.36.20", "162.159.36.5"),
+        ),
         DohPreset(
             key = "alidns",
             title = "AliDNS",

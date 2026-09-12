@@ -39,8 +39,14 @@ class HCookieJar : CookieJar {
     }
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        cookieMap[url.host] = cookies.toMutableList().also {
-            it += Preferences.loginCookieStateFlow.value.toLoginCookieList(url.host)
-        }
+        // 按 name 合并（同名覆盖、异名保留）。
+        // ⚠️ 不能整体替换：登录响应是 302，Cookie 分两次回写，
+        // 直接换掉会丢掉另一跳的 cookie（如 remember_web），表现为登录态莫名丢失。
+        val merged = (cookieMap[url.host] ?: mutableListOf()).associateBy { it.name }.toMutableMap()
+        cookies.forEach { merged[it.name] = it }
+        // 登录态 extras 同名覆盖（不另行追加，防重复堆积）
+        Preferences.loginCookieStateFlow.value.toLoginCookieList(url.host)
+            .forEach { merged[it.name] = it }
+        cookieMap[url.host] = merged.values.toMutableList()
     }
 }
