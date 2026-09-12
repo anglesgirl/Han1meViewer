@@ -1,7 +1,6 @@
 package com.yenaly.han1meviewer.logic.network
 
 import com.yenaly.han1meviewer.Preferences
-import com.yenaly.han1meviewer.logic.network.ech.EchHosts
 import okhttp3.internal.proxy.NullProxySelector
 import java.io.IOException
 import java.net.InetAddress
@@ -89,18 +88,10 @@ class HProxySelector : ProxySelector() {
     }
 
     override fun select(uri: URI?): MutableList<Proxy> {
-        // 受保护域名（ECH 名单）**一律直连**，绝不走 CONNECT 隧道：
-        // CONNECT 会把目标域名写在请求行里（GFW 据此重置 javchu.com 等站点，
-        // 等于把封锁域名的 SNI 换了个地方暴露）。这些域名由 Conscrypt 在传输层
-        // 注入 ECH 隐藏 SNI，直连才是安全的；ECH 未就绪时上层本来就 fail-closed。
-        //
-        // ⚠️ 这里**不再**像 Go 方案那样「对整个 App 强制直连」——
-        // 现在只对受保护域名直连，其余域名照常尊重用户的代理设置。
-        val host = uri?.host
-        if (host != null && EchHosts.isProtected(host)) {
-            return mutableListOf(Proxy.NO_PROXY)
-        }
-
+        // ⚠️ 这里原先有一段「ECH 本地代理就绪 → 整个 App 直连」的判断，换 Conscrypt 后已删除。
+        // 不要再加任何 ECH 相关的分支：ECH 现在完全在 OkHttp 传输层完成（见 logic/network/ech/），
+        // 与 ProxySelector 无关。而且一旦在这里对某些域名强制直连，用户为翻墙设的代理
+        // 就会对它们失效，反而连不上 —— 尊重用户的代理设置即可。
         val type = Preferences.proxyType
         if (type == TYPE_HTTP || type == TYPE_SOCKS) {
             val ip = Preferences.proxyIp

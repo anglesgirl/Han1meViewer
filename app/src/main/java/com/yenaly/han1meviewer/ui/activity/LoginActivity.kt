@@ -95,9 +95,6 @@ class LoginActivity : FrameActivity() {
 
     private var webView: WebView? = null
 
-    /** WebView 登录的表单劫持桥（登录 POST 无法在 shouldInterceptRequest 里接管） */
-    private var loginBridge: com.yenaly.han1meviewer.logic.network.ech.EchLoginBridge? = null
-
     @SuppressLint("SetJavaScriptEnabled")
     private fun createWebView(): WebView {
         return WebView(this).apply {
@@ -108,24 +105,6 @@ class LoginActivity : FrameActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.userAgentString = USER_AGENT
-
-            // 登录 POST 必须走原生 ECH 通道：shouldInterceptRequest 拿不到 POST body，
-            // 放任 WebView 自己发就等同于明文暴露登录站点的 SNI。
-            // 这里装桥：JS 拦表单提交 → 原生用 OkHttp(Conscrypt+ECH) 代发 → 结果回传。
-            loginBridge = com.yenaly.han1meviewer.logic.network.ech.EchLoginBridge.install(
-                webView!!,
-                loginUrlOf = { loginPageUrl() },
-                onSuccess = { cookies ->
-                    // 与 shouldOverrideUrlLoading 的登录成功分支保持一致
-                    login(cookies)
-                    EchStats.event("login_success", mapOf("via" to "native_post"))
-                    setResult(RESULT_OK)
-                    finish()
-                },
-                onFailure = { msg ->
-                    GlobalToasts.show(msg, level = GlobalToasts.ToastLevel.ERROR)
-                },
-            )
 
             webViewClient = object : WebViewClient() {
                 /**
@@ -143,8 +122,6 @@ class LoginActivity : FrameActivity() {
 
                 override fun onPageFinished(view: WebView, url: String) {
                     isRefreshing = false
-                    // 每次页面加载完都注入一次（表单可能是异步插入的，脚本内部用 MutationObserver 兜住）
-                    loginBridge?.inject()
                 }
 
                 override fun shouldOverrideUrlLoading(
