@@ -10,38 +10,30 @@ data class DohPreset(
 )
 
 object DohConfig {
+    /**
+     * 唯一预设：自建 CF 网关 DoH —— 直控解析结果，绕开大陆 DNS 污染。
+     * ECH 的配置查询（HTTPS 记录）也走它。
+     *
+     * 以前还有 AliDNS / DNSPod / Cloudflare / 自定义四个选项，现已移除：
+     * 那些解析被墙域名时结果不可靠（甚至被污染），留着只会让用户选到"能连上但解析错"的地址。
+     * 老版本存过的 key 会由 [selectedPreset] 归到这一个，**不会断网**。
+     */
     val presets = listOf(
-        // 自建 CF 网关：直控解析结果，绕开大陆 DNS 污染。
-        // 默认预设就是它（见 Preferences.dohPreset），ECH 的配置查询也走它。
         DohPreset(
             key = "gateway",
-            title = "Gateway",
+            title = "小雅DoH",
             url = "https://tgxjjdszvu.cloudflare-gateway.com/dns-query",
             bootstrapIps = listOf("162.159.36.20", "162.159.36.5"),
         ),
-        DohPreset(
-            key = "alidns",
-            title = "AliDNS",
-            url = "https://dns.alidns.com/dns-query",
-            bootstrapIps = listOf("223.5.5.5", "223.6.6.6"),
-        ),
-        DohPreset(
-            key = "dnspod",
-            title = "DNSPod",
-            url = "https://doh.pub/dns-query",
-            bootstrapIps = listOf("1.12.12.12", "120.53.53.53"),
-        ),
-        DohPreset(
-            key = "cloudflare",
-            title = "Cloudflare",
-            url = "https://cloudflare-dns.com/dns-query",
-            bootstrapIps = listOf("1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"),
-        ),
     )
 
-    fun selectedPreset(): DohPreset = presets.firstOrNull { it.key == Preferences.dohPreset } ?: presets.first()
-
-    fun customUrl(): String = Preferences.dohCustomUrl.trim()
+    /**
+     * 当前生效的预设。
+     * 已删除的旧 key（alidns / dnspod / cloudflare / custom）一律回落到唯一预设 ——
+     * 否则会出现"设置里显示 A、实际用 B"这种查不出来的怪问题。
+     */
+    fun selectedPreset(): DohPreset =
+        presets.firstOrNull { it.key == Preferences.dohPreset } ?: presets.first()
 
     fun bootstrapIps(): List<String> {
         val customBootstrapIps = Preferences.dohBootstrapIps
@@ -50,17 +42,11 @@ object DohConfig {
             .filter { it.isNotBlank() }
             .distinct()
         if (customBootstrapIps.isNotEmpty()) return customBootstrapIps
-        if (Preferences.dohPreset == "custom") return emptyList()
         return selectedPreset().bootstrapIps
     }
 
     fun timeoutSeconds(): Int = Preferences.dohTimeoutSeconds.coerceIn(1, 60)
 
-    fun resolveUrl(): String? {
-        if (!Preferences.useDoH) return null
-        return when (Preferences.dohPreset) {
-            "custom" -> customUrl().takeIf { it.isNotBlank() }
-            else -> selectedPreset().url
-        }
-    }
+    /** 只认这一个预设，不再有"自定义 URL"分支 */
+    fun resolveUrl(): String? = if (Preferences.useDoH) selectedPreset().url else null
 }

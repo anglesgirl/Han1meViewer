@@ -501,26 +501,8 @@ private fun DohDialog(
     onConfirm: (Boolean, String, String, String, Int) -> Unit,
 ) {
     var dohEnabled by rememberSaveable(enabled) { mutableStateOf(enabled) }
-    var presetValue by rememberSaveable(preset) {
-        mutableStateOf(preset.ifBlank { DohConfig.presets.first().key })
-    }
-    var customValue by rememberSaveable(customUrl) { mutableStateOf(customUrl) }
     var bootstrapValue by rememberSaveable(bootstrapIps) { mutableStateOf(bootstrapIps) }
     var timeoutValue by rememberSaveable(timeoutSeconds) { mutableStateOf(timeoutSeconds.toString()) }
-    var showPresetDialog by rememberSaveable { mutableStateOf(false) }
-
-    if (showPresetDialog) {
-        NetworkChoiceDialog(
-            title = stringResource(R.string.doh_preset),
-            selectedValue = presetValue,
-            options = DohConfig.presets.map { it.title to it.key } + (stringResource(R.string.custom) to "custom"),
-            onDismiss = { showPresetDialog = false },
-            onSelect = {
-                presetValue = it
-                showPresetDialog = false
-            },
-        )
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -539,21 +521,20 @@ private fun DohDialog(
                     Text(stringResource(R.string.use_doh))
                 }
 
-                SettingNavigationItem(
-                    title = stringResource(R.string.doh_preset),
-                    valueText = DohConfig.presets.firstOrNull { it.key == presetValue }?.title
-                        ?: stringResource(R.string.custom),
-                    iconRes = R.drawable.baseline_domain_24,
-                    onClick = { showPresetDialog = true },
-                )
-
-                OutlinedTextField(
-                    value = customValue,
-                    onValueChange = { customValue = it },
-                    label = { Text(stringResource(R.string.doh_custom_url)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
+                // 只有一个预设就不再给"选择"入口了，直接显示名字
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.doh_preset),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(text = DohConfig.presets.first().title)
+                }
 
                 OutlinedTextField(
                     value = bootstrapValue,
@@ -577,8 +558,10 @@ private fun DohDialog(
             TextButton(onClick = {
                 onConfirm(
                     dohEnabled,
-                    presetValue,
-                    customValue.trim(),
+                    // 预设只剩一个：老版本存的 alidns/cloudflare/custom 顺手归一化掉
+                    DohConfig.presets.first().key,
+                    // 自定义 URL 已下线，这里把用户原有值原样传回，不做破坏性清空
+                    customUrl,
                     bootstrapValue.trim(),
                     timeoutValue.toIntOrNull()?.coerceIn(1, 60) ?: 10,
                 )
@@ -813,7 +796,7 @@ private fun NetworkSettingsScreenPreview() {
             proxyIp = "",
             proxyPort = -1,
             dohEnabled = false,
-            dohPreset = "cloudflare",
+            dohPreset = "gateway",
             dohCustomUrl = "",
             dohBootstrapIps = "1.1.1.1, 8.8.8.8",
             dohTimeoutSeconds = 10,
