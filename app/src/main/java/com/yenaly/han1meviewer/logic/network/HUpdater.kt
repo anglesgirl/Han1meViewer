@@ -1,10 +1,12 @@
 package com.yenaly.han1meviewer.logic.network
 
 import android.util.Log
+import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.model.github.Latest
 import com.yenaly.han1meviewer.util.checkNeedUpdate
 import com.yenaly.han1meviewer.util.copyTo
+import com.yenaly.han1meviewer.util.parseVersionCode
 import com.yenaly.han1meviewer.util.runSuspendCatching
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okio.use
@@ -33,16 +35,25 @@ object HUpdater {
         if (forceCheck || Preferences.isUpdateDialogVisible) {
             // Firebase 已移除：原来由 Remote Config 下发的开关，现在恒为 true
             if (Preferences.useCIUpdateChannel) {
-                // CI 通道：取最新一次构建（CI 每次成功构建都会发一个发布，预发布也算）。
+                // CI 通道：所有发布里取**版本号最大**的那个（CI 每次成功构建都会发一个，含预发布）。
                 //
-                // ⚠️ 不再走 workflow artifacts：下载 artifact 需要带 token，App 里没有可用
-                // token（旧版把 CI 的临时 GITHUB_TOKEN 编进包里，跑起来早过期 → 401）。
-                // 发布资产是**匿名可下**的，还能直接用 gh-proxy / ghfast 镜像加速。
+                // ⚠️ 两个坑都是实测出来的：
+                //  1) 不能只看列表第一条 —— GitHub 的返回顺序不可靠（本仓库几个 release 的
+                //     created_at 完全相同，旧版 v1.0.4 会排在最新构建前面）。
+                //  2) 参与比较的 tag 必须能解析出版本号：老 release 的 tag 形如 `v1.0.4-26083016`，
+                //     放进去会被当成 Int.MAX_VALUE → 永远"有更新"。
+                // 另外不走 workflow artifacts：下载 artifact 需要 token，App 里没有可用的
+                //（CI 的临时 token 早过期），而发布资产匿名可下、还能走镜像加速。
                 val releases = runSuspendCatching {
                     HanimeNetwork.githubService.getReleases()
                 }.getOrNull().orEmpty()
-                val rel = releases.firstOrNull { !it.draft && it.assets.isNotEmpty() } ?: return null
-                if (!checkNeedUpdate(rel.tagName)) return null
+                val newest = releases.asSequence()
+                    .filter { !it.draft && it.assets.isNotEmpty() }
+                    .mapNotNull { rel -> parseVersionCode(rel.tagName)?.let { code -> code to rel } }
+                    .maxByOrNull { it.first }
+                    ?: return null
+                val (versionCode, rel) = newest
+                if (BuildConfig.VERSION_CODE >= versionCode) return null
                 val asset = rel.assets.first()
                 return Latest(
                     version = rel.tagName,

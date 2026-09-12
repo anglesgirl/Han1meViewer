@@ -11,14 +11,20 @@ import java.io.File
 
 val Context.updateFile: File get() = File(applicationContext.cacheDir, "update.apk")
 
-fun checkNeedUpdate(versionName: String): Boolean {
-    // tag 形如 `Han1meViewer-v1.0.8-ci+2609121210`（旧版还带 `-ech-conscrypt` 后缀），
-    // 所以只取 "+" 后面的**数字**：直接 substringAfter("+").toIntOrNull() 会因后缀解析失败，
-    // 回落成 Int.MAX_VALUE → 永远提示"有更新"（旧版就踩过）。
-    val latestVersionCode = Regex("\\+(\\d+)")
-        .find(versionName)?.groupValues?.get(1)?.toIntOrNull()
+/**
+ * 从 tag 里取 `+<版本号>`。取不到返回 null。
+ *
+ * 例：`Han1meViewer-v1.0.8-ci+26091211` → 26091211；
+ * 老 release 的 tag 形如 `v1.0.4-26083016` 没有 `+` → null。
+ * ⚠️ 直接 `substringAfter("+").toIntOrNull()` 会因后缀（`-ech-conscrypt`）解析失败，
+ * 调用方若按 Int.MAX_VALUE 兜底就会"永远提示有更新"，所以这里要精确取数字。
+ */
+fun parseVersionCode(versionName: String): Int? =
+    Regex("\\+(\\d+)").find(versionName)?.groupValues?.get(1)?.toIntOrNull()
         ?: versionName.substringAfter("+", "").toIntOrNull()
-        ?: Int.MAX_VALUE
+
+fun checkNeedUpdate(versionName: String): Boolean {
+    val latestVersionCode = parseVersionCode(versionName) ?: Int.MAX_VALUE
     return BuildConfig.VERSION_CODE < latestVersionCode
 }
 
