@@ -6,6 +6,7 @@ import androidx.core.content.edit
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.database.FirebaseDatabase
 import com.yenaly.han1meviewer.FIREBASE_REALTIME_DATABASE
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.milliseconds
@@ -43,6 +45,8 @@ class HomePageViewModel: ViewModel() {
 
     private val _homePageFlow = MutableStateFlow<PageState<HomeData>>(PageState.Loading)
     val homePageFlow = _homePageFlow.asStateFlow()
+
+    private val database = FirebaseDatabase.getInstance(FIREBASE_REALTIME_DATABASE)
 
     private val _sessionExpiredMessage = MutableSharedFlow<SessionExpiredMessage>()
     val sessionExpiredMessage = _sessionExpiredMessage
@@ -102,13 +106,40 @@ class HomePageViewModel: ViewModel() {
             }
         }
     }
-    /**
-     * 公告数据源。
-     *
-     * Firebase（Realtime Database）已整体移除，这里恒返回空列表。
-     * 函数名/调用点/超时逻辑/Announcement 模型都保留，日后要接远程公告只需恢复实现。
-     */
-    private suspend fun fetchAnnouncementsFromFirebase(): List<Announcement> = emptyList()
+    private suspend fun fetchAnnouncementsFromFirebase(): List<Announcement> =
+        suspendCancellableCoroutine { continuation ->
+            val lastDismissTime = getSpValue("last_dismiss_time", 0L, "setting_pref")
+            val shouldShowAnno = System.currentTimeMillis() - lastDismissTime > 24 * 60 * 60 * 1000L
+            if (!shouldShowAnno) {
+                continuation.resume(emptyList())
+                return@suspendCancellableCoroutine
+            }
+
+            database.getReference("announcements").get()
+                .addOnSuccessListener { snapshot ->
+                    val list = mutableListOf<Announcement>()
+                    if (snapshot.exists()) {
+                        for (announceSnap in snapshot.children) {
+                            val announcement = announceSnap.getValue(Announcement::class.java)
+                            if (announcement != null && announcement.isActive) {
+                                list.add(announcement)
+                            }
+                        }
+                        if (continuation.isActive) {
+                            continuation.resume(list.sortedBy { it.priority })
+                        }
+                    } else {
+                        if (continuation.isActive) {
+                            continuation.resume(emptyList())
+                        }
+                    }
+                }.addOnFailureListener { e ->
+                    Log.e("Announcement", "读取失败: ${e.message}")
+                    if (continuation.isActive) {
+                        continuation.resume(emptyList()) // 失败也容错返回空列表
+                    }
+                }
+        }
 
     private companion object {
         const val ANNOUNCEMENTS_TIMEOUT_MILLIS = 5_000L

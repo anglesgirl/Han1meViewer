@@ -36,6 +36,7 @@ import cn.jzvd.JZMediaInterface
 import cn.jzvd.JZMediaSystem
 import cn.jzvd.Jzvd
 import com.yenaly.han1meviewer.BuildConfig
+import com.yenaly.han1meviewer.HanimeResolution
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.network.HProxySelector
@@ -155,7 +156,9 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                     .setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
             )
 
-            val currUrl = jzvd.jzDataSource.currentUrl.toString()
+            val rawUrl = jzvd.jzDataSource.currentUrl.toString()
+            // 坏 CDN 节点统一换 t33（实测可播）
+            val currUrl = HanimeResolution.normalizeCdnHost(rawUrl)
             val videoSource = if (currUrl.contains(".m3u8")) {
                 HlsMediaSource.Factory(dataSourceFactory)
                     .createMediaSource(MediaItem.fromUri(currUrl))
@@ -701,7 +704,7 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
         init()
         handler = Handler(Looper.getMainLooper())
 
-        val url = jzvd.jzDataSource.currentUrl.toString()
+        val url = HanimeResolution.normalizeCdnHost(jzvd.jzDataSource.currentUrl.toString())
         if (url.isEmpty()) {
             Log.e(TAG, "视频链接为空")
             return

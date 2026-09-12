@@ -33,3 +33,8 @@
 -keep class androidx.window.extensions.embedding.** { *; }
 -keep class is.xyz.mpv.** { *; }
 -keep class lis.xyz.mpv.** { *; }
+-keep class cn.jzvd.** { *; }
+
+# ⚠️ ECH 总开关：Conscrypt 用反射调用 PolicyTrustManager.getNetworkSecurityPolicy()，
+# 被 R8 改名/裁掉的话，release 包会「日志全绿但一个字节 ECH 都不发」（ECH 静默失效）。
+-keep class com.yenaly.han1meviewer.logic.network.ech.ConscryptEch$PolicyTrustManager { *; }

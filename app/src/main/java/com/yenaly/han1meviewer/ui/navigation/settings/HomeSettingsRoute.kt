@@ -49,6 +49,8 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.core.text.parseAsHtml
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.firebase.Firebase
+import com.google.firebase.analytics.analytics
 import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.HanimeConstants
 import com.yenaly.han1meviewer.HA1_GITHUB_FORUM_URL
@@ -336,6 +338,7 @@ fun HomeSettingsRouteScreen(
             }
             saveBoolean(HOME_USE_ANALYTICS, true)
             refreshKey++
+            Firebase.analytics.setAnalyticsCollectionEnabled(true)
         },
         onUseLockScreenChange = { value ->
             if (value) {
@@ -482,6 +485,7 @@ fun HomeSettingsRouteScreen(
                 TextButton(onClick = {
                     saveBoolean(HOME_USE_ANALYTICS, false)
                     refreshKey++
+                    Firebase.analytics.setAnalyticsCollectionEnabled(false)
                     showAnalyticsDialog = false
                 }) {
                     Text(stringResource(R.string.deny))

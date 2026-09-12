@@ -1,5 +1,5 @@
 permissions:
-  contents: read
+  contents: write
 name: CI
 
 on:
@@ -8,6 +8,8 @@ on:
     branches: [ "main", "ech-conscrypt" ]
     paths-ignore:
       - "**.md"
+  # 手动触发（改 secret / 重出包时不用空提交）
+  workflow_dispatch:
 
 jobs:
   build:
@@ -41,6 +43,24 @@ jobs:
           printf '%s' "$KS" | base64 -d > keystore.jks
           ls -lh keystore.jks
 
+      - name: Load Google Services File
+        # Firebase 配置走 secret（.gitignore 里明确排除该文件，不进 git）
+        env:
+          DATA: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -z "$DATA" ]; then
+            echo "::error::缺少 secret GOOGLE_SERVICES_JSON_BASE64（Firebase 配置）"
+            exit 1
+          fi
+          printf '%s' "$DATA" | base64 -d > app/google-services.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open('app/google-services.json'))
+          pkgs = [c['client_info']['android_client_info']['package_name'] for c in d.get('client', [])]
+          print('google-services.json 合法 ✓ 包名:', pkgs)
+          assert 'com.yenaly.han1meviewer.ech' in pkgs, '包名与 applicationId 不匹配，processReleaseGoogleServices 会失败'
+          PY
+
       - name: Set up keystore for signing
         run: |
           mkdir -p $HOME/.android
@@ -57,11 +77,67 @@ jobs:
           HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN != '' && secrets.HA_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           HA1_VERSION_SOURCE: 'ci'
 
+      - name: Verify APK (Conscrypt ECH, arm64, 无 Go 残留)
+        # CI 绿灯 ≠ 功能可用；这里至少证明「打进去的是 Conscrypt 而不是 Go 反代」
+        run: |
+          set -e
+          APK=$(find app/build/outputs/apk -name "Han1meViewer-v*.apk" -type f | head -1)
+          echo "APK: $APK"
+          [ -n "$APK" ] || { echo "::error::没有找到 release APK"; exit 1; }
+          du -h "$APK"
+          unzip -l "$APK" | grep -E "lib/arm64-v8a/" || true
+          # Go 反代时代的产物不该再出现
+          if unzip -l "$APK" | grep -q "libgojni.so"; then
+            echo "::error::APK 里还有 Go 代理的 libgojni.so"; exit 1
+          fi
+          # Conscrypt 的 native 库必须在
+          unzip -l "$APK" | grep -q "libconscrypt_jni.so" || {
+            echo "::error::APK 里没有 libconscrypt_jni.so（Conscrypt 没打进去）"; exit 1; }
+          echo "Conscrypt ECH 校验通过 ✓"
+
       - name: Upload APK Zip
         uses: actions/upload-artifact@v4
         with:
           name: app-release-${{ github.sha }}
           path: app/build/outputs/apk/release/Han1meViewer-v*.apk
+
+      - name: Publish to GitHub Release
+        # 大陆用户直链下载 + 留档；tag 带分支后缀，避免与上游 main 的 tag 冲突
+        if: success() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          APK=$(find app/build/outputs/apk -name "Han1meViewer-v*.apk" -type f | head -1)
+          [ -n "$APK" ] || { echo "::error::没有找到 release APK"; exit 1; }
+          SIZE_MB=$(du -m "$APK" | cut -f1)
+          APK_NAME=$(basename "$APK")
+          TAG="$(basename "$APK" .apk)-ech-conscrypt"
+          echo "Publishing ${SIZE_MB}MB $APK as $TAG"
+          ACCEL1="https://gh-proxy.com/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          ACCEL2="https://ghfast.top/https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          DIRECT="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          {
+            echo "arm64-only APK (${SIZE_MB}MB) — misaka 基座 + Conscrypt in-process ECH。"
+            echo ""
+            echo "## Download acceleration (mainland China)"
+            echo "- gh-proxy.com: ${ACCEL1}"
+            echo "- ghfast.top: ${ACCEL2}"
+            echo ""
+            echo "Direct: ${DIRECT}"
+          } > /tmp/release_notes.md
+          NOTES=$(cat /tmp/release_notes.md)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "$NOTES" >/dev/null 2>&1 || true
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Han1meViewer (Conscrypt ECH)" \
+              --notes "$NOTES" \
+              --draft
+          fi
+          echo "RELEASE_TAG=$TAG"
 
       - name: Notify build result
         # 无论成败都要回传（用户明确要求：CI 成败都通知，附上产物下载入口）

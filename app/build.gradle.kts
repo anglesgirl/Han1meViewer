@@ -12,6 +12,9 @@ plugins {
     alias(libs.plugins.org.jetbrains.kotlin.plugin.parcelize)
     alias(libs.plugins.org.jetbrains.kotlin.plugin.serialization)
     alias(libs.plugins.com.google.devtools.ksp)
+    alias(libs.plugins.com.google.gms.google.services)
+    alias(libs.plugins.com.google.firebase.crashlytics)
+    alias(libs.plugins.com.google.firebase.firebase.pref)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.navigation.safeargs)
     id("com.mikepenz.aboutlibraries.plugin") version "14.2.1"
@@ -29,10 +32,14 @@ android {
         projectDir, "ha1_github_token.txt"
     ).checkIfExists()?.readText().orEmpty()
 
+
     defaultConfig {
-        applicationId = "com.yenaly.han1meviewer"
+        // 与官方版共存（可同时安装），并对应我们自己的 Firebase 应用（google-services.json 里的包名）
+        applicationId = "com.yenaly.han1meviewer.ech"
         minSdk = property("min.sdk")?.toString()?.toIntOrNull()
         targetSdk = property("target.sdk")?.toString()?.toIntOrNull()
+        // 只保留中英日资源，裁掉依赖库带来的其他语言（省体积；缺失时回退英文）
+        resConfigs("en", "zh-rCN", "ja")
         val (code, name) = createVersion(major = 1, minor = 0, patch = 8)
         versionCode = code
         versionName = name
@@ -115,6 +122,7 @@ kotlin {
     }
 }
 
+
 androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
@@ -178,6 +186,7 @@ dependencies {
 
     implementation(libs.coil)
 
+
     // video
 
     implementation(libs.jiaozi.video.player)
@@ -194,7 +203,16 @@ dependencies {
     implementation(libs.about)
     implementation(libs.circular.reveal.switch)
     implementation(libs.drawerlayout)
+
+    // firebase
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.perf)
+    implementation(libs.firebase.config)
     debugImplementation(libs.androidx.ui.test.manifest)
+    implementation(libs.firebase.database)
     ksp(libs.room.compiler)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)

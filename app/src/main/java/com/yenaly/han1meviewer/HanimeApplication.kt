@@ -7,6 +7,13 @@ import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.color.DynamicColors
+import com.google.firebase.Firebase
+import com.google.firebase.analytics.analytics
+import com.google.firebase.crashlytics.crashlytics
+import com.google.firebase.crashlytics.setCustomKeys
+import com.google.firebase.database.database
+import com.google.firebase.remoteconfig.remoteConfig
+import com.google.firebase.remoteconfig.remoteConfigSettings
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.ui.activity.MainActivity
@@ -75,9 +82,11 @@ class HanimeApplication : YenalyApplication() {
         }
         ProxySelector.setDefault(HProxySelector())
         HProxySelector.rebuildNetwork()
-        // ECH 传输层：装载 Conscrypt provider。这里只是预热，真正注入 ECH 时才会用到，
-        // 不涉及任何线程或端口（区别于已被删掉的 Go 本地反代）。
+        // ECH 传输层：装载 Conscrypt provider（in-process，无外挂线程/无本地端口）。
+        // 这是取代原先 Go 本地反代的唯一改动 —— WebView 的子请求由
+        // shouldInterceptRequest 接管后走这条通道拿到 ECH。
         com.yenaly.han1meviewer.logic.network.ech.ConscryptEch.install()
+        com.yenaly.han1meviewer.util.EchStats.event("app_start")
         initFirebase()
         initNotificationChannel()
         MPVLib.create(applicationContext)
@@ -94,9 +103,34 @@ class HanimeApplication : YenalyApplication() {
     }
 
     private fun initFirebase() {
-        // Firebase 已整体移除（自用 App 不需要统计/崩溃上报）。
-        // 保留这个方法与它在 onCreate 里的调用点，免得生命周期逻辑大改；
-        // 日后要接回统计，在这里恢复初始化即可。
+        // 用于处理 Firebase Analytics 初始化
+        Firebase.analytics.setAnalyticsCollectionEnabled(Preferences.isAnalyticsEnabled)
+        // 用于处理 Firebase Crashlytics 初始化
+        Firebase.crashlytics.apply {
+            isCrashlyticsCollectionEnabled = !BuildConfig.DEBUG
+            setCustomKeys {
+                key(
+                    FirebaseConstants.APP_LANGUAGE,
+                    LanguageHelper.preferredLanguage.toLanguageTag()
+                )
+                key(
+                    FirebaseConstants.VERSION_SOURCE,
+                    BuildConfig.VERSION_SOURCE
+                )
+            }
+        }
+        // 用于处理 Firebase Remote Config 初始化
+        Firebase.remoteConfig.apply {
+            setConfigSettingsAsync(remoteConfigSettings {
+                minimumFetchIntervalInSeconds = if (BuildConfig.DEBUG) 0 else 3 * 60 * 60
+                fetchTimeoutInSeconds = 10
+            })
+            setDefaultsAsync(FirebaseConstants.remoteConfigDefaults)
+            fetchAndActivate().addOnCompleteListener {
+                AppViewModel.getLatestVersion(delayMillis = 200)
+            }
+        }
+        Firebase.database.setPersistenceEnabled(true)
     }
 
     private fun initNotificationChannel() {
