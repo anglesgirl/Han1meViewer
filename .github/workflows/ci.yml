@@ -24,25 +24,8 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      - name: Set up Go (stable)
-        uses: actions/setup-go@v5
-        with:
-          go-version: "stable"
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-
-      - name: Build ECH proxy AAR (gomobile, arm64)
-        run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
-          export PATH="$PATH:$(go env GOPATH)/bin"
-          cd ech
-          go get golang.org/x/mobile/bind@latest
-          mkdir -p ../app/libs
-          gomobile bind -v -target=android/arm64 -androidapi 27 \
-            -o ../app/libs/echproxy.aar ./echproxy
-          ls -la ../app/libs
 
       - name: Restore release keystore
         if: env.KEYSTORE_BASE64 != ''
@@ -66,11 +49,26 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
 
-      - name: Verify ECH library in APK
+      - name: Verify ECH transport in APK
         run: |
           APK=$(find app/build/outputs -name "*.apk" -type f | head -1)
           echo "APK: $APK"
-          unzip -l "$APK" | grep -q "lib/arm64-v8a/libgojni.so" && echo "libgojni.so present ✓" || echo "WARNING: libgojni.so missing"
+          # 换 Conscrypt 后不该再有 Go 运行时；若有，说明旧的反代链路没删干净
+          if unzip -l "$APK" | grep -q "libgojni.so"; then
+            echo "::error::APK 里仍有 libgojni.so —— Go 反代链路未删净"
+            exit 1
+          fi
+          echo "无 Go 运行时 ✓"
+          # 传输层必须在包里：Conscrypt + 我们自己的 policy/注入代码
+          unzip -p "$APK" 'classes*.dex' > /tmp/all.dex
+          for s in "org/conscrypt" "DomainEncryptionMode" "echTransport" "isProtected"; do
+            if grep -qa "$s" /tmp/all.dex; then
+              echo "$s ✓"
+            else
+              echo "::error::dex 里缺少 $s —— ECH 传输层没打进包"
+              exit 1
+            fi
+          done
 
       - name: Find APK
         run: find app/build/outputs -name "*.apk" -type f
