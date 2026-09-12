@@ -1,6 +1,9 @@
 package com.yenaly.han1meviewer.logic.network.ech
 
 import okhttp3.OkHttpClient
+import okhttp3.Dns
+import okhttp3.Request
+import okhttp3.Response
 
 /**
  * 给 OkHttp 客户端挂上 Conscrypt ECH 传输层。
@@ -34,10 +37,31 @@ fun OkHttpClient.Builder.echTransport(
     // 唯一保留的拦截器：ECH 被拒时清缓存，让重试拿到 retryConfigs
     .addInterceptor(EchRetryInterceptor())
 
-/** ECH 传输层是否已就绪（设置页/诊断用） */
+/** 共享的 ECH OkHttp 客户端 */
 object EchHttp {
+
     val isReady: Boolean get() = ConscryptEch.ready
 
     /** 用户改了 DoH 设置后调用：让解析器与 ECH 缓存跟着刷新 */
     fun onDohSettingsChanged() = EchDoh.invalidateAll()
+
+    /**
+     * 登录 POST 专用客户端。
+     *
+     * ⚠️ **必须 followRedirects(false)**：登录响应是个 302，凭据挂在它的 `Set-Cookie` 上。
+     * 一旦自动跟随重定向，就只能看到最终的 200，读不到那个 Set-Cookie ——
+     * 表现为"登录提交成功但登录态没同步回来"。这是老实现栽过的坑。
+     */
+    val loginClient: OkHttpClient by lazy {
+        ConscryptEch.install()
+        OkHttpClient.Builder()
+            .sslSocketFactory(ConscryptEch.socketFactory, ConscryptEch.trustManager)
+            .dns(EchDns())
+            .cookieJar(okhttp3.CookieJar.NO_COOKIES)   // Cookie 由 CookieManager 统一管
+            .followRedirects(false)
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+    }
 }

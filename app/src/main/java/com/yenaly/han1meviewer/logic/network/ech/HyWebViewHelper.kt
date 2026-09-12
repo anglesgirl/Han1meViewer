@@ -27,34 +27,21 @@ object HyWebViewHelper {
 
     private const val TAG = "HY-ECH-WEBVIEW"
 
-    /** 与 WebView 共用 CookieManager：Cookie 由 cookieJar 注入，这里跳过 WebView 传来的 Cookie 头 */
+    /**
+     * WebView 子请求专用客户端。
+     * cookieJar 用 NO_COOKIES —— Cookie 由 CookieManager 统一注入/回写（与 WebView 同源），
+     * 交给 OkHttp 管会和 WebView 打架。
+     */
     private val client: OkHttpClient by lazy {
+        ConscryptEch.install()
         OkHttpClient.Builder()
-            .echTransport()
-            .cookieJar(SharedWebViewCookieJar)
+            .sslSocketFactory(ConscryptEch.socketFactory, ConscryptEch.trustManager)
+            .dns(EchDns())
+            .cookieJar(okhttp3.CookieJar.NO_COOKIES)
+            .addInterceptor(EchRetryInterceptor())
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
-    }
-
-    /** 受保护域名的 Cookie 写入/读取都通过系统 CookieManager（与 WebView 双向共享） */
-    private object SharedWebViewCookieJar : okhttp3.CookieJar {
-        override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> = emptyList()
-
-        override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
-            val cm = CookieManager.getInstance()
-            cookies.forEach { c ->
-                val sb = StringBuilder()
-                sb.append(c.name).append('=').append(c.value)
-                if (c.expiresAt < Long.MAX_VALUE / 2) {
-                    sb.append("; Max-Age=").append((c.expiresAt - System.currentTimeMillis()) / 1000)
-                }
-                sb.append("; Path=").append(c.path.ifEmpty { "/" })
-                if (c.secure) sb.append("; Secure")
-                runCatching { cm.setCookie(url.toString(), sb.toString()) }
-            }
-            runCatching { cm.flush() }
-        }
     }
 
     /**
