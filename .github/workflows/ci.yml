@@ -26,16 +26,62 @@ jobs:
           cache: gradle
 
       - name: Load Google Services File
+        # ⚠️ 我们的 fork 没有 GOOGLE_SERVICES_JSON_BASE64 这个 secret。
+        # 原写法（echo $DATA | base64 -di > app/google-services.json）在 secret 为空时
+        # 会写出一个**空文件**，:app:processReleaseGoogleServices 随即报
+        # "Malformed root json" 且整个构建失败。
+        #
+        # 这版改法：有 secret 就用真的；没有就写一份**占位配置**（包名正确、id 为 0），
+        # 保证 Firebase 插件能正常应用、CI 能出货。占位不会上报任何数据，
+        # 想要真实统计就把 google-services.json 的 base64 存进 secret。
         env:
           DATA: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
-        run: echo $DATA | base64 -di > app/google-services.json
+        run: |
+          if [ -n "$DATA" ]; then
+            echo "$DATA" | base64 -di > app/google-services.json
+            echo "已写入真实 google-services.json"
+          else
+            cat > app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "0",
+              "project_id": "han1meviewer-placeholder",
+              "storage_bucket": "han1meviewer-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:0:android:0",
+                  "android_client_info": { "package_name": "com.yenaly.han1meviewer" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+            echo "未提供 secret，已写入占位 google-services.json（不上报数据）"
+          fi
+          # 立刻校验，避免再次踩到"文件坏了才发现"
+          python3 -c "import json,sys; json.load(open('app/google-services.json')); print('google-services.json JSON 合法 ✓')"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Decode keystore
+        # ⚠️ 上游用的是 YOUR_KEYSTORE_BASE64，本 fork 的 secret 叫 KEYSTORE_BASE64
+        # （fallback 保留上游名字，两边都能用）
+        env:
+          KS: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_BASE64 || secrets.YOUR_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.YOUR_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          if [ -z "$KS" ]; then
+            echo "::error::缺少 keystore secret（KEYSTORE_BASE64）"
+            exit 1
+          fi
+          printf '%s' "$KS" | base64 -d > keystore.jks
+          ls -lh keystore.jks
 
       - name: Set up keystore for signing
         run: |
@@ -45,10 +91,12 @@ jobs:
       - name: Build and sign APK with Gradle
         run: ./gradlew assembleRelease
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
+          # 同上：兼容本 fork 的 secret 命名
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD != '' && secrets.KEYSTORE_PASSWORD || secrets.YOUR_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD != '' && secrets.KEYSTORE_PASSWORD || secrets.YOUR_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN }}
+          # 上游用自定义 PAT；本 fork 未设置时回落到内置 token（仅用于版本查询）
+          HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN != '' && secrets.HA_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           HA1_VERSION_SOURCE: 'ci'
 
       - name: Upload APK Zip
