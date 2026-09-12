@@ -6,7 +6,6 @@ import com.yenaly.han1meviewer.HA1_GITHUB_API_URL
 import com.yenaly.han1meviewer.HJson
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.network.interceptor.CloudflareInterceptor
-import com.yenaly.han1meviewer.logic.network.EchInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.GetchuInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.UrlLoggingInterceptor
@@ -16,6 +15,7 @@ import com.yenaly.yenaly_libs.utils.unsafeLazy
 import okhttp3.Cache
 import okhttp3.CookieJar
 import okhttp3.MediaType.Companion.toMediaType
+import com.yenaly.han1meviewer.logic.network.ech.echTransport
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import retrofit2.Retrofit
@@ -87,10 +87,9 @@ object ServiceCreator {
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(GetchuInterceptor())
-            .addInterceptor(EchInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
-            .proxySelector(HProxySelector())
-            .dns(dns)
+            // getchu 不在 ECH 名单里，echTransport 会对它走普通 DNS/TLS
+            .echTransport(dns)
             .build()
     }
 
@@ -100,8 +99,7 @@ object ServiceCreator {
             .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
-            .addInterceptor(EchInterceptor())
-            .dns(dns)
+            .echTransport(dns)
             .build()
     }
 
@@ -114,13 +112,11 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor(CloudflareInterceptor(applicationContext))
-            .addInterceptor(EchInterceptor())
             .cache(cache)
-            // NO_COOKIES:EchInterceptor 按原始域名手动注入/回写(HCookieJar 同源);
-            // 若用 HCookieJar,OkHttp 核心会按改写后的 127.0.0.1 读写覆盖手动头。
-            .cookieJar(CookieJar.NO_COOKIES)
-            .proxySelector(HProxySelector())
-            .dns(dns)
+            // 换 Conscrypt 后域名不再被改写，Cookie 回到标准语义：直接用 HCookieJar
+            // （它按真实域名存取，且与 WebView 共用同一份 cookieMap）。
+            .cookieJar(HCookieJar())
+            .echTransport(dns)
             .build()
     }
 

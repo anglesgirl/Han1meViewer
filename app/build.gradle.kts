@@ -129,11 +129,14 @@ androidComponents {
 }
 
 dependencies {
-    // Go ECH 代理 AAR(CI 现场 gomobile 生成 app/libs/echproxy.aar)。文件不存在时跳过,普通构建依然成功。
-    val echproxyAar = file("libs/echproxy.aar")
-    if (echproxyAar.exists()) {
-        implementation(files(echproxyAar))
-    }
+    // ECH 传输层改用 Conscrypt（in-process，取代原先的 Go 本地代理 + gomobile AAR）。
+    // ⚠️ 必须是 2.7.0+：ECH API（setEchConfigList）自 2.7-alpha 引入、2.7.0 定稿。
+    // 但**光有版本还不够** —— 还必须自写 TrustManager 暴露 getNetworkSecurityPolicy()，
+    // 否则 Conscrypt 反射取不到策略，ECH 会「静默不注入」（详见 logic/network/ech/ConscryptEch.kt）。
+    implementation("org.conscrypt:conscrypt-android:2.7.0")
+
+    // 注：Go ECH 源码仍保留在仓库根部的 ech/ 目录，供 **iOS 端**用 gomobile 复用；
+    // Android 侧已不再引用它（原先的 libs/echproxy.aar 已移除）。
     implementation(libs.appcompat)
     implementation(libs.androidx.window)
     implementation(libs.androidx.window.java)

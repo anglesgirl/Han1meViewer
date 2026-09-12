@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -17,7 +18,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.preference.PreferenceManager
-import com.yenaly.han1meviewer.Preferences.cloudFlareCookie
+import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.cloudFlareCookie
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.ui.screen.web.CloudflareScreen
@@ -78,6 +80,19 @@ class CloudflareActivity : AppCompatActivity() {
             }
 
             webViewClient = object : WebViewClient() {
+                /**
+                 * 受保护域名（ECH 名单）的**所有子请求**必须在这里接管：
+                 * WebView 自己的 TLS 栈无法注入 ECH，放行即等于明文暴露 SNI。
+                 * 非受保护域名返回 null，保持 WebView 原行为。
+                 */
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? {
+                    HyWebViewHelper.intercept(request)?.let { return it }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,

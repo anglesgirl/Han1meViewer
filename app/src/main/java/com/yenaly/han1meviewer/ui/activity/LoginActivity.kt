@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.enableEdgeToEdge
@@ -27,9 +28,9 @@ import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.login
 import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
-import com.yenaly.han1meviewer.logic.ech.EchProxyManager
 import com.yenaly.han1meviewer.logic.network.HCookieJar
 import com.yenaly.han1meviewer.logic.network.ServiceCreator
 import com.yenaly.han1meviewer.ui.screen.login.LoginScreen
@@ -106,6 +107,19 @@ class LoginActivity : FrameActivity() {
             settings.userAgentString = USER_AGENT
 
             webViewClient = object : WebViewClient() {
+                /**
+                 * 受保护域名（ECH 名单）的**所有子请求**必须在这里接管：
+                 * WebView 自己的 TLS 栈无法注入 ECH，放行即等于明文暴露 SNI。
+                 * 非受保护域名返回 null，保持 WebView 原行为。
+                 */
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? {
+                    HyWebViewHelper.intercept(request)?.let { return it }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
                 override fun onPageFinished(view: WebView, url: String) {
                     isRefreshing = false
                 }
@@ -159,23 +173,18 @@ class LoginActivity : FrameActivity() {
                     }
                 }
             }
-            // 等待代理就緒再載入登錄頁
-            lifecycleScope.launch {
-                while (!EchProxyManager.isRunning) {
-                    kotlinx.coroutines.delay(200)
-                }
-                loadUrl(loginPageUrl())
-            }
+            // 直接載入登錄頁：ECH 现在在传输层（Conscrypt）生效，
+            // 不再需要等本地 Go 代理就绪。
+            loadUrl(loginPageUrl())
         }
     }
 
-    /** 登录页地址：代理就緒則走 127.0.0.1 簡單路徑(代理按 target 轉發)，否則直連。
-     * 使用當前選擇的站點 baseUrl (hanime1.me / javchu.com 等)。 */
+    /** 登录页地址：直接用當前選擇的站點 baseUrl (hanime1.me / javchu.com 等)。
+     * ECH 由传输层处理，页面上看到的就是真实域名。 */
     private fun loginPageUrl(): String {
         val base = Preferences.baseUrl
         val loginPath = if (base.endsWith("/")) "login" else "/login"
-        val proxy = EchProxyManager.proxyUrl(loginPath)
-        return proxy ?: base + loginPath
+        return base + loginPath
     }
 
     private fun openQrScanner() {

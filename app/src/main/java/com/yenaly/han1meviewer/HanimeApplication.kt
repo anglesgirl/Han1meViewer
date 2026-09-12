@@ -8,7 +8,7 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.android.material.color.DynamicColors
 import com.yenaly.han1meviewer.logic.network.HProxySelector
-import com.yenaly.han1meviewer.logic.ech.EchProxyManager
+import com.yenaly.han1meviewer.logic.network.ech.ConscryptEch
 import com.yenaly.han1meviewer.util.EchStats
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.ui.activity.MainActivity
@@ -75,10 +75,12 @@ class HanimeApplication : YenalyApplication() {
         if (Preferences.useDynamicColor){
             DynamicColors.applyToActivitiesIfAvailable(this)
         }
-        // 設置系統代理選擇器（ECH 代理啟動後會自動 rebuildNetwork）
+        // 設置系統代理選擇器（用户的 HTTP/SOCKS 代理设置靠它全局生效，
+        // 对 HttpURLConnection / ExoPlayer 等非 OkHttp 链路有效）
         ProxySelector.setDefault(HProxySelector())
-        // 启动本地 Go ECH 代理(失败则各请求直连兜底)
-        EchProxyManager.startAsync(this)
+        // ECH 现在由 Conscrypt 在 in-process 承担（见 logic/network/ech/），
+        // 不再启动本地 Go 代理 —— 那个是外挂线程 + 本地端口，会被系统回收。
+        ConscryptEch.install()
         EchStats.event("app_start")
         // 更新检查(原 Firebase RemoteConfig 触发,现直接触发)
         AppViewModel.getLatestVersion(delayMillis = 200)

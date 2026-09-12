@@ -8,7 +8,6 @@ import androidx.core.content.FileProvider
 import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.FILE_PROVIDER_AUTHORITY
 import com.yenaly.han1meviewer.Preferences
-import com.yenaly.han1meviewer.logic.ech.EchProxyManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -34,8 +33,8 @@ object LogExporter {
         sb.appendLine("device=${Build.MANUFACTURER} ${Build.MODEL}")
         sb.appendLine("baseUrl=${Preferences.baseUrl}")
         sb.appendLine("dohPreset=${Preferences.dohPreset} useDoH=${Preferences.useDoH}")
-        sb.appendLine("echPort=${EchProxyManager.port}")
-        sb.appendLine("echStatus=${runCatching { EchProxyManager.status() }.getOrNull()}")
+        sb.appendLine("echReady=${EchHttp.isReady}")
+        sb.appendLine("echProtected=${EchHosts.isProtected(Preferences.baseUrl)}")
         sb.appendLine("=== logcat(pid=${android.os.Process.myPid()}) ===")
         sb.appendLine(readOwnLogcat())
         val name = "han1me-log-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.txt"

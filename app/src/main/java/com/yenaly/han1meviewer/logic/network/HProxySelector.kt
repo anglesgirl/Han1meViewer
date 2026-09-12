@@ -1,7 +1,7 @@
 package com.yenaly.han1meviewer.logic.network
 
 import com.yenaly.han1meviewer.Preferences
-import com.yenaly.han1meviewer.logic.ech.EchProxyManager
+import com.yenaly.han1meviewer.logic.network.ech.EchHosts
 import okhttp3.internal.proxy.NullProxySelector
 import java.io.IOException
 import java.net.InetAddress
@@ -57,13 +57,11 @@ class HProxySelector : ProxySelector() {
         // 非 Cloudflare 域名(m3u8/ts CDN)自动降级普通 TLS。
         fun rebuildNetwork() {
             val properties = System.getProperties()
-            val echPort = EchProxyManager.port
-            if (echPort > 0) {
-                properties["proxySet"] = true.toString()
-                properties["proxyHost"] = "127.0.0.1"
-                properties["proxyPort"] = echPort.toString()
-                return
-            }
+            // ⚠️ 这里原先有一段「ECH 本地代理就绪就把系统代理指向 127.0.0.1:echPort」
+            // —— 换 Conscrypt 后已删除：本地代理不存在了，留着会把
+            // HttpURLConnection/ExoPlayer 指向死端口。ECH 现在由 OkHttp 传输层承担，
+            // WebView/ExoPlayer 另行接线（见 logic/network/ech/）。
+
             when (Preferences.proxyType) {
                 TYPE_HTTP, TYPE_SOCKS -> {
                     properties["proxySet"] = true.toString()
@@ -91,11 +89,15 @@ class HProxySelector : ProxySelector() {
     }
 
     override fun select(uri: URI?): MutableList<Proxy> {
-        // ECH 开启时:站点流量由 EchInterceptor 改写走 ECH 代理
-        // (X-Ech-Target 模式,Go 内部 ECH 隐藏 SNI,封锁站点可通)。
-        // 这里一律直连——绝不能让 OkHttp 走 CONNECT 隧道:
-        // CONNECT 无法隐藏 SNI(GFW 会重置 javchu.com 等封锁站点)。
-        if (EchProxyManager.port > 0) {
+        // 受保护域名（ECH 名单）**一律直连**，绝不走 CONNECT 隧道：
+        // CONNECT 会把目标域名写在请求行里（GFW 据此重置 javchu.com 等站点，
+        // 等于把封锁域名的 SNI 换了个地方暴露）。这些域名由 Conscrypt 在传输层
+        // 注入 ECH 隐藏 SNI，直连才是安全的；ECH 未就绪时上层本来就 fail-closed。
+        //
+        // ⚠️ 这里**不再**像 Go 方案那样「对整个 App 强制直连」——
+        // 现在只对受保护域名直连，其余域名照常尊重用户的代理设置。
+        val host = uri?.host
+        if (host != null && EchHosts.isProtected(host)) {
             return mutableListOf(Proxy.NO_PROXY)
         }
 
