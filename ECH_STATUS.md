@@ -97,7 +97,39 @@ Analytics / Crashlytics / Remote Config / RealtimeDatabase 全部保留。
   - 页面 POST：`bridge POST xxx -> 200`
   - 出现 `保持原样（body 类型不可序列化）` = 该请求仍走明文（Blob/File body），需处理
 
-## 五、验证节奏
+## 五、更新检查（2026-09-12 修，全是实测出来的）
+
+### 之前是坏的（不是"会更新到上游"，是"永远查不到更新"）
+1. **401**：`buildGithubClient` 无条件加 `Authorization: Bearer <BuildConfig.HA_GITHUB_TOKEN>`，
+   而这个 token 来自 CI 的临时 GITHUB_TOKEN，App 跑起来早过期/为空。
+   实测：`Authorization: Bearer `（空值）→ HTTP 401；同一请求不带该头 → HTTP 200。
+   → 现在 token 为空就不加这个头；CI 也不再注入 HA_GITHUB_TOKEN。
+2. **workflow artifacts 匿名下不了**：实测匿名 GET artifact zip → 401「Requires authentication」。
+   → CI 频道改读 `releases?per_page=10`（含预发布）；稳定通道读 `releases/latest`。
+3. **tag 版本号解析不出**：`checkNeedUpdate` 原用 `substringAfter("+").toIntOrNull()`，
+   tag 带 `-ech-conscrypt` 后缀时解析失败 → 回落 Int.MAX_VALUE → 永远提示"有更新"。
+   → 换成 `Regex("\\+(\\d+)")`；CI 的 tag 也去掉了分支后缀。
+
+### 通道设计（匿名可下，零 token）
+| 通道 | 读什么 | 语义 |
+|---|---|---|
+| 稳定（默认，`useCIUpdateChannel=false`） | `releases/latest` | 只有**正式版**（非预发布） |
+| CI（设置里那个开关） | `releases?per_page=10` 取最新 | 含预发布，每次构建都能拿到 |
+
+- CI 每次成功构建自动发**预发布**（保留最近 5 个）；要发正式版就
+  `gh release edit <tag> --prerelease=false --latest`
+- 下载走 `gh-proxy.com` → `ghfast.top` → 直连，依次重试
+- **曾经的坑**：仓库里长期存在的唯一"正式版"是 9/8 的 Go 构建（tag `v1.0.8-ech-final`），
+  `releases/latest` 一直指着它 —— 已删除（包备份在 `/root/go-release-backup/`）
+
+### 验证方式（不用真机，匿名请求即可）
+```bash
+curl -s https://api.github.com/repos/anglesgirl/Han1meViewer/releases/latest   # tag 应含 +<版本号>
+curl -sL -o /dev/null -w '%{http_code}' -r 0-1023 \
+  https://gh-proxy.com/https://github.com/anglesgirl/Han1meViewer/releases/download/<tag>/<apk>
+```
+
+## 六、验证节奏
 
 - CI：`gh run watch <id> --exit-status` 后台等；核对 `headSha` 与本地 `git rev-parse HEAD` 一致
 - 交付校验（CI 里已自动跑）：APK 内**无** `libgojni.so`、**有** `libconscrypt_jni.so`
