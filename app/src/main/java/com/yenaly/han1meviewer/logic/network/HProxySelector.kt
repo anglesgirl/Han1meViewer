@@ -74,6 +74,16 @@ class HProxySelector : ProxySelector() {
     }
 
     override fun select(uri: URI?): MutableList<Proxy> {
+        // 受保护域名（ECH 名单）直连。用户定调：「只要 sni 不明文外泄，直接联通就是最好最快的」：
+        //   ① ECH 已在传输层藏住 SNI（见 ech/ConscryptEch），直连不会明文外泄 —— 唯一底线
+        //   ② 直连最快：不经代理、无 CONNECT 往返
+        //   ③ 走代理反而更差 —— HTTP 代理会把目标域名原样写进 CONNECT 请求行，等于换个地方暴露
+        // 其余域名照常尊重用户在设置里选的代理。
+        val host = uri?.host
+        if (host != null && com.yenaly.han1meviewer.logic.network.ech.EchHosts.isProtected(host)) {
+            return mutableListOf(Proxy.NO_PROXY)
+        }
+
         val type = Preferences.proxyType
         if (type == TYPE_HTTP || type == TYPE_SOCKS) {
             val ip = Preferences.proxyIp

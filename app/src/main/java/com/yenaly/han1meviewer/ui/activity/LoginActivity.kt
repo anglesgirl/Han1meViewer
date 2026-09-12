@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.enableEdgeToEdge
@@ -107,6 +108,17 @@ class LoginActivity : FrameActivity() {
             settings.userAgentString = USER_AGENT
 
             webViewClient = object : WebViewClient() {
+                // WebView 的子请求在这里接管，交给 OkHttp（Conscrypt + ECH）去发。
+                // 这是"WebView 用上 ECH"的唯一入口 —— 换掉 Go 本地反代后不再需要任何转发层。
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? {
+                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
+                        .intercept(request)?.let { return it }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
                 override fun onPageFinished(view: WebView, url: String) {
                     isRefreshing = false
                 }

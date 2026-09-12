@@ -82,6 +82,9 @@ class HanimeApplication : YenalyApplication() {
         }
         ProxySelector.setDefault(HProxySelector())
         HProxySelector.rebuildNetwork()
+        // ECH 传输层：装载 Conscrypt provider。这里只是预热，真正注入 ECH 时才会用到，
+        // 不涉及任何线程或端口（区别于已被删掉的 Go 本地反代）。
+        com.yenaly.han1meviewer.logic.network.ech.ConscryptEch.install()
         initFirebase()
         initNotificationChannel()
         MPVLib.create(applicationContext)

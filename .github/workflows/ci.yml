@@ -4,7 +4,8 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    # 我们的 ECH 分支也要出包（上游只监听 main；我们以 misaka/main 为基准做开发）
+    branches: [ "main", "ech-conscrypt" ]
     paths-ignore:
       - "**.md"
 
