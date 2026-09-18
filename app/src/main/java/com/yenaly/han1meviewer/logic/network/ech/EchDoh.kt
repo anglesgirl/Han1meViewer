@@ -33,6 +33,15 @@ object EchDoh {
     private const val MIN_TTL_MS = 60_000L
     private const val MAX_TTL_MS = 3_600_000L
 
+    /**
+     * 配置的唯一「活源」：CF 官方的 ECH 域名。
+     *
+     * 手写/注入到别处的 `ech=` 记录一旦过期，**再拉还是那份旧的**（记录没变、里面的密钥轮换掉了），
+     * 拿它去握手只会被服务器拒绝（Conscrypt 抛 EchRejected）。所以受保护域名一律先取这份实时配置：
+     * 跨 zone 注入实测可行，内层 SNI 仍是目标域名，SNI 不外泄。
+     */
+    private const val LIVE_SOURCE_HOST = "cloudflare-ech.com"
+
     private val bootstrapClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(DohConfig.timeoutSeconds().toLong(), TimeUnit.SECONDS)
@@ -91,6 +100,9 @@ object EchDoh {
     private val echCache = ConcurrentHashMap<String, EchEntry>()
     private val echFailed = ConcurrentHashMap<String, Long>()
 
+    /** 被服务器拒过的域名：改用「它自己的记录」优先，别一直拿同一份撞。 */
+    private val ownFirst = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+
     /**
      * 取 ECHConfigList（RFC 9460 wire 格式，**已含 2 字节长度前缀**，可直接喂 Conscrypt）。
      * @return null 表示该域名没有 ECH 配置或 DoH 拿不到 —— 调用方据此 fail-closed
@@ -108,37 +120,54 @@ object EchDoh {
             return null
         }
 
-        return try {
-            val body = query(url, host, "HTTPS") ?: run {
-                echFailed[host] = now
-                return null
-            }
-            val b64 = Regex("ech=([A-Za-z0-9+/=]+)").find(body)?.groupValues?.get(1)
-            if (b64 == null) {
-                Log.i(TAG, "no ech config for $host")
-                echFailed[host] = now
-                return null
-            }
-            val ttl = Regex("\"TTL\"\\s*:\\s*(\\d+)").findAll(body)
-                .mapNotNull { it.groupValues[1].toLongOrNull() }
-                .minOrNull() ?: 300L
-            // ⚠️ 解码结果就是完整 wire（含长度前缀），不要再自己加一层
-            val wire = Base64.decode(b64, Base64.DEFAULT)
-            echCache[host] = EchEntry(wire, now + (ttl * 1000).coerceIn(MIN_TTL_MS, MAX_TTL_MS))
-            echFailed.remove(host)
-            Log.i(TAG, "ech config for $host: ${wire.size} bytes, ttl=${ttl}s")
-            wire
+        // 先走哪条路：默认官方活源；被翻过标志位的域名先用它自己的记录。
+        val first = if (host != LIVE_SOURCE_HOST && !ownFirst.contains(host)) LIVE_SOURCE_HOST else host
+        val second = if (first == host) LIVE_SOURCE_HOST else host
+        val hit = try {
+            listOf(first, second).distinct()
+                .firstNotNullOfOrNull { name -> fetchConfig(url, name, now) }
         } catch (t: Throwable) {
             Log.w(TAG, "ech query failed for $host: ${t.message}")
-            echFailed[host] = now
             null
         }
+        if (hit == null) {
+            Log.i(TAG, "no ech config for $host（已试：$first / $second）")
+            echFailed[host] = now
+            return null
+        }
+        val (wire, ttlMs) = hit
+        echCache[host] = EchEntry(wire, now + ttlMs)
+        echFailed.remove(host)
+        Log.i(TAG, "ech config for $host: ${wire.size} bytes（源=$first）")
+        return wire
     }
 
-    /** ECH 被服务器拒绝（密钥轮换）后清缓存，下次用服务器给的 retryConfigs 重试 */
+    /** 查某个域名的 HTTPS(65) 记录并解出配置：wire（含 2 字节长度前缀）+ 缓存时长。 */
+    private fun fetchConfig(url: String, name: String, now: Long): Pair<ByteArray, Long>? {
+        val body = query(url, name, "HTTPS") ?: return null
+        val b64 = Regex("ech=([A-Za-z0-9+/=]+)").find(body)?.groupValues?.get(1)
+        if (b64 == null) {
+            Log.i(TAG, "no ech config in record of $name")
+            return null
+        }
+        val ttl = Regex("\"TTL\"\\s*:\\s*(\\d+)").findAll(body)
+            .mapNotNull { it.groupValues[1].toLongOrNull() }
+            .minOrNull() ?: 300L
+        // ⚠️ 解码结果就是完整 wire（含长度前缀），不要再自己加一层
+        val wire = Base64.decode(b64, Base64.DEFAULT)
+        return wire to (ttl * 1000).coerceIn(MIN_TTL_MS, MAX_TTL_MS)
+    }
+
+    /**
+     * ECH 被服务器拒绝（密钥轮换 / 配置失效）后清缓存，让 OkHttp 的重试换一份配置。
+     * 活源那份也一起丢（它可能正是被拒的那份），并把这个域名翻成「用它自己的记录」，
+     * 否则重试会拿回同一个值、一直撞同一堵墙。
+     */
     fun invalidateEch(host: String) {
         echCache.remove(host)
         echFailed.remove(host)
+        echCache.remove(LIVE_SOURCE_HOST)
+        if (host != LIVE_SOURCE_HOST) ownFirst.add(host)
     }
 
     // ---------------- DNS ----------------
