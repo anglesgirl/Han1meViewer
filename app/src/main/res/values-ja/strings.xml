@@ -206,8 +206,7 @@
     <string name="doh_preset">DoHプリセット</string>
     <string name="doh_custom_url">カスタムDoH URL</string>
     <string name="doh_bootstrap_ips">ブートストラップ解決 IP</string>
-    <string name="doh_custom_url">カスタム DoH URL</string>
-    <string name="doh_custom_url_summary">空欄なら上のプリセットを使用。独自の DoH を入力するとそちらを優先します（例：回線から当方のゲートウェイに到達できない場合）。ECH と H3 は自動で適用されます。</string>
+    <string name="doh_custom_url_summary">空欄なら上のプリセットを使用。独自の DoH を入力した場合はそちらを使用します（例：回線から当方のゲートウェイに到達できない場合）。ECH と H3 は自動で適用されます。</string>
     <string name="doh_bootstrap_ips_summary">DoH サービス自身の IP をカンマ区切りで入力します。組み込みプリセットは自動設定され、カスタム URL で空欄の場合はシステム解決を使います</string>
     <string name="doh_timeout_seconds">解決タイムアウト（秒）</string>
     <string name="doh_timeout_seconds_summary">DoH リクエストの接続・読み取りタイムアウトです。5〜15秒を推奨します</string>

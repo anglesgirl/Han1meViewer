@@ -206,8 +206,7 @@ Some mirrors may not support login, may not share cookies, may fail verification
     <string name="doh_preset">DoH Preset</string>
     <string name="doh_custom_url">Custom DoH URL</string>
     <string name="doh_bootstrap_ips">Bootstrap Resolver IPs</string>
-    <string name="doh_custom_url">Custom DoH URL</string>
-    <string name="doh_custom_url_summary">Leave blank to use the preset above. If you set your own DoH it takes priority (e.g. when our gateway is unreachable on your ISP). ECH and HTTP/3 are still injected automatically.</string>
+    <string name="doh_custom_url_summary">Leave blank to use the preset above. If you set your own DoH, it is used instead (e.g. when our gateway is unreachable on your ISP). ECH and HTTP/3 are still injected automatically.</string>
     <string name="doh_bootstrap_ips_summary">Enter DoH endpoint IPs separated by commas. Built-in presets provide them automatically; custom URLs use system resolution when empty.</string>
     <string name="doh_timeout_seconds">Resolution Timeout (s)</string>
     <string name="doh_timeout_seconds_summary">Connect/read timeout for DoH requests. 5–15 seconds is recommended.</string>
