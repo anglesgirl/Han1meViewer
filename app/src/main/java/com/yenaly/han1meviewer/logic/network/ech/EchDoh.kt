@@ -2,6 +2,7 @@ package com.yenaly.han1meviewer.logic.network.ech
 
 import android.util.Base64
 import android.util.Log
+import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -59,8 +60,21 @@ object EchDoh {
      * 取（可能随用户设置变化的）DoH 解析器。
      * 用户在设置页换预设/自定义 URL 后，这里按 URL 变化重建 —— 否则还打旧网关。
      */
+    /**
+     * ECH 活值的取数地址：**与「普通 DNS 解析开关」解耦**。
+     *
+     * 关掉 DoH 只应停掉普通域名解析（那种场景下地址由内置 Hosts / 系统 DNS 提供），
+     * 但 ECH 配置仍必须能取到 —— 否则受保护域 fail-closed，整个 App 直接没网
+     * （用户实测：启用 Host + 关 DoH → 全 App 无网络）。
+     * 这里始终可用：用户自定义 DoH（若有）→ 内置网关（其引导 IP 写死，不需要 DNS）。
+     */
+    private fun echDohUrl(): String {
+        val custom = Preferences.dohCustomUrl.trim()
+        return if (custom.isNotEmpty()) custom else DohConfig.presets.first().url
+    }
+
     private fun resolver(): Dns? {
-        val url = DohConfig.resolveUrl() ?: return null   // null = 用户没配/关掉了 DoH
+        val url = echDohUrl()
         cachedResolver?.let { if (cachedResolverUrl == url) return it }
         return synchronized(this) {
             cachedResolver?.let { if (cachedResolverUrl == url) return it }
@@ -113,12 +127,9 @@ object EchDoh {
         val failedAt = echFailed[host]
         if (failedAt != null && now - failedAt < FAIL_COOLDOWN_MS) return null
 
-        val url = DohConfig.resolveUrl()
-        if (url == null) {
-            Log.w(TAG, "DoH 未配置，无法获取 ECH 配置（fail-closed）：$host")
-            echFailed[host] = now
-            return null
-        }
+        // 注意：这里**不看** useDoH 开关。关 DoH 只是停普通解析，ECH 取数必须照旧，
+        // 否则受保护域全部 fail-closed = 整个 App 没网络（用户实测过）。
+        val url = echDohUrl()
 
         // 先走哪条路：默认官方活源；被翻过标志位的域名先用它自己的记录。
         val first = if (host != LIVE_SOURCE_HOST && !ownFirst.contains(host)) LIVE_SOURCE_HOST else host
