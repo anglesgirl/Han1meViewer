@@ -108,8 +108,15 @@ class HDns : Dns {
             return runCatching { lookupByDoH(dohUrl, hostname) }
                 .getOrElse {
                     Log.w("DOH", "lookup failed for $hostname: ${it.message}")
-                    Dns.SYSTEM.lookup(hostname)
+                    if (HANIME_HOSTNAME.contains(hostname)) emptyList() else Dns.SYSTEM.lookup(hostname)
                 }
+        }
+
+        // 受保护域在「内置 Hosts 关 + DoH 关」时**不许回落系统 DNS**：
+        // 那样会拿到污染地址并把 SNI 暴露出去（fail-closed：宁可连不上，也不明文暴露）。
+        if (HANIME_HOSTNAME.contains(hostname)) {
+            Log.w("DOH", "受保护域 $hostname 无可用解析途径（Hosts/DoH 均未启用），已按 fail-closed 拒绝")
+            return emptyList()
         }
 
         return Dns.SYSTEM.lookup(hostname)
