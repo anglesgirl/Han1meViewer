@@ -60,6 +60,12 @@ Thumbs.db
 /yenaly_libs/local/
 /icon/temp/
 
+# H3 原生库（quiche/BoringSSL 由 CI 用 cargo-ndk 现场编，产物一律不入库）
+/native-h3/target/
+/native-h3/vendor/
+/native-h3/Cargo.lock
+/app/src/main/jniLibs/
+
 # 但保留gradle wrapper
 !gradle/wrapper/gradle-wrapper.jar
 

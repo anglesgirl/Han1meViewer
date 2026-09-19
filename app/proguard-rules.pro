@@ -44,3 +44,10 @@
 -keepclassmembers class com.yenaly.han1meviewer.logic.network.ech.EchWebBridge {
     public *;
 }
+
+# ⚠️ H3（QUIC+ECH）native 入口：Rust 侧按「全限定类名_方法名」导出符号，运行时 dlsym 按名解析。
+# 类被改名 / h3Fetch 被裁掉 = H3 静默失效（永远回落 H2，日志上看不出错）——名字必须原样保留。
+-keep class com.yenaly.han1meviewer.logic.network.ech.HyEchH3 { *; }
+-keepclasseswithmembernames class com.yenaly.han1meviewer.logic.network.ech.HyEchH3 {
+    native <methods>;
+}

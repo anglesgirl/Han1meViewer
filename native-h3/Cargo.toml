@@ -1,0 +1,17 @@
+[package]
+name = "hn1_h3"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "hn1_h3"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+quiche = { version = "0.22", features = ["boringssl-vendored", "ffi", "pkg-config-meta"] }
+rand = "0.8"
+jni = "0.21"
+
+# CI：先把 quiche 源码解出来并 patch（暴露 ECH 入口），再用这份本地副本覆盖
+[patch.crates-io]
+quiche = { path = "vendor/quiche" }

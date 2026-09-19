@@ -86,6 +86,9 @@ class HanimeApplication : YenalyApplication() {
         // 这是取代原先 Go 本地反代的唯一改动 —— WebView 的子请求由
         // shouldInterceptRequest 接管后走这条通道拿到 ECH。
         com.yenaly.han1meviewer.logic.network.ech.ConscryptEch.install()
+        // H3（QUIC + ECH）传输层：注册 Context（负缓存落盘 ech_h3_state 要用），
+        // native 库在首次真正用到时才 dlopen —— 缺库不影响其余功能。
+        com.yenaly.han1meviewer.logic.network.ech.HyEchH3.attach(this)
         com.yenaly.han1meviewer.util.EchStats.event("app_start")
         initFirebase()
         initNotificationChannel()

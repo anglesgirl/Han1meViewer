@@ -73,6 +73,63 @@ jobs:
           mkdir -p $HOME/.android
           mv keystore.jks $HOME/.android/keystore.jks
 
+      # ---------------- H3（QUIC + ECH）原生库 ----------------
+      # 移植自 CO3 已跑通的那一套：quiche 0.22 本身没有 ECH，靠 tools/patch_quiche.py
+      # 把它 vendor 的 BoringSSL 的 ECH 客户端入口暴露出来；JNI 符号必须被 llvm-nm 断言命中。
+      - name: Setup Android NDK (H3 native lib 用)
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK/ndk" ] || [ -z "$(ls -A "$SDK/ndk" 2>/dev/null)" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" "ndk;27.1.12297006" > /dev/null
+          fi
+          NDK="$SDK/ndk/$(ls "$SDK/ndk" | sort -V | tail -1)"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
+          echo "NDK = $NDK"
+          ls "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/" | grep -E "^(llvm-nm|clang)$"
+
+      - name: Setup Rust (H3 native lib)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache cargo (native-h3)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native-h3
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: 取 quiche 源码并打 ECH 补丁
+        run: |
+          set -e
+          curl -sSL https://static.crates.io/crates/quiche/quiche-0.22.0.crate -o /tmp/quiche.crate
+          mkdir -p native-h3/vendor && tar -xzf /tmp/quiche.crate -C native-h3/vendor
+          rm -rf native-h3/vendor/quiche && mv native-h3/vendor/quiche-0.22.0 native-h3/vendor/quiche
+          python3 tools/patch_quiche.py native-h3/vendor/quiche
+
+      - name: 编 H3 原生库（铁律：只留主库 + 验 JNI 符号）
+        run: |
+          set -e
+          cd native-h3
+          cargo ndk -t arm64-v8a -o ../app/src/main/jniLibs build --release --lib
+          # quiche 的 crate-type 含 cdylib，会多出一个没人 dlopen 的大库 —— 必须删掉
+          find ../app/src/main/jniLibs -name "libquiche*.so" -delete
+          ls -la ../app/src/main/jniLibs/arm64-v8a/
+          [ -f ../app/src/main/jniLibs/arm64-v8a/libhn1_h3.so ] || {
+            echo "::error::没有编出 libhn1_h3.so"; exit 1; }
+          NM="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          [ -x "$NM" ] || NM=$(find "${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk}" -name llvm-nm -type f | head -1)
+          echo "llvm-nm: $NM"
+          n=$("$NM" -D ../app/src/main/jniLibs/arm64-v8a/libhn1_h3.so \
+                | grep -c "Java_com_yenaly_han1meviewer_logic_network_ech_HyEchH3_h3Fetch" || true)
+          echo "arm64-v8a JNI 符号命中: $n"
+          [ "$n" -gt 0 ] || {
+            echo "::error::arm64-v8a 缺 JNI 符号 Java_com_yenaly_han1meviewer_logic_network_ech_HyEchH3_h3Fetch"; exit 1; }
+
       - name: Build and sign APK with Gradle
         run: ./gradlew assembleRelease
         env:
@@ -100,7 +157,30 @@ jobs:
           # Conscrypt 的 native 库必须在
           unzip -l "$APK" | grep -q "libconscrypt_jni.so" || {
             echo "::error::APK 里没有 libconscrypt_jni.so（Conscrypt 没打进去）"; exit 1; }
-          echo "Conscrypt ECH 校验通过 ✓"
+          # H3（QUIC+ECH）原生库必须在，且不该夹带无用的 libquiche*.so
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libhn1_h3.so" || {
+            echo "::error::APK 里没有 libhn1_h3.so（H3 原生库没打进去）"; exit 1; }
+          if unzip -l "$APK" | grep -q "libquiche"; then
+            echo "::error::APK 里还有 libquiche*.so（多带的无用大库）"; exit 1
+          fi
+          echo "Conscrypt ECH 校验通过 ✓；H3 原生库校验通过 ✓"
+          # ABI 只允许 arm64-v8a + H3 库的动态依赖必须在包内（缺 libc++_shared.so 会 dlopen 失败 → H3 静默失效）
+          python3 - "$APK" <<'PY'
+          import sys, zipfile
+          apk = sys.argv[1]
+          names = zipfile.ZipFile(apk).namelist()
+          abis = sorted({n.split('/')[1] for n in names if n.startswith('lib/') and n.count('/') >= 2})
+          print('包内 ABI:', abis)
+          assert abis == ['arm64-v8a'], f'ABI 不止 arm64-v8a: {abis}'
+          h3 = [n for n in names if n.endswith('/libhn1_h3.so')]
+          assert h3, '包里找不到 libhn1_h3.so'
+          print('H3 库:', h3)
+          blob = zipfile.ZipFile(apk).read(h3[0])
+          need_cxx = b'libc++_shared.so' in blob
+          print('需要 libc++_shared.so:', need_cxx)
+          if need_cxx and not any(n.endswith('/libc++_shared.so') for n in names):
+              raise SystemExit('::error::libhn1_h3.so 需要 libc++_shared.so 但包里没有')
+          PY
 
       - name: Upload APK Zip
         uses: actions/upload-artifact@v4
@@ -113,7 +193,8 @@ jobs:
         #   · 稳定通道（App 默认读 releases/latest）只认正式版 → 用户不会被自动推到每次构建
         #   · 设置里的「CI 更新频道」读 releases 列表（含预发布）→ 这才是它"更快但不保证稳定"的语义
         # tag 直接用 APK 名（**不要加分支后缀**）：App 端要从 tag 里取出 `+<版本号>` 判断要不要更新
-        if: success() && github.event_name != 'pull_request'
+        # 提交信息里带 [ci-no-publish] 时只出包不发布（做验证/探针构建时用，避免污染 release 列表）
+        if: success() && github.event_name != 'pull_request' && !contains(github.event.head_commit.message || '', '[ci-no-publish]')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -165,7 +246,8 @@ jobs:
 
       - name: Notify build result
         # 无论成败都要回传（用户明确要求：CI 成败都通知，附上产物下载入口）
-        if: always()
+        # 例外：[ci-no-publish] 的验证构建静默（不当成用户可见的发布动作）
+        if: always() && !contains(github.event.head_commit.message || '', '[ci-no-publish]')
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TG_CHAT_ID }}

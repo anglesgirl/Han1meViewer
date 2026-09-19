@@ -1,14 +1,17 @@
 package com.yenaly.han1meviewer.logic.network.ech
 
+import android.net.Uri
 import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
+import com.yenaly.han1meviewer.util.EchStats
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayInputStream
+import java.io.FileInputStream
 import java.util.concurrent.TimeUnit
 
 /**
@@ -22,12 +25,50 @@ import java.util.concurrent.TimeUnit
  * 被墙域名当场暴露 —— 与用户定下的 fail-closed 直接冲突。
  * 所以这里**失败也返回 502 页面，绝不返回 null**。
  *
+ * 两层传输（本分支）：
+ *   1. **H3 优先**（QUIC + ECH，见 [HyEchH3]）—— 只接管 GET + 静态扩展名（图片/样式/脚本/字体）；
+ *      失败即记负缓存（`ech_h3_state`，24h）并回落下面的 H2 链路。
+ *   2. **H2 兜底**（TCP + Conscrypt + ECH）—— 其余一切，包括有状态请求。
+ * H3 这条**不发送 Cookie**，所以 HTML/POST/Cookie 相关请求绝不走 H3（否则把已登录读成未登录）。
+ *
  * 局限（已知，另行处理）：`shouldInterceptRequest` 拿不到 POST 的 body，
  * 所以**非 GET 一律放行** —— WebView 的登录 POST 会走 WebView 自己的 TLS 栈。
  */
 object HyWebViewHelper {
 
     private const val TAG = "HY-ECH-WEBVIEW"
+
+    /**
+     * H3 只接管可缓存、不带会话的静态资源（图片/样式/脚本/字体）。
+     * HTML/POST/Cookie 这类有状态请求必须继续走 TCP+ECH —— H3 这条不发送 Cookie，
+     * 会把已登录状态读成未登录。
+     */
+    private val STATIC_EXT = setOf(
+        "jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "ico", "svg",
+        "css", "js", "mjs", "woff", "woff2", "ttf",
+    )
+
+    private fun isStaticAsset(uri: Uri): Boolean {
+        val ext = (uri.path ?: return false).substringAfterLast('.', "").lowercase()
+        return ext in STATIC_EXT
+    }
+
+    private fun mimeFor(uri: Uri): String = when (
+        (uri.path ?: "").substringAfterLast('.', "").lowercase()
+    ) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "avif" -> "image/avif"
+        "svg" -> "image/svg+xml"
+        "css" -> "text/css"
+        "js", "mjs" -> "application/javascript"
+        "woff" -> "font/woff"
+        "woff2" -> "font/woff2"
+        "ttf" -> "font/ttf"
+        else -> "application/octet-stream"
+    }
 
     /**
      * 给 WebView 挂上非 GET 传输桥（[EchWebBridge]）。
@@ -77,6 +118,23 @@ object HyWebViewHelper {
         val url = request.url?.toString() ?: return null
         val host = request.url?.host ?: return null
         val method = request.method ?: "GET"
+
+        // ---- H3 优先（用户定调：**默认所有域名都先试 H3**）----
+        // 失败时 [HyEchH3] 会把这个域名记入负缓存（`ech_h3_state`，24h），本次请求立刻回落到
+        // 下面的 H2（TCP+ECH）链路 —— 用户无感；负缓存过期后自动再试一次。
+        // 只接管「静态、不带会话」的资源：HTML/POST/Cookie 相关请求必须走 TCP+ECH，
+        // 因为 H3 这条不发送 Cookie，会把已登录状态读成未登录。
+        // 实测：javchu.com 支持 H3（3/3 成功）；hanime1.me 不支持（握手被切）→ 负缓存兜住。
+        if (method == "GET" && isStaticAsset(request.url)) {
+            val h3 = runCatching { HyEchH3.fetchResourceToFile(url) }.getOrNull()
+            if (h3 != null && h3.exists() && h3.length() > 0) {
+                Log.i(TAG, "webview h3 hit $host ${h3.length()}B")
+                EchStats.event("hy_h3_hit", mapOf("host" to host, "len" to h3.length().toString()))
+                return WebResourceResponse(
+                    mimeFor(request.url), null, 200, "OK", emptyMap(), FileInputStream(h3),
+                )
+            }
+        }
 
         // 只接管受保护域名：其余域名保持 WebView 原行为（不干涉普通浏览）
         if (!EchHosts.isProtected(host)) return null
