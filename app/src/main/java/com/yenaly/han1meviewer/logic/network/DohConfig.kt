@@ -9,6 +9,44 @@ data class DohPreset(
     val bootstrapIps: List<String>,
 )
 
+/**
+ * 我们实测可用的地址段。
+ *
+ * 实测（SNI 校验）：CF 给本 zone 分配的 172.64.229.1~254 **整段**都能服务 hanime1.me / javchu.com；
+ * 而别的段（162.159.36.x / 108.162.192.x）对 javchu.com 返回 403 —— 所以 Host 只用这一段。
+ * 段内随机取几个作默认值：不同用户拿到的地址不同，单点失效也不会全灭；用户可在设置里改。
+ */
+object NodePool {
+    private const val HOST_SEGMENT = "172.64.229."
+    private const val DOH_SEGMENT = "162.159.36."
+    private const val PICK_COUNT = 4
+    private const val LOW = 4
+    private const val HIGH = 250
+
+    private val random = java.util.Random()
+
+    private fun pick(segment: String) =
+        (LOW..HIGH).shuffled(random).take(PICK_COUNT).map { segment + it }
+
+    /** 内置 Hosts 默认值（用于 hanime1.me 等受保护域）：首次生成后落盘，保持稳定且可被用户覆盖。 */
+    fun builtInHosts(): List<String> {
+        val saved = Preferences.builtInHosts
+            .split(',', '\n', ';', ' ')
+            .map { it.trim() }.filter { it.isNotBlank() }
+        if (saved.isNotEmpty()) return saved
+        return pick(HOST_SEGMENT).also { Preferences.builtInHosts = it.joinToString(",") }
+    }
+
+    /** DoH 网关引导 IP 默认值：与 [builtInHosts] 同法。 */
+    fun dohBootstrapIps(): List<String> {
+        val saved = Preferences.builtInDohIps
+            .split(',', '\n', ';', ' ')
+            .map { it.trim() }.filter { it.isNotBlank() }
+        if (saved.isNotEmpty()) return saved
+        return pick(DOH_SEGMENT).also { Preferences.builtInDohIps = it.joinToString(",") }
+    }
+}
+
 object DohConfig {
     /**
      * 唯一预设：自建 CF 网关 DoH —— 直控解析结果，绕开大陆 DNS 污染。
@@ -23,7 +61,7 @@ object DohConfig {
             key = "gateway",
             title = "小雅DoH",
             url = "https://tgxjjdszvu.cloudflare-gateway.com/dns-query",
-            bootstrapIps = listOf("162.159.36.20", "162.159.36.5"),
+            bootstrapIps = emptyList(),   // 默认由 NodePool.dohBootstrapIps() 从段内随机取
         ),
     )
 
@@ -42,11 +80,20 @@ object DohConfig {
             .filter { it.isNotBlank() }
             .distinct()
         if (customBootstrapIps.isNotEmpty()) return customBootstrapIps
-        return selectedPreset().bootstrapIps
+        return NodePool.dohBootstrapIps()
     }
 
     fun timeoutSeconds(): Int = Preferences.dohTimeoutSeconds.coerceIn(1, 60)
 
-    /** 只认这一个预设，不再有"自定义 URL"分支 */
-    fun resolveUrl(): String? = if (Preferences.useDoH) selectedPreset().url else null
+    /**
+     * 生效的 DoH 地址：**用户自己填的优先**。
+     *
+     * 我们的网关在部分宽带（如某些联通线路）可能不可达，用户必须能换成自己的 DoH；
+     * ECH/H3 仍由程序自动注入，用户只需管地址。
+     */
+    fun resolveUrl(): String? {
+        if (!Preferences.useDoH) return null
+        val custom = Preferences.dohCustomUrl.trim()
+        return if (custom.isNotEmpty()) custom else selectedPreset().url
+    }
 }

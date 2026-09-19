@@ -31,11 +31,6 @@ class HDns : Dns {
 
     companion object {
 
-        private val cloudFlareIps = listOf(
-            "172.64.229.154", "162.159.0.1", "108.162.192.1", "172.64.33.1", "104.19.0.1",
-            "2606:4700:3035::ac43:bb8d", "2606:4700:3030::6815:746", "2606:4700:3030::6815:714"
-        )
-
         private val getchuIps = listOf("210.155.150.166", "210.155.150.145")
 
         private const val GETCHU_HOSTNAME = "www.getchu.com"
@@ -103,7 +98,7 @@ class HDns : Dns {
                     InetAddress.getByAddress(hostname, InetAddress.getByName(it).address)
                 }
             }
-            return cloudFlareIps.map {
+            return NodePool.builtInHosts().map {
                 InetAddress.getByAddress(hostname, InetAddress.getByName(it).address)
             }
         }
@@ -180,7 +175,7 @@ class HDns : Dns {
             if (!customIps.isNullOrEmpty()) {
                 return customIps.distinct()
             }
-            return cloudFlareIps.distinct()
+            return NodePool.builtInHosts().distinct()
         }
 
         return runCatching {

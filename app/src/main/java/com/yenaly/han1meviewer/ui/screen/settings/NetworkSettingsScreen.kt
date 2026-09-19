@@ -503,6 +503,7 @@ private fun DohDialog(
     var dohEnabled by rememberSaveable(enabled) { mutableStateOf(enabled) }
     var bootstrapValue by rememberSaveable(bootstrapIps) { mutableStateOf(bootstrapIps) }
     var timeoutValue by rememberSaveable(timeoutSeconds) { mutableStateOf(timeoutSeconds.toString()) }
+    var customUrlValue by rememberSaveable(customUrl) { mutableStateOf(customUrl) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -537,6 +538,15 @@ private fun DohDialog(
                 }
 
                 OutlinedTextField(
+                    value = customUrlValue,
+                    onValueChange = { customUrlValue = it },
+                    label = { Text(stringResource(R.string.doh_custom_url)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Text(stringResource(R.string.doh_custom_url_summary)) },
+                    singleLine = true,
+                )
+
+                OutlinedTextField(
                     value = bootstrapValue,
                     onValueChange = { bootstrapValue = it },
                     label = { Text(stringResource(R.string.doh_bootstrap_ips)) },
@@ -560,8 +570,8 @@ private fun DohDialog(
                     dohEnabled,
                     // 预设只剩一个：老版本存的 alidns/cloudflare/custom 顺手归一化掉
                     DohConfig.presets.first().key,
-                    // 自定义 URL 已下线，这里把用户原有值原样传回，不做破坏性清空
-                    customUrl,
+                    // 用户自己填的 DoH 优先：我们的网关在部分宽带（如某些联通线路）不可达时走它
+                    customUrlValue.trim(),
                     bootstrapValue.trim(),
                     timeoutValue.toIntOrNull()?.coerceIn(1, 60) ?: 10,
                 )

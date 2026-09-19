@@ -215,6 +215,8 @@
     <string name="doh_preset">DoH 預設</string>
     <string name="doh_custom_url">自訂 DoH URL</string>
     <string name="doh_bootstrap_ips">啟動解析 IP</string>
+    <string name="doh_custom_url">自訂 DoH 位址</string>
+    <string name="doh_custom_url_summary">留空則用上面的預設；填了自己的 DoH 就优先用它（例如我们的网关在你的宽带上不可达）。ECH 与 H3 仍由程序自动注入，你只需管地址。</string>
     <string name="doh_bootstrap_ips_summary">可輸入 DoH 服務本身的多個 IP，以逗號分隔。內建預設會自動提供，自訂 URL 留空時使用系統解析</string>
     <string name="doh_timeout_seconds">解析超時（秒）</string>
     <string name="doh_timeout_seconds_summary">DoH 請求的連線與讀取超時，建議 5–15 秒</string>

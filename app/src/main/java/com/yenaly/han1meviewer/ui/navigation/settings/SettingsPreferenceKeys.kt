@@ -43,6 +43,12 @@ object SettingsPreferenceKeys {
     const val APPEND_CUSTOM_MIRROR_PATH = "append_custom_mirror_path"
     const val USE_BUILT_IN_HOSTS = "use_built_in_hosts"
     const val CUSTOM_HOSTS_DATA = "custom_hosts_data"
+
+    /** 首次启动从我们实测可用的段里随机抽出的内置 Hosts（用户可在设置里改） */
+    const val BUILT_IN_HOSTS = "built_in_hosts"
+
+    /** 同上，DoH 网关的引导 IP */
+    const val BUILT_IN_DOH_IPS = "built_in_doh_ips"
     const val USE_DOH = "use_doh"
     const val DOH_PRESET = "doh_preset"
     const val DOH_CUSTOM_URL = "doh_custom_url"

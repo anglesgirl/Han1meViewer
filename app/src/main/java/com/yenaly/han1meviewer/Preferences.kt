@@ -237,6 +237,14 @@ object Preferences {
     val customHostsData: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.CUSTOM_HOSTS_DATA, EMPTY_STRING).orEmpty()
 
+    var builtInHosts: String
+        get() = preferenceSp.getString(SettingsPreferenceKeys.BUILT_IN_HOSTS, EMPTY_STRING).orEmpty()
+        set(value) = preferenceSp.edit { putString(SettingsPreferenceKeys.BUILT_IN_HOSTS, value) }
+
+    var builtInDohIps: String
+        get() = preferenceSp.getString(SettingsPreferenceKeys.BUILT_IN_DOH_IPS, EMPTY_STRING).orEmpty()
+        set(value) = preferenceSp.edit { putString(SettingsPreferenceKeys.BUILT_IN_DOH_IPS, value) }
+
     val useDoH: Boolean
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_DOH, true)
 
