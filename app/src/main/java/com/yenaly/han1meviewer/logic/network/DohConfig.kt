@@ -17,8 +17,14 @@ data class DohPreset(
  * 段内随机取几个作默认值：不同用户拿到的地址不同，单点失效也不会全灭；用户可在设置里改。
  */
 object NodePool {
+    /**
+     * 服务（内容域）与 DoH 引导**用同一个段**：实测该段既能服务内容
+     * （`javchu.com` 在该段各 IP 均 200），也能拉到 CF 官方活 ECH 值
+     * （5 个 IP 全部返回 71 字节 ECHConfigList）；而 162.159.36.x 是仅 DoH 的段，
+     * 拿来当 Host 必然 403。
+     */
     private const val HOST_SEGMENT = "172.64.229."
-    private const val DOH_SEGMENT = "162.159.36."
+    private const val DOH_SEGMENT = "172.64.229."
     private const val PICK_COUNT = 4
     private const val LOW = 4
     private const val HIGH = 250
