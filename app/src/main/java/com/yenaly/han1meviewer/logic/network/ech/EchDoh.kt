@@ -118,6 +118,106 @@ object EchDoh {
     private val ownFirst = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
 
     /**
+     * 取 ECH 活值的候选：**国内三家的纯 IP 端点**（实测三家均返回与 CF 官方逐字节相同的活值）。
+     * 纯 IP = 不查 DNS、不被污染；证书直接对 IP 生效。
+     * **不发 Host 头**：阿里带 Host 会直接失败（实测 http=000）。
+     * **只发 wire**：三家都不支持 JSON（阿里/360 回 400、腾讯 UrlParameterError）。
+     * 策略：随机挑一家试，失败换下一家（不同时打、不重复打同一家）。
+     */
+    private val ECH_DOH_IPS = listOf(
+        "223.5.5.5", "223.6.6.6",           // 阿里
+        "1.12.12.12", "120.53.53.53",       // 腾讯
+        "101.198.193.29", "101.198.192.33", // 360
+    )
+
+    private const val ECH_ONE_TIMEOUT_MS = 2500L
+    /** ECH 缓存下限：记录 TTL 只有 ~198s，但公钥实测稳定数天；被轮换时握手被拒会走 invalidateEch 自愈。 */
+    private const val ECH_CACHE_MIN_MS = 60 * 60 * 1000L
+    private const val ECH_CACHE_MAX_MS = 5 * 60 * 60 * 1000L
+
+    /** 从随机一家纯 IP DoH 取官方活值（wire 格式，解析 SVCB 的 key=5）。 */
+    private fun fetchLiveEch(): Pair<ByteArray, Long>? {
+        for (ip in ECH_DOH_IPS.shuffled()) {
+            val hit = runCatching { queryEchWire(ip, LIVE_SOURCE_HOST) }.getOrNull()
+            if (hit != null) {
+                Log.i(TAG, "live ech via $ip: ${hit.first.size} bytes, ttl=${hit.second}ms")
+                return hit
+            }
+            Log.i(TAG, "live ech via $ip failed, next")
+        }
+        return null
+    }
+
+    /** 建 DNS 查询（type 65 = HTTPS）。 */
+    private fun buildQuery(name: String): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        out.write(byteArrayOf(0x12, 0x34, 0x01, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
+        name.split('.').forEach { lb -> out.write(lb.length); out.write(lb.toByteArray()) }
+        out.write(0)
+        out.write(byteArrayOf(0x00, 65, 0x00, 0x01))
+        return out.toByteArray()
+    }
+
+    /** 纯 IP + wire 的 DoH 查询（绝不加 Host 头）。 */
+    private fun queryEchWire(ip: String, name: String): Pair<ByteArray, Long>? {
+        val b64 = android.util.Base64.encodeToString(
+            buildQuery(name), android.util.Base64.NO_WRAP or android.util.Base64.URL_SAFE,
+        ).trimEnd('=')
+        val req = Request.Builder()
+            .url("https://$ip/dns-query?dns=$b64")
+            .header("accept", "application/dns-message")
+            .build()
+        val client = bootstrapClient.newBuilder()
+            .connectTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .readTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .callTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
+        val wire = client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return null
+            resp.body?.bytes() ?: return null
+        }
+        return parseSvcbEch(wire)
+    }
+
+    /** 解析应答里的 type=65 记录，走 SvcParams 取 key=5（ech）；返回值**含 2 字节长度前缀**。 */
+    private fun parseSvcbEch(msg: ByteArray): Pair<ByteArray, Long>? {
+        if (msg.size < 12) return null
+        var i = 12
+        while (i < msg.size && msg[i].toInt() != 0) i += (msg[i].toInt() and 0xFF) + 1
+        i += 5
+        val ancount = ((msg[6].toInt() and 0xFF) shl 8) or (msg[7].toInt() and 0xFF)
+        for (n in 0 until ancount) {
+            if (i + 12 > msg.size) return null
+            if ((msg[i].toInt() and 0xC0) == 0xC0) i += 2
+            else { while (i < msg.size && msg[i].toInt() != 0) i += (msg[i].toInt() and 0xFF) + 1; i += 1 }
+            val type = ((msg[i].toInt() and 0xFF) shl 8) or (msg[i + 1].toInt() and 0xFF)
+            val ttl = (((msg[i + 4].toInt() and 0xFF).toLong() shl 24) or
+                ((msg[i + 5].toInt() and 0xFF).toLong() shl 16) or
+                ((msg[i + 6].toInt() and 0xFF).toLong() shl 8) or
+                (msg[i + 7].toInt() and 0xFF).toLong())
+            val rdlen = ((msg[i + 8].toInt() and 0xFF) shl 8) or (msg[i + 9].toInt() and 0xFF)
+            val rdata = i + 10
+            if (type == 65 && rdlen > 4 && rdata + rdlen <= msg.size) {
+                var j = rdata + 2
+                while (j < rdata + rdlen && msg[j].toInt() != 0) j += (msg[j].toInt() and 0xFF) + 1
+                j += 1
+                while (j + 4 <= rdata + rdlen) {
+                    val key = ((msg[j].toInt() and 0xFF) shl 8) or (msg[j + 1].toInt() and 0xFF)
+                    val len = ((msg[j + 2].toInt() and 0xFF) shl 8) or (msg[j + 3].toInt() and 0xFF)
+                    if (key == 5 && len > 0) {
+                        val ech = msg.copyOfRange(j + 4, j + 4 + len)
+                        val ttlMs = (ttl * 1000).coerceIn(ECH_CACHE_MIN_MS, ECH_CACHE_MAX_MS - 1) + 1
+                        return ech to ttlMs
+                    }
+                    j += 4 + len
+                }
+            }
+            i = rdata + rdlen
+        }
+        return null
+    }
+
+    /**
      * 取 ECHConfigList（RFC 9460 wire 格式，**已含 2 字节长度前缀**，可直接喂 Conscrypt）。
      * @return null 表示该域名没有 ECH 配置或 DoH 拿不到 —— 调用方据此 fail-closed
      */
@@ -135,8 +235,10 @@ object EchDoh {
         val first = if (host != LIVE_SOURCE_HOST && !ownFirst.contains(host)) LIVE_SOURCE_HOST else host
         val second = if (first == host) LIVE_SOURCE_HOST else host
         val hit = try {
-            listOf(first, second).distinct()
-                .firstNotNullOfOrNull { name -> fetchConfig(url, name, now) }
+            // 活值优先：国内三家纯 IP（随机一家、失败换下一家）；全失败才回退自有网关的 JSON 链路
+            if (first == LIVE_SOURCE_HOST) fetchLiveEch() ?: fetchConfig(url, first, now)
+            else fetchConfig(url, first, now)
+                ?: (if (second == LIVE_SOURCE_HOST) fetchLiveEch() else fetchConfig(url, second, now))
         } catch (t: Throwable) {
             Log.w(TAG, "ech query failed for $host: ${t.message}")
             null
