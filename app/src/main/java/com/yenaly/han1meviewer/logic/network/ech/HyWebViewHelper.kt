@@ -128,7 +128,7 @@ object HyWebViewHelper {
         if (method == "GET" && isStaticAsset(request.url)) {
             val h3 = runCatching { HyEchH3.fetchResourceToFile(url) }.getOrNull()
             if (h3 != null && h3.exists() && h3.length() > 0) {
-                Log.i(TAG, "webview h3 hit $host ${h3.length()}B")
+                EchTrace.event("webview h3 hit $host ${h3.length()}B")
                 EchStats.event("hy_h3_hit", mapOf("host" to host, "len" to h3.length().toString()))
                 return WebResourceResponse(
                     mimeFor(request.url), null, 200, "OK", emptyMap(), FileInputStream(h3),

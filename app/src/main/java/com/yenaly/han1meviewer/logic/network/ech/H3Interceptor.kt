@@ -51,7 +51,7 @@ class H3Interceptor : Interceptor {
             return chain.proceed(request)
         }
 
-        Log.i(TAG, "H3 命中 ${url.host} ${file.length()}B ${url.encodedPath}")
+        EchTrace.event("H3 命中 ${url.host} ${file.length()}B ${url.encodedPath}")
         runCatching {
             EchStats.event("h3_hit", mapOf("host" to url.host, "len" to file.length().toString()))
         }

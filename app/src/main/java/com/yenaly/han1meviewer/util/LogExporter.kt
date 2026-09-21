@@ -11,6 +11,7 @@ import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.network.ech.ConscryptEch
 import com.yenaly.han1meviewer.logic.network.ech.EchHosts
 import com.yenaly.han1meviewer.logic.network.ech.EchHttp
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -44,6 +45,11 @@ object LogExporter {
         sb.appendLine("baseHost=$baseHost")
         sb.appendLine("echCore=${EchHosts.isCoreDomain(baseHost)}")
         sb.appendLine("echDegraded(明文)=" + ConscryptEch.echUnavailableHosts().joinToString(","))
+        // ★ 关键事件直读内存缓冲：logcat 会被系统限流丢弃
+        //   （实测荣耀那台 1676 行日志里 1638 行是 CoilError，随后系统打 LOGLIMIT，
+        //    HY-ECH 的 Log.i 一条不剩）。这些事件双写，不依赖 logcat 能否幸存。
+        sb.appendLine("=== ECH/H3 关键事件（内存缓冲，不受 logcat 限流影响）===")
+        sb.appendLine(EchTrace.dump())
         sb.appendLine("=== logcat(pid=${android.os.Process.myPid()}) ===")
         sb.appendLine(readOwnLogcat())
         val name = "han1me-log-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.txt"

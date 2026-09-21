@@ -150,17 +150,17 @@ object EchDoh {
         for (ip in ECH_DOH_IPS.shuffled()) {
             val hit = runCatching { queryEchWire(ip, LIVE_SOURCE_HOST) }.getOrNull()
             if (hit != null) {
-                Log.i(TAG, "live ech via $ip: ${hit.first.size} bytes, ttl=${hit.second}ms")
+                EchTrace.event("live ech via $ip: ${hit.first.size} bytes, ttl=${hit.second}ms")
                 return hit
             }
             Log.i(TAG, "live ech via $ip failed, next")
         }
         val fallback = fetchLiveEchViaGateway()
         if (fallback != null) {
-            Log.i(TAG, "live ech via gateway(fallback): ${fallback.first.size} bytes, ttl=${fallback.second}ms")
+            EchTrace.event("live ech via gateway(fallback): ${fallback.first.size} bytes, ttl=${fallback.second}ms")
             return fallback
         }
-        Log.w(TAG, "live ech: 三家纯 IP 与网关兜底全部失败")
+        EchTrace.event("live ech: 三家纯 IP 与网关兜底全部失败")
         return null
     }
 
@@ -308,14 +308,14 @@ object EchDoh {
             null
         }
         if (hit == null) {
-            Log.i(TAG, "no ech config for $host（已试：$first / $second）")
+            EchTrace.event("no ech config for $host（已试：$first / $second）")
             echFailed[host] = now
             return null
         }
         val (wire, ttlMs) = hit
         echCache[host] = EchEntry(wire, now + ttlMs)
         echFailed.remove(host)
-        Log.i(TAG, "ech config for $host: ${wire.size} bytes（源=$first）")
+        EchTrace.event("ech config for $host: ${wire.size} bytes（源=$first）")
         return wire
     }
 
@@ -373,7 +373,7 @@ object EchDoh {
         return try {
             val addrs = r.lookup(host)
             if (addrs.isNotEmpty()) dnsCache[host] = DnsEntry(addrs, now + DNS_CACHE_TTL_MS)
-            Log.i(TAG, "doh resolve $host -> ${addrs.joinToString { it.hostAddress ?: "?" }}")
+            EchTrace.event("doh resolve $host -> ${addrs.joinToString { it.hostAddress ?: "?" }}")
             addrs
         } catch (t: Throwable) {
             Log.w(TAG, "doh resolve failed for $host: ${t.message}")
@@ -422,7 +422,7 @@ class EchDns(private val fallback: Dns = Dns.SYSTEM) : Dns {
         if (EchHosts.isCoreDomain(hostname)) {
             throw UnknownHostException("DoH 解析失败（fail-closed）：$hostname")
         }
-        Log.w(TAG, "DoH 解析失败，回落系统 DNS：$hostname")
+        EchTrace.event("DoH 解析失败，回落系统 DNS：$hostname")
         return fallback.lookup(hostname)
     }
 

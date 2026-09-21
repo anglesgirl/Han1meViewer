@@ -44,7 +44,7 @@ object HyEchH3 {
             loaded = true
             true
         } catch (t: Throwable) {
-            Log.w(TAG, "H3 native 库未加载：${t.message}")
+            EchTrace.event("H3 native 库未加载：${t.message}")
             false
         }
     }
@@ -119,8 +119,8 @@ object HyEchH3 {
                 .putLong("bad:$host", if (ok) 0L else System.currentTimeMillis() + H3_FAIL_TTL_MS)
                 .apply()
         }
-        if (ok) Log.i(TAG, "H3 可用，已记住: $host")
-        else Log.i(TAG, "H3 不通，已记负缓存 ${H3_FAIL_TTL_MS / 3600000}h，改走 H2: $host ($why)")
+        if (ok) EchTrace.event("H3 可用，已记住: $host")
+        else EchTrace.event("H3 不通，已记负缓存 ${H3_FAIL_TTL_MS / 3600000}h，改走 H2: $host ($why)")
     }
 
     /** 系统 CA 导出成单个 PEM（Rust 侧读它做校验），只做一次。 */
@@ -161,7 +161,7 @@ object HyEchH3 {
         val json = try {
             h3Fetch(host, ip, echB64, pathWithQuery, referer ?: "", caBundlePath(context), out.absolutePath)
         } catch (t: Throwable) {
-            Log.w(TAG, "H3 调用异常：${t.message}")
+            EchTrace.event("H3 调用异常：${t.message}")
             return null
         }
         val saved = try {

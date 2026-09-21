@@ -87,7 +87,7 @@ object ConscryptEch {
             sslContext
             socketFactory
             ready = true
-            Log.i(TAG, "Conscrypt ECH 就绪，version=${Conscrypt.version()}")
+            EchTrace.event("Conscrypt ECH 就绪，version=${Conscrypt.version()}")
             true
         }.getOrElse { t ->
             Log.e(TAG, "Conscrypt ECH 初始化失败: ${t.javaClass.simpleName} ${t.message}")
@@ -143,7 +143,7 @@ object ConscryptEch {
     /** 见 [echUnavailable]。由 [EchRetryInterceptor] 在识别到 ECH_REJECTED 后调用。 */
     fun markEchUnavailable(host: String) {
         if (echUnavailable.add(host.lowercase())) {
-            Log.w(TAG, "ECH 走不通，该域名转明文（降级）: $host")
+            EchTrace.event("ECH 走不通，该域名转明文（降级）: $host")
         }
     }
 
@@ -180,7 +180,7 @@ object ConscryptEch {
             val cfg = EchDoh.echConfigList(host)
             if (cfg == null) {
                 if (core) throw IOException("ECH 配置不可用（fail-closed）：拒绝以明文访问 $host")
-                Log.w(TAG, "拿不到 ECH 配置，该域名转明文（降级）: $host")
+                EchTrace.event("拿不到 ECH 配置，该域名转明文（降级）: $host")
                 markEchUnavailable(host)
                 return s
             }
@@ -194,10 +194,10 @@ object ConscryptEch {
                 //   2) **服务器回 ECH_REJECTED** —— 走不通的信号，由 EchRetryInterceptor 接住。
                 // 若哪天出现"核心域名连不上、且没有 ECH_REJECTED"，那就是 PolicyTrustManager
                 // 被静默失效（R8 改名 / 未传进 SSLContext），优先查 proguard-rules 的 keep。
-                Log.i(TAG, "ECH 已注入 host=$host cfg=${cfg.size}B 核心=$core")
+                EchTrace.event("ECH 已注入 host=$host cfg=${cfg.size}B 核心=$core")
             } catch (t: Throwable) {
                 if (core) throw IOException("setEchConfigList 失败（fail-closed）: ${t.message}")
-                Log.w(TAG, "setEchConfigList 失败，该域名转明文（降级）: $host ${t.message}")
+                EchTrace.event("setEchConfigList 失败，该域名转明文（降级）: $host ${t.message}")
                 markEchUnavailable(host)
                 return s
             }
@@ -249,12 +249,12 @@ class EchRetryInterceptor : Interceptor {
             if (!isEchRejected(t)) throw t
 
             if (EchHosts.isCoreDomain(host)) {
-                Log.w(tag, "ECH 被拒（核心域名），清缓存用新配置重试: $host")
+                EchTrace.event("ECH 被拒（核心域名），清缓存用新配置重试: $host")
                 EchDoh.invalidateEch(host)
                 return chain.proceed(request)
             }
 
-            Log.w(tag, "ECH 被拒（普通域名），标记后转明文重试: $host")
+            EchTrace.event("ECH 被拒（普通域名），标记后转明文重试: $host")
             ConscryptEch.markEchUnavailable(host)
             return chain.proceed(request)
         }
