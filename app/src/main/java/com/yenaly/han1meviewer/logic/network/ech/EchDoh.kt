@@ -102,6 +102,7 @@ object EchDoh {
         synchronized(this) {
             cachedResolver = null
             cachedResolverUrl = null
+            dnsCache.clear()
         }
         echCache.clear()
         echFailed.clear()
@@ -348,11 +349,27 @@ object EchDoh {
 
     // ---------------- DNS ----------------
 
-    /** 用 DoH 解析。失败返回空列表；调用方必须 fail-closed，不要回落系统 DNS（会拿污染 IP） */
+    /**
+     * A/AAAA 记录缓存。
+     *
+     * DoH 的每一次 `lookup` 都是一次完整的 HTTPS 往返；而**所有域名**都要走 DoH 之后，
+     * 不加缓存会让解析成为瓶颈（每次新连接都打一次自有网关）。
+     * 上层 OkHttp 有连接池、不会频繁 lookup，所以 5 分钟足够。
+     */
+    private val dnsCache = ConcurrentHashMap<String, DnsEntry>()
+
+    private const val DNS_CACHE_TTL_MS = 5 * 60 * 1000L
+
+    private data class DnsEntry(val addrs: List<InetAddress>, val expireAt: Long)
+
     fun resolve(host: String): List<InetAddress> {
+        val now = System.currentTimeMillis()
+        dnsCache[host]?.let { if (it.expireAt > now) return it.addrs }
+
         val r = resolver() ?: return emptyList()
         return try {
             val addrs = r.lookup(host)
+            if (addrs.isNotEmpty()) dnsCache[host] = DnsEntry(addrs, now + DNS_CACHE_TTL_MS)
             Log.i(TAG, "doh resolve $host -> ${addrs.joinToString { it.hostAddress ?: "?" }}")
             addrs
         } catch (t: Throwable) {
@@ -378,24 +395,35 @@ object EchDoh {
 }
 
 /**
- * 核心域名走 DoH（系统 DNS 在大陆被污染，连到假 IP 会得出错误结论）；
- * 其余域名保持 App 原有解析策略 [fallback]（不改动非 ECH 链路的行为）。
+ * **所有域名**都优先走自有 DoH 解析（用户定调）。
  *
- * ⚠️ 这里**必须**用 [EchHosts.isCoreDomain] 而不是 [EchHosts.shouldTryEch]：
- * 后者恒为 true，会让**每一个域名**的解析都绕道自有 DoH 网关 —— 量会爆，
- * 而且网关一挂就是全 App 解析失败，比系统 DNS 更脆。ECH 尝试与否由
- * Conscrypt 的策略层决定，跟"用哪套 DNS 解析"是两件事。
+ * 为什么不是只保护核心域名：「DNS 被污染」和「目标支不支持 ECH」是**两件事** ——
+ * 域名不支持 ECH、只能走明文，一样会被污染到假 IP 而连不上。
+ * 所以 DoH 是**解析层**的事，与 ECH 的覆盖面无关。
  *
- * 核心域名解析失败即抛异常：fail-closed，**不回落系统 DNS**。
+ * 差别只在解析失败之后：
+ * - **核心域名**：fail-closed（抛异常）。系统 DNS 对它们必然被污染，
+ *   宁可不连也不连假 IP —— 这也是用户明确的底线。
+ * - **其他域名**：回落系统 DNS。否则自有网关一挂 = 全 App 解析失败，比系统 DNS 更脆；
+ *   而这些域名的污染风险本来就低（不在墙内）。
+ *
+ * 性能：`EchDoh.resolve` 内部带 5 分钟 A 记录缓存，且 OkHttp 有连接池、不会频繁 lookup，
+ * 所以全量走 DoH 不会把解析变成瓶颈。
  */
 class EchDns(private val fallback: Dns = Dns.SYSTEM) : Dns {
 
     override fun lookup(hostname: String): List<InetAddress> {
-        if (!EchHosts.isCoreDomain(hostname)) return fallback.lookup(hostname)
-        val addrs = EchDoh.resolve(hostname)
-        if (addrs.isEmpty()) {
+        val addrs = runCatching { EchDoh.resolve(hostname) }.getOrNull()
+        if (!addrs.isNullOrEmpty()) return addrs
+
+        if (EchHosts.isCoreDomain(hostname)) {
             throw UnknownHostException("DoH 解析失败（fail-closed）：$hostname")
         }
-        return addrs
+        Log.w(TAG, "DoH 解析失败，回落系统 DNS：$hostname")
+        return fallback.lookup(hostname)
+    }
+
+    private companion object {
+        const val TAG = "HY-ECH-DOH"
     }
 }
