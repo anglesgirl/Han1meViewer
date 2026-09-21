@@ -33,10 +33,42 @@ class HanimeResolution {
         // 已经是 t33 的不动，其他域名/节点一概不碰。
         // （上游 Parser 里另有一套只对 AV 站生效的同类修正，两条路径结果一致、互不冲突。）
         private val BAD_CDN_HOST =
-            Regex("""://t(?!33\\.)(\\d{1,2})\\.cdn2020\\.com""", RegexOption.IGNORE_CASE)
+            Regex("""://t(?!33\.)(\d{1,2})\.cdn2020\.com""", RegexOption.IGNORE_CASE)
 
-        fun normalizeCdnHost(url: String): String =
-            url.replace(BAD_CDN_HOST, "://t33.cdn2020.com")
+        /**
+         * 被运营商**按域名封锁**、但同一 CDN 还有可用备用域名的 host。
+         *
+         * 实测：中国移动按 SNI 单独封了 `vdownload.hembed.com`（CDN77 域名，图片与视频都挂在这），
+         * 而 CDN77 给它分配的备用域名 `1497203185.rsc.cdn77.org` 未被封 ——
+         * 两者共用同一张证书（SAN 同时覆盖两者）、鉴权参数不绑定 Host，
+         * 所以直接换 Host 就能拿到同样内容（图片侧已按此修复并真机验证）。
+         *
+         * ⚠️ 只放**已实测**有可用备用域名的 host。站方自建的 `vdownload-8.hembed.com`
+         * 证书只含它自己，换了会直接证书错误 —— **绝不能进这张表**。
+         */
+        private val BLOCKED_HOST_ALIASES = mapOf(
+            "vdownload.hembed.com" to "1497203185.rsc.cdn77.org",
+        )
+
+        /**
+         * 修正播放/加载用的 CDN 域名。
+         *
+         * ⚠️ 为什么这里必须单独做一遍：视频播放器用的是
+         * `androidx.media3.datasource.DefaultHttpDataSource`（底层 HttpURLConnection），
+         * **完全不经过 OkHttp** —— OkHttp 那侧的拦截器（ECH / DoH / CDN Host 改写）
+         * 一个都覆盖不到播放链路，只能在这一层换域名。
+         *
+         * 换域名后响应头里的 Content-Type 可能变成 octet-stream
+         * （CDN77 按 Host 配置 MIME），但播放器靠文件头 sniff、不看 Content-Type，
+         * 实测可直接播放。
+         */
+        fun normalizeCdnHost(url: String): String {
+            var out = url.replace(BAD_CDN_HOST, "://t33.cdn2020.com")
+            BLOCKED_HOST_ALIASES.forEach { (blocked, alt) ->
+                out = out.replace("://$blocked", "://$alt")
+            }
+            return out
+        }
     }
 
     /**
