@@ -69,6 +69,43 @@ object HyEchH3 {
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(H3_STATE_PREFS, Context.MODE_PRIVATE)
 
+    /**
+     * H3 只接管「静态、不带会话」的 GET：HTML / POST / Cookie 相关请求必须走 TCP+ECH，
+     * 因为 H3 这条通路**不发送 Cookie**（会把已登录状态读成未登录），
+     * 且 native 侧只回 `status/body_len`，**没有响应头**（无 Set-Cookie / Content-Type）。
+     *
+     * 判据与 WebView 侧共用（单一事实来源），避免两边口径漂移。
+     */
+    fun isStaticAsset(url: okhttp3.HttpUrl): Boolean {
+        val ext = url.pathSegments.lastOrNull()
+            ?.substringAfterLast('.', "")?.lowercase() ?: return false
+        return ext.isNotEmpty() && ext in STATIC_EXT
+    }
+
+    private val STATIC_EXT = setOf(
+        "jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "ico", "svg",
+        "css", "js", "mjs", "woff", "woff2", "ttf",
+    )
+
+    /** 扩展名 → MIME（H3 通路拿不到响应头，得自己补一个） */
+    fun mimeFor(url: okhttp3.HttpUrl): String =
+        when (url.pathSegments.lastOrNull()?.substringAfterLast('.', "")?.lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            "avif" -> "image/avif"
+            "bmp" -> "image/bmp"
+            "ico" -> "image/x-icon"
+            "svg" -> "image/svg+xml"
+            "css" -> "text/css"
+            "js", "mjs" -> "application/javascript"
+            "woff" -> "font/woff"
+            "woff2" -> "font/woff2"
+            "ttf" -> "font/ttf"
+            else -> "application/octet-stream"
+        }
+
     /** 是否该先试 H3：只要没被负缓存拦下就算可用（不写死白名单）。 */
     fun shouldTryH3(host: String): Boolean {
         val context = ctx() ?: return false

@@ -80,7 +80,10 @@ class HProxySelector : ProxySelector() {
         //   ③ 走代理反而更差 —— HTTP 代理会把目标域名原样写进 CONNECT 请求行，等于换个地方暴露
         // 其余域名照常尊重用户在设置里选的代理。
         val host = uri?.host
-        if (host != null && com.yenaly.han1meviewer.logic.network.ech.EchHosts.isProtected(host)) {
+        // ⚠️ 用 [EchHosts.isCoreDomain] 而非 shouldTryEch：后者恒为 true，
+        // 会把用户设置里的 HTTP/SOCKS 代理**全部作废**（所有域名都被强制直连）。
+        // 只有核心被墙域名才该无条件直连；其余域名尊重用户的代理选择。
+        if (host != null && com.yenaly.han1meviewer.logic.network.ech.EchHosts.isCoreDomain(host)) {
             return mutableListOf(Proxy.NO_PROXY)
         }
 

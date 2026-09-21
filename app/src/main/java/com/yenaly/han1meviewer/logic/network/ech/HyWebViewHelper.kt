@@ -85,7 +85,7 @@ object HyWebViewHelper {
      * 只对受保护域名注入，其余页面一概不碰。
      */
     fun injectBridge(webView: WebView, url: String?) {
-        if (url == null || !EchHosts.isProtected(runCatching { java.net.URI(url).host ?: "" }.getOrDefault(""))) {
+        if (url == null || !EchHosts.isCoreDomain(runCatching { java.net.URI(url).host ?: "" }.getOrDefault(""))) {
             return
         }
         runCatching {
@@ -136,8 +136,11 @@ object HyWebViewHelper {
             }
         }
 
-        // 只接管受保护域名：其余域名保持 WebView 原行为（不干涉普通浏览）
-        if (!EchHosts.isProtected(host)) return null
+        // 只接管核心域名：其余域名保持 WebView 原行为（不干涉普通浏览）
+        // ⚠️ 这里不能用 shouldTryEch（恒为 true）—— 那会把 WebView 里**每一个** GET
+        // 都拽进 OkHttp 接管，失败还返回 502，等于改变整个浏览行为。
+        // 「所有网络都试 ECH」的战场在 App 自身的 OkHttp 链路（echTransport），不在页面渲染。
+        if (!EchHosts.isCoreDomain(host)) return null
         // ⚠️ POST body 取不到，无法代发 —— 放行（登录 POST 的 ECH 方案另行处理）
         if (method != "GET") {
             Log.i(TAG, "放行非 GET（body 取不到）：$method $host")

@@ -14,7 +14,9 @@ import com.google.firebase.crashlytics.setCustomKeys
 import com.google.firebase.database.database
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
+import com.yenaly.han1meviewer.logic.network.HDns
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.ech.echTransport
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.util.AnimeShaders
@@ -22,19 +24,50 @@ import com.yenaly.han1meviewer.util.ThemeUtils
 import com.developer.crashx.config.CrashConfig
 import com.yenaly.yenaly_libs.base.YenalyApplication
 import com.yenaly.yenaly_libs.utils.LanguageHelper
+import coil3.ImageLoader
+import coil3.ImageLoaderFactory
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import okhttp3.OkHttpClient
 import `is`.xyz.mpv.MPVLib
 import java.net.ProxySelector
+import java.util.concurrent.TimeUnit
 
 /**
  * @project Hanime1
  * @author Yenaly Liew
  * @time 2022/06/08 008 17:32
  */
-class HanimeApplication : YenalyApplication() {
+class HanimeApplication : YenalyApplication(), ImageLoaderFactory {
 
     companion object {
         const val TAG = "HanimeApplication"
     }
+
+    /**
+     * 图片链路专用 OkHttp —— 必须挂 ECH 传输层。
+     *
+     * Coil 默认自建 OkHttpClient，走的是**系统 TLS 栈**（`com.android.org.conscrypt`），
+     * 而系统栈没有 ECH：在被 SNI 阻断的网络里，图片请求会在 TLS 握手阶段直接被 RST。
+     * 用户报障日志正是如此：
+     *   `CoilError: Image load failed` → `SocketException: Connection reset`
+     *     at `com.android.org.conscrypt.ConscryptEngineSocket.doHandshake`
+     * 同网络下 Chrome 打得开、App 打不开 —— 差别就在 Chrome 自己有 ECH，而图片这条链路没有。
+     *
+     * 受保护域名（[HanimeConstants.HANIME_HOSTNAME]）由 EchSocketFactory 注入 ECHConfigList、
+     * 并由 EchDns 走 DoH 解析；其他域名（getchu / picsum 等）行为不变。
+     */
+    private val imageClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .echTransport(HDns())
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
+    /** Coil 全局 ImageLoader：把图片请求接到 ECH 传输层（此前 Coil 用默认 client，完全没有 ECH）。 */
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .components { add(OkHttpNetworkFetcherFactory(callFactory = { imageClient })) }
+        .build()
 
     /**
      * 已在 [initCrashX] 中透過 CrashX 處理

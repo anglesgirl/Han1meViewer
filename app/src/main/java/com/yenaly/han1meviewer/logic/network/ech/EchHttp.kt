@@ -34,7 +34,13 @@ fun OkHttpClient.Builder.echTransport(
     .sslSocketFactory(ConscryptEch.socketFactory, ConscryptEch.trustManager)
     // 受保护域名走 DoH（拿不到就抛异常，不回落系统 DNS）；其余域名保持原策略
     .dns(EchDns(fallbackDns))
-    // 唯一保留的拦截器：ECH 被拒时清缓存，让重试拿到 retryConfigs
+    // ① H3（QUIC+ECH）优先：只接管无状态静态资源 GET。
+    //    H3 同样带 ECH（配置由 HyEchH3 一并传给 QUIC），所以它不是"退回明文"，
+    //    而是走 UDP/443 —— 掐 TCP SNI 的网络未必连 QUIC 一起掐。
+    //    失败会记 24h 负缓存并立刻回落下面的 TCP 链路，用户无感。
+    .addInterceptor(H3Interceptor())
+    // ② ③ TCP+ECH；ECH 被服务器拒绝时：普通域名标记后转明文重试，
+    //     核心域名清 ECH 缓存用新配置重试（不降级，明文必被 RST）
     .addInterceptor(EchRetryInterceptor())
 
 /** 共享的 ECH OkHttp 客户端 */

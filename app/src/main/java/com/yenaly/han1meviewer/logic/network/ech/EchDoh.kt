@@ -378,15 +378,20 @@ object EchDoh {
 }
 
 /**
- * 受保护域名走 DoH（系统 DNS 在大陆被污染，连到假 IP 会得出错误结论）；
+ * 核心域名走 DoH（系统 DNS 在大陆被污染，连到假 IP 会得出错误结论）；
  * 其余域名保持 App 原有解析策略 [fallback]（不改动非 ECH 链路的行为）。
  *
- * 解析失败即抛异常：fail-closed，**不回落系统 DNS**。
+ * ⚠️ 这里**必须**用 [EchHosts.isCoreDomain] 而不是 [EchHosts.shouldTryEch]：
+ * 后者恒为 true，会让**每一个域名**的解析都绕道自有 DoH 网关 —— 量会爆，
+ * 而且网关一挂就是全 App 解析失败，比系统 DNS 更脆。ECH 尝试与否由
+ * Conscrypt 的策略层决定，跟"用哪套 DNS 解析"是两件事。
+ *
+ * 核心域名解析失败即抛异常：fail-closed，**不回落系统 DNS**。
  */
 class EchDns(private val fallback: Dns = Dns.SYSTEM) : Dns {
 
     override fun lookup(hostname: String): List<InetAddress> {
-        if (!EchHosts.isProtected(hostname)) return fallback.lookup(hostname)
+        if (!EchHosts.isCoreDomain(hostname)) return fallback.lookup(hostname)
         val addrs = EchDoh.resolve(hostname)
         if (addrs.isEmpty()) {
             throw UnknownHostException("DoH 解析失败（fail-closed）：$hostname")

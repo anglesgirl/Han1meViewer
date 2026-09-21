@@ -13,6 +13,7 @@ import java.net.Socket
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
@@ -127,10 +128,38 @@ object ConscryptEch {
     }
 
     /**
+     * 已经确认「ECH 走不通」的域名：服务器回了 ECH_REJECTED（或拿不到配置）。
+     *
+     * 实测依据（BoringSSL/OpenSSL 层，本机复现）：给**非 Cloudflare** 域名注入
+     * cloudflare-ech.com 的 ECHConfigList 时，握手直接以
+     * `error:1000013f:SSL routines:OPENSSL_internal:ECH_REJECTED` 失败，
+     * 且 **retry_len=0** —— 服务器**不会**回传 retry_configs。
+     * 这就意味着 Conscrypt 没有任何自动降级的机会，"降级"必须由我们自己记。
+     *
+     * 记下来之后，同一域名不再注入 ECH，直接明文：省掉每次访问都要白白失败一次的握手。
+     */
+    private val echUnavailable: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** 见 [echUnavailable]。由 [EchRetryInterceptor] 在识别到 ECH_REJECTED 后调用。 */
+    fun markEchUnavailable(host: String) {
+        if (echUnavailable.add(host.lowercase())) {
+            Log.w(TAG, "ECH 走不通，该域名转明文（降级）: $host")
+        }
+    }
+
+    /** 仅供诊断日志：当前已降级为明文的域名快照。 */
+    fun echUnavailableHosts(): List<String> = echUnavailable.toList().sorted()
+
+    /**
      * 包装 Conscrypt 的 SSLSocketFactory：返回 socket 前按 host 注入 ECHConfigList。
      * OkHttp 走的是 `createSocket(Socket, String, int, boolean)` 重载。
      *
-     * 拿不到配置时**抛异常**（fail-closed）—— 宁可不连，也绝不明文暴露被墙域名的 SNI。
+     * 降级策略（用户定调：**所有网络都先试 ECH，匹配失败降级，能走 ECH 就走 ECH**）：
+     * - **核心域名**（[EchHosts.isCoreDomain]）：拿不到配置一律抛异常（fail-closed）。
+     *   它们明确被墙，明文 = 把 SNI 写在脸上 = 立刻被 RST —— 降级对它们
+     *   既救不了可用性，又输掉安全性，所以宁可不连。
+     * - **其他域名**：ECH 不可用就明文放行。它们本来就在明文访问，
+     *   少一层加密不会更糟：降级只损失隐私增益，不损失可用性。
      */
     private class EchSocketFactory(private val delegate: SSLSocketFactory) : SSLSocketFactory() {
 
@@ -139,13 +168,38 @@ object ConscryptEch {
         override fun getSupportedCipherSuites(): Array<String> = delegate.supportedCipherSuites
 
         private fun prepare(s: Socket, host: String?): Socket {
-            if (host == null || s !is SSLSocket || !EchHosts.isProtected(host)) return s
+            if (host == null || s !is SSLSocket || !EchHosts.shouldTryEch(host)) return s
+            val core = EchHosts.isCoreDomain(host)
+
+            // 已确认走不通的域名：普通域名直接明文；核心域名仍然 fail-closed
+            if (echUnavailable.contains(host.lowercase())) {
+                if (core) throw IOException("ECH 配置不可用（fail-closed）：拒绝以明文访问 $host")
+                return s
+            }
+
             val cfg = EchDoh.echConfigList(host)
-                ?: throw IOException("ECH 配置不可用（fail-closed）：拒绝以明文访问 $host")
+            if (cfg == null) {
+                if (core) throw IOException("ECH 配置不可用（fail-closed）：拒绝以明文访问 $host")
+                Log.w(TAG, "拿不到 ECH 配置，该域名转明文（降级）: $host")
+                markEchUnavailable(host)
+                return s
+            }
+
             try {
                 Conscrypt.setEchConfigList(s, cfg)
+                // ⚠️ conscrypt-android 2.7.0 **没有** getEchConfigList（javap 实证：只有
+                // setEchConfigList 的两个重载），所以无法回读校验 —— 别指望在这里"验货"。
+                // ECH 到底有没有真的发出去，只能靠两条外部证据：
+                //   1) **核心域名能连上** —— 它们明文必被 RST，能通即证明 ECH 扩展真的发出去了；
+                //   2) **服务器回 ECH_REJECTED** —— 走不通的信号，由 EchRetryInterceptor 接住。
+                // 若哪天出现"核心域名连不上、且没有 ECH_REJECTED"，那就是 PolicyTrustManager
+                // 被静默失效（R8 改名 / 未传进 SSLContext），优先查 proguard-rules 的 keep。
+                Log.i(TAG, "ECH 已注入 host=$host cfg=${cfg.size}B 核心=$core")
             } catch (t: Throwable) {
-                throw IOException("setEchConfigList 失败（fail-closed）: ${t.message}")
+                if (core) throw IOException("setEchConfigList 失败（fail-closed）: ${t.message}")
+                Log.w(TAG, "setEchConfigList 失败，该域名转明文（降级）: $host ${t.message}")
+                markEchUnavailable(host)
+                return s
             }
             return s
         }
@@ -172,23 +226,47 @@ object ConscryptEch {
 }
 
 /**
- * ECH 被服务器拒绝（密钥轮换 / 配置过期）时清掉缓存，让 OkHttp 的重试拿到新配置。
- * Conscrypt 会抛带 EchRejected 的异常并附 retryConfigs，这里**只做失效 + 重试**，
- * 不改写任何传输语义 —— 这是本方案留下的唯一一个拦截器。
+ * ECH 被拒时的降级/重试。这是本方案唯一保留的拦截器。
+ *
+ * 两种情况要分开处理（实测 BoringSSL 在服务器不认 ECH 时回 `ECH_REJECTED`，
+ * 且 **retry_len=0**、不给 retry_configs，所以 Conscrypt 自己不会降级）：
+ *
+ * - **核心域名**（被墙站点）：清掉 ECH 缓存、用新配置重试一次。**不降级** ——
+ *   明文访问它们等于当场被 RST。通常是密钥轮换/配置过期，换新配置多半就好了。
+ * - **普通域名**：把该域名标记为"ECH 走不通"，然后**明文重试一次**。
+ *   用户看到的就是一次正常的请求（多花一个 RTT），之后同域名直接明文。
  */
 class EchRetryInterceptor : Interceptor {
+
+    private val tag = "HY-ECH"
+
     override fun intercept(chain: Interceptor.Chain): Response {
-        val host = chain.request().url.host
+        val request = chain.request()
+        val host = request.url.host
         return try {
-            chain.proceed(chain.request())
+            chain.proceed(request)
         } catch (t: Throwable) {
-            val echRejected = generateSequence(t) { it.cause }
-                .any { it.javaClass.simpleName.contains("EchRejected", ignoreCase = true) }
-            if (echRejected && EchHosts.isProtected(host)) {
-                Log.w("HY-ECH", "ECH 被拒，清缓存以便用 retryConfigs 重试: $host")
+            if (!isEchRejected(t)) throw t
+
+            if (EchHosts.isCoreDomain(host)) {
+                Log.w(tag, "ECH 被拒（核心域名），清缓存用新配置重试: $host")
                 EchDoh.invalidateEch(host)
+                return chain.proceed(request)
             }
-            throw t
+
+            Log.w(tag, "ECH 被拒（普通域名），标记后转明文重试: $host")
+            ConscryptEch.markEchUnavailable(host)
+            return chain.proceed(request)
         }
     }
+
+    /**
+     * ECH 被拒的判定：异常链里带 `EchRejected` 类名，
+     * 或消息里带 BoringSSL 的 `ECH_REJECTED` 文案。
+     */
+    private fun isEchRejected(t: Throwable): Boolean =
+        generateSequence(t) { it.cause }.any { cause ->
+            cause.javaClass.simpleName.contains("EchRejected", ignoreCase = true) ||
+                cause.message?.contains("ECH_REJECTED", ignoreCase = true) == true
+        }
 }

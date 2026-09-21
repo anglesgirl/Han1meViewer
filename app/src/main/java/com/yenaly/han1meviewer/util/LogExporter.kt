@@ -8,6 +8,7 @@ import androidx.core.content.FileProvider
 import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.FILE_PROVIDER_AUTHORITY
 import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.logic.network.ech.ConscryptEch
 import com.yenaly.han1meviewer.logic.network.ech.EchHosts
 import com.yenaly.han1meviewer.logic.network.ech.EchHttp
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +37,13 @@ object LogExporter {
         sb.appendLine("baseUrl=${Preferences.baseUrl}")
         sb.appendLine("dohPreset=${Preferences.dohPreset} useDoH=${Preferences.useDoH}")
         sb.appendLine("echReady=${EchHttp.isReady}")
-        sb.appendLine("echProtected=${EchHosts.isProtected(Preferences.baseUrl)}")
+        // ⚠️ 以前这里传的是 Preferences.baseUrl（"https://hanime1.me/" 这种完整 URL），
+        // 而 isProtected 期望的是**裸 host** —— 永远匹配不上，字段恒为 false，
+        // 白白误导过一次排查（曾据此误判"ECH 没生效"）。这里先取出 host 再判。
+        val baseHost = runCatching { java.net.URI(Preferences.baseUrl).host }.getOrNull().orEmpty()
+        sb.appendLine("baseHost=$baseHost")
+        sb.appendLine("echCore=${EchHosts.isCoreDomain(baseHost)}")
+        sb.appendLine("echDegraded(明文)=" + ConscryptEch.echUnavailableHosts().joinToString(","))
         sb.appendLine("=== logcat(pid=${android.os.Process.myPid()}) ===")
         sb.appendLine(readOwnLogcat())
         val name = "han1me-log-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.txt"
