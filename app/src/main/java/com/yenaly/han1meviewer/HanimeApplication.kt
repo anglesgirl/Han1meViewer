@@ -1,6 +1,7 @@
 package com.yenaly.han1meviewer
 
 import android.content.ComponentName
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Process
 import android.util.Log
@@ -25,8 +26,8 @@ import com.developer.crashx.config.CrashConfig
 import com.yenaly.yenaly_libs.base.YenalyApplication
 import com.yenaly.yenaly_libs.utils.LanguageHelper
 import coil3.ImageLoader
-import coil3.ImageLoaderFactory
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.SingletonImageLoader
+import coil3.network.okhttp.OkHttpNetworkFetcher
 import okhttp3.OkHttpClient
 import `is`.xyz.mpv.MPVLib
 import java.net.ProxySelector
@@ -37,7 +38,7 @@ import java.util.concurrent.TimeUnit
  * @author Yenaly Liew
  * @time 2022/06/08 008 17:32
  */
-class HanimeApplication : YenalyApplication(), ImageLoaderFactory {
+class HanimeApplication : YenalyApplication(), SingletonImageLoader.Factory {
 
     companion object {
         const val TAG = "HanimeApplication"
@@ -65,8 +66,8 @@ class HanimeApplication : YenalyApplication(), ImageLoaderFactory {
     }
 
     /** Coil 全局 ImageLoader：把图片请求接到 ECH 传输层（此前 Coil 用默认 client，完全没有 ECH）。 */
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .components { add(OkHttpNetworkFetcherFactory(callFactory = { imageClient })) }
+    override fun newImageLoader(context: Context): ImageLoader = ImageLoader.Builder(context)
+        .components { add(OkHttpNetworkFetcher.factory(imageClient)) }
         .build()
 
     /**

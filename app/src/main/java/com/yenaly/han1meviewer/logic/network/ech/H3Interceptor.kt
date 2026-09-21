@@ -1,6 +1,7 @@
 package com.yenaly.han1meviewer.logic.network.ech
 
 import android.util.Log
+import com.yenaly.han1meviewer.util.EchStats
 import okhttp3.Interceptor
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
