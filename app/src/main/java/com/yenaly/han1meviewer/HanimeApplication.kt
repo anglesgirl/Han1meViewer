@@ -71,6 +71,28 @@ class HanimeApplication : YenalyApplication(), SingletonImageLoader.Factory {
         .build()
 
     /**
+     * **Coil 2** 的全局 ImageLoader 也必须挂 ECH。
+     *
+     * 主 UI 图片早就迁到 Coil 3（`AsyncImage` → [SingletonImageLoader]），但工程里仍残留
+     * 2.7.0，还有两处在用：
+     *   · `VideoRouteHostScreen` 的 `posterImageView.load(coverUrl)`（**视频封面**）
+     *   · `HImageMeower`（下载任务取封面）
+     * 它们走的是 Coil 2 自己的默认 ImageLoader = 系统 TLS 栈、**没有 ECH** ——
+     * 在被 SNI 阻断的网络里会直接 Connection reset。
+     * 用户报障日志里「图片全挂、但名字能显示能点进去」正是这个形状：
+     * API 那条链路挂了 ECH（能活），图片/封面这两条没挂（全死）。
+     */
+    private fun initCoil2EchTransport() {
+        runCatching {
+            coil.Coil.setImageLoader(
+                coil.ImageLoader.Builder(this)
+                    .okHttpClient(imageClient)
+                    .build(),
+            )
+        }.onFailure { Log.w(TAG, "Coil2 ImageLoader 挂 ECH 失败: ${it.message}") }
+    }
+
+    /**
      * 已在 [initCrashX] 中透過 CrashX 處理
      */
     override val isDefaultCrashHandlerEnabled: Boolean = false
@@ -123,6 +145,7 @@ class HanimeApplication : YenalyApplication(), SingletonImageLoader.Factory {
         // H3（QUIC + ECH）传输层：注册 Context（负缓存落盘 ech_h3_state 要用），
         // native 库在首次真正用到时才 dlopen —— 缺库不影响其余功能。
         com.yenaly.han1meviewer.logic.network.ech.HyEchH3.attach(this)
+        initCoil2EchTransport()
         com.yenaly.han1meviewer.util.EchStats.event("app_start")
         initFirebase()
         initNotificationChannel()
