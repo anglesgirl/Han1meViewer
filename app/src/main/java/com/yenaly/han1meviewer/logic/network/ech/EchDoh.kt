@@ -350,11 +350,14 @@ object EchDoh {
     // ---------------- DNS ----------------
 
     /**
-     * A/AAAA 记录缓存。
+     * A/AAAA 记录缓存（5 分钟）。
      *
-     * DoH 的每一次 `lookup` 都是一次完整的 HTTPS 往返；而**所有域名**都要走 DoH 之后，
-     * 不加缓存会让解析成为瓶颈（每次新连接都打一次自有网关）。
-     * 上层 OkHttp 有连接池、不会频繁 lookup，所以 5 分钟足够。
+     * 加它**不是**因为怕打爆 DoH 端 —— Cloudflare 侧 24 小时 2000 万请求都不算事，
+     * 容量完全不是约束。留它是为了省**本机**的一次 HTTPS 往返：DoH 每次 lookup
+     * 都是一整个请求，而系统 DNS 有本地缓存做对照 —— 不缓存会让每个新连接
+     * 多等一次往返。加上 OkHttp 自身的连接池，实际 lookup 频率本来就很低。
+     *
+     * 只在解析**成功**时缓存；失败不缓存，下次立刻重试。
      */
     private val dnsCache = ConcurrentHashMap<String, DnsEntry>()
 
