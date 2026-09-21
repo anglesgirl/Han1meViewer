@@ -27,7 +27,7 @@ import com.yenaly.yenaly_libs.base.YenalyApplication
 import com.yenaly.yenaly_libs.utils.LanguageHelper
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
-import coil3.network.okhttp.OkHttpNetworkFetcher
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import okhttp3.OkHttpClient
 import `is`.xyz.mpv.MPVLib
 import java.net.ProxySelector
@@ -67,7 +67,7 @@ class HanimeApplication : YenalyApplication(), SingletonImageLoader.Factory {
 
     /** Coil 全局 ImageLoader：把图片请求接到 ECH 传输层（此前 Coil 用默认 client，完全没有 ECH）。 */
     override fun newImageLoader(context: Context): ImageLoader = ImageLoader.Builder(context)
-        .components { add(OkHttpNetworkFetcher.factory(imageClient)) }
+        .components { add(OkHttpNetworkFetcherFactory(imageClient)) }
         .build()
 
     /**
