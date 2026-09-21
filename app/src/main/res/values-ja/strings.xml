@@ -230,6 +230,8 @@
     <string name="testing">テスト実施中…</string>
     <string name="test_doh">DoHをテスト</string>
     <string name="test_doh_summary">現在のDoH設定でドメインを解決できるか確認します</string>
+    <string name="export_diagnostic_log">診断ログを書き出す</string>
+    <string name="export_diagnostic_log_summary">端末の logcat・ECH/H3 状態・設定を収集して共有します</string>
     <string name="doh_test_result">DoHテスト結果</string>
     <string name="password">パスワード</string>
     <string name="try_login_here">ここでログインしてみる</string>

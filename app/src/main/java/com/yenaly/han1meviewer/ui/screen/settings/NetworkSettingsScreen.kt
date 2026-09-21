@@ -26,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,6 +35,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.yenaly.han1meviewer.R
+import com.yenaly.han1meviewer.util.LogExporter
+import kotlinx.coroutines.launch
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.ui.component.ChoiceDialog
@@ -108,6 +112,9 @@ fun NetworkSettingsScreen(
     onDismissDohTest: () -> Unit,
     onApplyProxy: (Int, String, Int) -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var showDomainDialog by rememberSaveable { mutableStateOf(false) }
     var showProxyDialog by rememberSaveable { mutableStateOf(false) }
     var showDohDialog by rememberSaveable { mutableStateOf(false) }
@@ -277,6 +284,20 @@ fun NetworkSettingsScreen(
                 summary = stringResource(R.string.test_doh_summary),
                 iconRes = R.drawable.baseline_doh_24,
                 onClick = onOpenDohTest,
+            )
+        }
+
+        item {
+            SettingNavigationItem(
+                title = stringResource(R.string.export_diagnostic_log),
+                summary = stringResource(R.string.export_diagnostic_log_summary),
+                iconRes = R.drawable.baseline_edit_24,
+                onClick = {
+                    scope.launch {
+                        val f = LogExporter.collect(context)
+                        LogExporter.share(context, f)
+                    }
+                },
             )
         }
     }

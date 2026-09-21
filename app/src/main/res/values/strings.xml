@@ -534,6 +534,8 @@
     <string name="testing">測試中…</string>
     <string name="test_doh">測試 DoH</string>
     <string name="test_doh_summary">檢查目前 DoH 設定是否可解析網域</string>
+    <string name="export_diagnostic_log">匯出診斷日誌</string>
+    <string name="export_diagnostic_log_summary">抓取本機 logcat、ECH/H3 狀態與設定，分享給開發者排查</string>
     <string name="doh_test_result">DoH 測試結果</string>
     <string name="doh_conflict_message">DoH 與內建 DNS 映射不可同時啟用。開啟其中一個時，會自動關閉另一個。</string>
     <string name="unknow">未知</string>

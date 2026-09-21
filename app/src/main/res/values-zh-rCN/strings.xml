@@ -561,6 +561,8 @@
     <string name="testing">测试中…</string>
     <string name="test_doh">测试 DoH</string>
     <string name="test_doh_summary">检查当前 DoH 配置是否可解析域名</string>
+    <string name="export_diagnostic_log">导出诊断日志</string>
+    <string name="export_diagnostic_log_summary">抓取本机 logcat、ECH/H3 状态与配置，分享给开发者排查</string>
     <string name="doh_test_result">DoH 测试结果</string>
     <string name="doh_conflict_message">DoH 与内建 DNS 映射不能同时启用。开启其中一个时，会自动关闭另一个。</string>
     <string name="view_checkin">查看</string>

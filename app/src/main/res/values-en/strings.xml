@@ -555,6 +555,8 @@ Recommendations are as follows:\n
     <string name="testing">Testing…</string>
     <string name="test_doh">Test DoH</string>
     <string name="test_doh_summary">Check whether current DoH settings can resolve the domain</string>
+    <string name="export_diagnostic_log">Export diagnostic log</string>
+    <string name="export_diagnostic_log_summary">Collect device logcat, ECH/H3 status and settings to share with the developer</string>
     <string name="doh_test_result">DoH Test Result</string>
     <string name="doh_conflict_message">DoH and built-in DNS mapping cannot be enabled at the same time. Enabling one will automatically disable the other.</string>
     <string name="view_checkin">View</string>
