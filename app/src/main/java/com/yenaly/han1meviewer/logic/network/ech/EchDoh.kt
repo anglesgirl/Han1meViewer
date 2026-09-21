@@ -135,7 +135,16 @@ object EchDoh {
     private const val ECH_CACHE_MIN_MS = 60 * 60 * 1000L
     private const val ECH_CACHE_MAX_MS = 5 * 60 * 60 * 1000L
 
-    /** 从随机一家纯 IP DoH 取官方活值（wire 格式，解析 SVCB 的 key=5）。 */
+    /** 网关兜底的超时：比纯 IP 那三家宽松些（走域名 + 可能的国际线路）。 */
+    private const val ECH_GATEWAY_TIMEOUT_MS = 4000L
+
+    /**
+     * 取 ECH 活值：先国内三家纯 IP，全部失败再走**自家网关**兜底。
+     *
+     * 为什么需要兜底：三家的公共解析 IP 在某些移动网会被"动手脚"（实证：同一网络里
+     * Chrome 走自家网关能正常打开页面，App 却不行 —— 被干扰的正好是那几个公共解析地址）。
+     * 这时三家全失败，只剩自家网关这条路。
+     */
     private fun fetchLiveEch(): Pair<ByteArray, Long>? {
         for (ip in ECH_DOH_IPS.shuffled()) {
             val hit = runCatching { queryEchWire(ip, LIVE_SOURCE_HOST) }.getOrNull()
@@ -145,7 +154,61 @@ object EchDoh {
             }
             Log.i(TAG, "live ech via $ip failed, next")
         }
+        val fallback = fetchLiveEchViaGateway()
+        if (fallback != null) {
+            Log.i(TAG, "live ech via gateway(fallback): ${fallback.first.size} bytes, ttl=${fallback.second}ms")
+            return fallback
+        }
+        Log.w(TAG, "live ech: 三家纯 IP 与网关兜底全部失败")
         return null
+    }
+
+    /**
+     * 兜底源：自有 CF 网关 DoH。
+     *
+     * **必须「域名 URL + 钉住 CF 边缘 IP」**，不能像三家那样纯 IP 直连 ——
+     * CF Gateway 靠 SNI 分流到对应账户，直连 IP 会被拒（这正是它与三家纯 IP 端点最大的区别，
+     * 「不发 Host 头」那套在这里不适用）。钉的 IP 取 [DohConfig.bootstrapIps]（NodePool 的
+     * `172.64.229.x` 段），既不查 DNS 也就绕开了污染。
+     */
+    private fun fetchLiveEchViaGateway(): Pair<ByteArray, Long>? {
+        val url = echDohUrl()
+        val pins = DohConfig.bootstrapIps()
+            .mapNotNull { runCatching { InetAddress.getByName(it) }.getOrNull() }
+        if (pins.isEmpty()) {
+            Log.w(TAG, "gateway fallback skipped: 没有可用的引导 IP")
+            return null
+        }
+        val pinnedDns = object : Dns {
+            override fun lookup(hostname: String): List<InetAddress> = pins
+        }
+        val client = bootstrapClient.newBuilder()
+            .dns(pinnedDns)
+            .connectTimeout(ECH_GATEWAY_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .readTimeout(ECH_GATEWAY_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .callTimeout(ECH_GATEWAY_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .build()
+        return runCatching {
+            val b64 = android.util.Base64.encodeToString(
+                buildQuery(LIVE_SOURCE_HOST), android.util.Base64.NO_WRAP or android.util.Base64.URL_SAFE,
+            ).trimEnd('=')
+            val req = Request.Builder()
+                .url("$url?dns=$b64")
+                .header("accept", "application/dns-message")
+                .build()
+            val wire = client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    Log.i(TAG, "live ech via gateway: http=${resp.code}")
+                    null
+                } else {
+                    resp.body?.bytes()
+                }
+            } ?: return null
+            parseSvcbEch(wire)
+        }.getOrElse {
+            Log.i(TAG, "live ech via gateway failed: ${it.message}")
+            null
+        }
     }
 
     /** 建 DNS 查询（type 65 = HTTPS）。 */
