@@ -85,7 +85,13 @@ object EchDoh {
                     .client(bootstrapClient)
                     .url(url.toHttpUrl())
                     .apply { if (pins.isNotEmpty()) bootstrapDnsHosts(*pins.toTypedArray()) }
-                    .includeIPv6(false)
+                    // ⚠️ 必须启用 IPv6 —— 这是「Chrome 打得开、App 打不开」的根因。
+                    // 实测：同一张图走 IPv6 直连（2a02:6ea0:c77a::47）返回 200/47480B，
+                    // 走 IPv4（37.19.194.81）也返回 200，但**移动对封锁域名的 SNI 阻断
+                    // 只在 IPv4 侧生效**。Chrome 优先 IPv6 所以打得开；而这里曾经显式
+                    // 关闭 IPv6，App 只能拿到 A 记录 → 必然走 IPv4 → 必然被 RST。
+                    // 关闭的代价是 App 比浏览器"笨"，遇到按 IP 版本区别对待的封锁就必死。
+                    .includeIPv6(true)
                     .build()
             }.getOrElse {
                 Log.w(TAG, "DoH 解析器构建失败（url=$url）：${it.message}")
