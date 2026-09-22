@@ -290,6 +290,46 @@ object EchDoh {
     /** 域名 → 是否解析到 CF 边缘段。缓存判定结果，避免每次建连都重复解析。 */
     private val cfHostCache = ConcurrentHashMap<String, Boolean>()
 
+    /** IP → 是否属于 Cloudflare。按地址缓存，避免每个新连接都查一次 ASN。 */
+    private val asnCache = ConcurrentHashMap<String, Boolean>()
+
+    private const val CLOUDFLARE_ASN = 13335
+
+    /**
+     * 该 IP 是否属于 Cloudflare（**AS13335**）—— 决定要不要给它注入 ECH。
+     *
+     * 为什么用 ASN 而不是官方 IP 段表：段表要手工维护、而且**会漏** ——
+     * 新增段、以及 CF「中国网络」的国内段都不在 `ips-v4` 里，漏判会让本该受保护的
+     * 域名退回明文。ASN 归属由 IRRd 权威数据决定，一次查询覆盖它的全部段。
+     * 实测：CF 站点（含 cloudflare-ech.com、bgm.tv、hanime1.me、javchu.com）全是 13335，
+     * 而 CDN77 是 60068、站方自建 VPS 是 30058、Google 是 15169。
+     *
+     * 查询走 Team Cymru 的 DNS 反查（纯 DNS，与我们自己的 DoH 同一条路，
+     * 手机上不需要任何额外依赖）：
+     *
+     *     <反转 IP>.origin.asn.cymru.com   TXT
+     *     → "13335 | 104.26.0.0/20 | US | arin | 2014-03-28"
+     *
+     * IPv6 不参与判定（Cymru 的 v6 反查是另一套 nibble 形式），由调用方只看 IPv4。
+     */
+    private fun isCloudflareIp(ip: InetAddress): Boolean {
+        if (ip.address.size != 4) return false
+        val addr = ip.hostAddress ?: return false
+        asnCache[addr]?.let { return it }
+        val rev = addr.split(".").reversed().joinToString(".") + ".origin.asn.cymru.com"
+        val body = try {
+            query(echDohUrl(), rev, "TXT")
+        } catch (t: Throwable) {
+            null
+        }
+        val asn = body?.let { Regex(""""(\d{2,6})\s*\|""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
+        // 查不到（网络或服务异常）时按「是 CF」处理：宁可白试一次，也不能误伤受保护域名
+        if (asn == null) return true
+        val cf = asn == CLOUDFLARE_ASN
+        asnCache[addr] = cf
+        return cf
+    }
+
     /**
      * 该域名是否解析到 Cloudflare 边缘段 —— **决定要不要注入 ECH**。
      *
@@ -304,10 +344,13 @@ object EchDoh {
             emptyList()
         }
         if (addrs.isEmpty()) return true
-        val cf = addrs.any { CloudflareEdge.contains(it) }
+        // 只看 IPv4 的归属：Cymru 反查是 IPv4 形式，域名只要有一个 IPv4 判为 CF 就算 CF。
+        // 只有 IPv6 的域名（罕见）不拦 —— 宁可白试一次，不能误伤。
+        val v4 = addrs.filter { it.address.size == 4 }
+        val cf = if (v4.isEmpty()) true else v4.any { isCloudflareIp(it) }
         cfHostCache[host] = cf
         if (cf) {
-            EchTrace.event("CF 域名，注入 ECH: $host")
+            EchTrace.event("CF 域名（AS13335），注入 ECH: $host")
         } else {
             EchTrace.event(
                 "非 CF 域名，跳过 ECH（提前判定）: $host -> " +
