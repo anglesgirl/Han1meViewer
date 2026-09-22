@@ -1,5 +1,6 @@
 package com.yenaly.han1meviewer
 
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import kotlinx.serialization.Serializable
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 
@@ -65,7 +66,11 @@ class HanimeResolution {
         fun normalizeCdnHost(url: String): String {
             var out = url.replace(BAD_CDN_HOST, "://t33.cdn2020.com")
             BLOCKED_HOST_ALIASES.forEach { (blocked, alt) ->
-                out = out.replace("://$blocked", "://$alt")
+                if (out.contains("://$blocked")) {
+                    // 走 EchTrace 而非 Log.i：播放链路的日志会和 ECH 一样被系统限流吃掉
+                    EchTrace.event("CDN 域名改写（按域名封锁）: $blocked -> $alt")
+                    out = out.replace("://$blocked", "://$alt")
+                }
             }
             return out
         }

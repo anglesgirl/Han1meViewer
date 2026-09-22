@@ -14,6 +14,7 @@ import android.util.Log
 import android.view.Surface
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
@@ -167,7 +168,7 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                     .createMediaSource(MediaItem.fromUri(currUrl))
             }
 
-            Log.i(TAG, "URL Link = $currUrl")
+            EchTrace.event("播放(Exo) URL = $currUrl")
 
             exoPlayer.addListener(this)
 
@@ -710,7 +711,7 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
             return
         }
 
-        Log.e(TAG, "URL Link = $url")
+        EchTrace.event("播放(mpv) URL = $url")
         MPVLib.setOptionString("force-window", "yes")
 
         val uri = url.toUri()
