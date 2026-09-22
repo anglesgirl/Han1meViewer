@@ -288,10 +288,48 @@ object EchDoh {
     }
 
     /**
+    /** 域名 → 是否解析到 CF 边缘段。缓存判定结果，避免每次建连都重复解析。 */
+    private val cfHostCache = ConcurrentHashMap<String, Boolean>()
+
+    /**
+     * 该域名是否解析到 Cloudflare 边缘段 —— **决定要不要注入 ECH**。
+     *
+     * ⚠️ 解析失败时**返回 true（不拦）**：宁可白注入一次，也不能因为一次解析失败
+     * 就让本该受保护的域名退回明文 —— 核心域名是 fail-closed 的，误判等于断网。
+     */
+    private fun isCloudflareHost(host: String): Boolean {
+        cfHostCache[host]?.let { return it }
+        val addrs = try {
+            resolve(host)
+        } catch (t: Throwable) {
+            emptyList()
+        }
+        if (addrs.isEmpty()) return true
+        val cf = addrs.any { CloudflareEdge.contains(it) }
+        cfHostCache[host] = cf
+        if (cf) {
+            EchTrace.event("CF 域名，注入 ECH: $host")
+        } else {
+            EchTrace.event(
+                "非 CF 域名，跳过 ECH（提前判定）: $host -> " +
+                    addrs.joinToString(", ") { it.hostAddress ?: "?" }
+            )
+        }
+        return cf
+    }
+
+    /**
      * 取 ECHConfigList（RFC 9460 wire 格式，**已含 2 字节长度前缀**，可直接喂 Conscrypt）。
      * @return null 表示该域名没有 ECH 配置或 DoH 拿不到 —— 调用方据此 fail-closed
      */
     fun echConfigList(host: String): ByteArray? {
+        // ★ 提前判定：不在 Cloudflare 的域名**不可能**支持 ECH（ECH 就是 CF 的机制）。
+        //   注入 ECHConfigList 会被这类服务器**静默忽略** —— 不报错、不返回 retry_configs，
+        //   于是靠捕获 ECH_REJECTED 的降级逻辑永不触发，每个新连接都白注入一遍。
+        //   实测：播放页几十张新图，40 秒内刷了几十次 "ECH 已注入 … 核心=false"，
+        //   而 echDegraded(明文) 始终为空 —— 纯白费，还拖慢加载。
+        if (!isCloudflareHost(host)) return null
+
         val now = System.currentTimeMillis()
         echCache[host]?.let { if (it.expireAt > now) return it.wire }
         val failedAt = echFailed[host]
