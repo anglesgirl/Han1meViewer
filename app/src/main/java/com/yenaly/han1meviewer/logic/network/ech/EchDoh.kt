@@ -287,7 +287,6 @@ object EchDoh {
         return null
     }
 
-    /**
     /** 域名 → 是否解析到 CF 边缘段。缓存判定结果，避免每次建连都重复解析。 */
     private val cfHostCache = ConcurrentHashMap<String, Boolean>()
 
