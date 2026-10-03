@@ -846,7 +846,7 @@ private fun NetworkSettingsScreenPreview() {
             proxyIp = "",
             proxyPort = -1,
             dohEnabled = false,
-            dohPreset = "cloudflare",
+            dohPreset = "cf-gateway",
             dohCustomUrl = "",
             dohBootstrapIps = "1.1.1.1, 8.8.8.8",
             dohTimeoutSeconds = 10,
