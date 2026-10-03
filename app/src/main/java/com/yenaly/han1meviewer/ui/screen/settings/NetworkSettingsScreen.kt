@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.yenaly.han1meviewer.CDN_REGION_NODES
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HProxySelector
@@ -52,6 +53,7 @@ data class NetworkSettingsUiState(
     val useBackupMediaCdn: Boolean,
     val mediaCdnRegion: String,
     val mediaCdnRegionSummary: String,
+    val mediaCdnCustomIp: String,
     val useCustomMirrorSite: Boolean,
     val customMirrorSite: String,
     val appendCustomMirrorPath: Boolean,
@@ -106,6 +108,8 @@ fun NetworkSettingsScreen(
     onTestCustomMirrorSite: (String, Boolean) -> Unit,
     useBackupMediaCdn: Boolean,
     onUseBackupMediaCdnChange: (Boolean) -> Unit,
+    onMediaCdnRegionChange: (String) -> Unit,
+    onMediaCdnCustomIpSave: (String) -> Unit,
     onUseBuiltInHostsChange: (Boolean) -> Unit,
     onSaveCustomHosts: (String) -> Unit,
     onSaveDohSettings: (Boolean, String, String, String, Int) -> Unit,
@@ -121,6 +125,7 @@ fun NetworkSettingsScreen(
     var showDohDialog by rememberSaveable { mutableStateOf(false) }
     var showCustomHostsDialog by rememberSaveable { mutableStateOf(false) }
     var showCustomMirrorSiteDialog by rememberSaveable { mutableStateOf(false) }
+    var showMediaCdnRegionDialog by rememberSaveable { mutableStateOf(false) }
 
     if (showDomainDialog) {
         NetworkChoiceDialog(
@@ -190,6 +195,22 @@ fun NetworkSettingsScreen(
         )
     }
 
+    if (showMediaCdnRegionDialog) {
+        MediaCdnRegionDialog(
+            selectedRegion = state.mediaCdnRegion,
+            customIp = state.mediaCdnCustomIp,
+            onDismiss = { showMediaCdnRegionDialog = false },
+            onSelectRegion = { region ->
+                showMediaCdnRegionDialog = false
+                onMediaCdnRegionChange(region)
+            },
+            onSaveCustomIp = { ip ->
+                showMediaCdnRegionDialog = false
+                onMediaCdnCustomIpSave(ip)
+            },
+        )
+    }
+
     if (isDelayTesting) {
         DelayTestDialog(
             currentHost = currentHost,
@@ -245,6 +266,15 @@ fun NetworkSettingsScreen(
                 checked = useBackupMediaCdn,
                 iconRes = R.drawable.baseline_domain_24,
                 onCheckedChange = onUseBackupMediaCdnChange,
+            )
+        }
+
+        item {
+            SettingNavigationItem(
+                title = stringResource(R.string.media_cdn_region),
+                valueText = state.mediaCdnRegionSummary,
+                iconRes = R.drawable.baseline_domain_24,
+                onClick = { showMediaCdnRegionDialog = true },
             )
         }
 
@@ -326,6 +356,86 @@ private fun NetworkChoiceDialog(
         selectedValue = selectedValue,
         onDismiss = onDismiss,
         onSelect = onSelect,
+    )
+}
+
+@Composable
+private fun MediaCdnRegionDialog(
+    selectedRegion: String,
+    customIp: String,
+    onDismiss: () -> Unit,
+    onSelectRegion: (String) -> Unit,
+    onSaveCustomIp: (String) -> Unit,
+) {
+    var ip by rememberSaveable(customIp) { mutableStateOf(customIp) }
+    var tab by rememberSaveable { mutableStateOf(if (customIp.isNotBlank()) 1 else 0) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.media_cdn_region)) },
+        text = {
+            Column {
+                Row {
+                    TextButton(onClick = { tab = 0 }) {
+                        Text(
+                            stringResource(R.string.media_cdn_region_preset),
+                            color = if (tab == 0) MaterialTheme.colorScheme.primary else Color.Gray,
+                        )
+                    }
+                    TextButton(onClick = { tab = 1 }) {
+                        Text(
+                            stringResource(R.string.media_cdn_region_custom),
+                            color = if (tab == 1) MaterialTheme.colorScheme.primary else Color.Gray,
+                        )
+                    }
+                }
+                if (tab == 0) {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        Row(
+                            Modifier.fillMaxWidth().selectable(
+                                selected = selectedRegion.isBlank(),
+                                onClick = { onSelectRegion("") },
+                            ).padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = selectedRegion.isBlank(), onClick = { onSelectRegion("") })
+                            Text(stringResource(R.string.media_cdn_region_auto), Modifier.padding(start = 8.dp))
+                        }
+                        CDN_REGION_NODES.forEach { node ->
+                            Row(
+                                Modifier.fillMaxWidth().selectable(
+                                    selected = selectedRegion == node.region,
+                                    onClick = { onSelectRegion(node.region) },
+                                ).padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(selected = selectedRegion == node.region, onClick = { onSelectRegion(node.region) })
+                                Text(node.region, Modifier.padding(start = 8.dp))
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = ip,
+                        onValueChange = { ip = it },
+                        label = { Text(stringResource(R.string.media_cdn_custom_ip_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (tab == 1) {
+                TextButton(onClick = { onSaveCustomIp(ip.trim()) }) {
+                    Text(stringResource(R.string.confirm))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
     )
 }
 
@@ -815,6 +925,7 @@ private fun NetworkSettingsScreenPreview() {
                 useBackupMediaCdn = false,
                 mediaCdnRegion = "香港",
                 mediaCdnRegionSummary = "香港 (2 个 IP)",
+                mediaCdnCustomIp = "",
                 useCustomMirrorSite = false,
                 customMirrorSite = "",
                 appendCustomMirrorPath = true,
@@ -855,6 +966,8 @@ private fun NetworkSettingsScreenPreview() {
             onTestCustomMirrorSite = { _, _ -> },
             useBackupMediaCdn = false,
             onUseBackupMediaCdnChange = {},
+            onMediaCdnRegionChange = {},
+            onMediaCdnCustomIpSave = {},
             onUseBuiltInHostsChange = {},
             onSaveCustomHosts = {},
             customHostsData = "",

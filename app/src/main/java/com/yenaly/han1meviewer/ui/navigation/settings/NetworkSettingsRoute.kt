@@ -260,6 +260,16 @@ fun NetworkSettingsRouteScreen() {
             refreshKey++
             showHostsRestartConfirm = true
         },
+        onMediaCdnRegionChange = { region ->
+            Preferences.mediaCdnRegion = region
+            Preferences.mediaCdnCustomIp = ""
+            refreshKey++
+        },
+        onMediaCdnCustomIpSave = { ip ->
+            Preferences.mediaCdnCustomIp = ip
+            Preferences.mediaCdnRegion = ""
+            refreshKey++
+        },
         onUseBuiltInHostsChange = { value ->
             if (value && Preferences.useDoH) {
                 showDohConflictConfirm = true
@@ -511,6 +521,7 @@ private fun buildNetworkSettingsUiState(context: Context): NetworkSettingsUiStat
         useBackupMediaCdn = Preferences.useBackupMediaCdn,
         mediaCdnRegion = Preferences.mediaCdnRegion,
         mediaCdnRegionSummary = buildMediaCdnSummary(),
+        mediaCdnCustomIp = Preferences.mediaCdnCustomIp,
         useCustomMirrorSite = Preferences.useCustomMirrorSite,
         customMirrorSite = Preferences.customMirrorSite,
         appendCustomMirrorPath = Preferences.appendCustomMirrorPath,
