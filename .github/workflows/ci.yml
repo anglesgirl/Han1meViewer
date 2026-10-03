@@ -41,9 +41,14 @@ jobs:
             echo "Keystore invalid, generating a fresh one for CI"
             rm -f keystore.jks
             keytool -genkeypair -v -keystore keystore.jks -alias "${{ secrets.KEY_ALIAS }}" -keyalg RSA -keysize 2048 \
-              -validity 10000 -storepass "${{ secrets.YOUR_KEYSTORE_PASSWORD }}" \
-              -keypass "${{ secrets.YOUR_KEYSTORE_PASSWORD }}" \
+              -validity 10000 -storepass "han1meviewer123" \
+              -keypass "han1meviewer123" \
               -dname "CN=Han1meViewer, OU=CI, O=CI, L=CI, ST=CI, C=CN"
+            echo "KEYSTORE_PASSWORD=han1meviewer123" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=han1meviewer123" >> $GITHUB_ENV
+          else
+            echo "KEYSTORE_PASSWORD=${{ secrets.YOUR_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.YOUR_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           fi
 
       - name: Set up keystore for signing
@@ -54,8 +59,6 @@ jobs:
       - name: Build and sign APK with Gradle
         run: ./gradlew assembleRelease
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN }}
           HA1_VERSION_SOURCE: 'ci'
