@@ -83,13 +83,41 @@ object MiniProxy {
         return "http://127.0.0.1:$port/"
     }
 
-    /** 目标 URL → 走代理的 URL */
-    fun proxyUrl(targetUrl: String): String = "${baseUrl()}$targetUrl"
+    /** 当前页面的目标站（如 https://hanime1.me）。相对路径资源（/css/x.css）靠它拼出完整 URL。 */
+    @Volatile
+    var currentTargetHost: String? = null
+        private set
+
+    /** 目标 URL → 走代理的 URL（同时记录目标站，供相对路径拼接用） */
+    fun proxyUrl(targetUrl: String): String {
+        updateTargetHost(targetUrl)
+        return "${baseUrl()}$targetUrl"
+    }
+
+    /** 从完整目标 URL 提取 scheme+host，如 https://hanime1.me/login → https://hanime1.me */
+    private fun updateTargetHost(targetUrl: String) {
+        val m = Regex("^(https?://[^/]+)").find(targetUrl)
+        if (m != null) currentTargetHost = m.groupValues[1]
+    }
 
     fun isProxyUrl(url: String): Boolean =
         port > 0 && url.startsWith("http://127.0.0.1:$port/")
 
-    /** 从代理 URL 还原目标 URL */
+    /**
+     * 从代理 URL 还原完整目标 URL。
+     * - 含嵌入目标：直接还原（如 .../https://hanime1.me/login）
+     * - 相对路径：用 [currentTargetHost] 拼接（如 .../css/style.css → https://hanime1.me/css/style.css）
+     * 解析不出返回 null。
+     */
+    fun resolveTarget(proxyUrl: String): String? {
+        if (!isProxyUrl(proxyUrl)) return null
+        val path = proxyUrl.removePrefix("http://127.0.0.1:$port/")
+        if (path.startsWith("https://") || path.startsWith("http://")) return path
+        val host = currentTargetHost ?: return null
+        return "$host/$path"
+    }
+
+    /** 从代理 URL 还原目标 URL（仅含嵌入目标的；相对路径用 [resolveTarget]） */
     fun extractTarget(proxyUrl: String): String? {
         if (!isProxyUrl(proxyUrl)) return null
         val target = proxyUrl.removePrefix("http://127.0.0.1:$port/")
@@ -196,9 +224,15 @@ object MiniProxy {
         if (parts.size < 2) return null
         val method = parts[0].uppercase()
         val rawPath = parts[1]
-        // path 形如 /https://hanime1.me/login
-        val targetUrl = rawPath.removePrefix("/")
-        if (!targetUrl.startsWith("https://") && !targetUrl.startsWith("http://")) return null
+        // path 形如 /https://hanime1.me/login；相对路径形如 /css/style.css（页面内 <link href="/css/..."> 解析而来）
+        val stripped = rawPath.removePrefix("/")
+        val targetUrl = if (stripped.startsWith("https://") || stripped.startsWith("http://")) {
+            stripped
+        } else {
+            // 相对路径：用当前目标站拼接
+            val host = currentTargetHost ?: return null
+            "$host/$stripped"
+        }
 
         val headers = LinkedHashMap<String, String>()
         while (true) {
@@ -350,11 +384,16 @@ object MiniProxy {
      */
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
         val url = request.url.toString()
-        if (isProxyUrl(url)) return null // 已经是代理 URL，主链路直接放行
-        if (!url.startsWith("https://") && !url.startsWith("http://")) return null
+        // 目标 URL：代理 URL 先解析（嵌入目标或相对路径如 /css/style.css 都用 currentTargetHost 还原），
+        // 普通 https URL 直接用；都不是则走系统默认
+        val target = when {
+            isProxyUrl(url) -> resolveTarget(url) ?: return null
+            url.startsWith("https://") || url.startsWith("http://") -> url
+            else -> return null
+        }
         return try {
-            val target = proxyUrl(url)
-            val builder = Request.Builder().url(target)
+            val proxied = proxyUrl(target)
+            val builder = Request.Builder().url(proxied)
             for ((k, v) in request.requestHeaders) {
                 if (!isHopHeader(k)) builder.addHeader(k, v)
             }
