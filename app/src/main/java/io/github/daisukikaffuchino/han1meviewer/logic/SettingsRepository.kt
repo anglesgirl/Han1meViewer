@@ -67,6 +67,23 @@ object SettingsRepository : SettingsStore {
     val selectedBaseUrl get() = current.selectedBaseUrl
     val useBuiltInHosts get() = current.useBuiltInHosts
     val customHostsData get() = current.customHostsData
+    val useBackupMediaCdn get() = current.useBackupMediaCdn
+    val mediaCdnRegion get() = current.mediaCdnRegion
+    val mediaCdnCustomIp get() = current.mediaCdnCustomIp
+    val mobileCdnHintShown get() = current.mobileCdnHintShown
+    /**
+     * 当前选中的 CDN 区域节点 IP（区域选择优先，手动填写次之）。
+     */
+    val mediaCdnNodeIp: String get() {
+        val region = current.mediaCdnRegion
+        if (region.isNotBlank()) {
+            io.github.daisukikaffuchino.han1meviewer.CDN_REGION_NODES
+                .find { it.region == region }?.ip
+                ?.takeIf { !it.startsWith("TODO_") }
+                ?.let { return it }
+        }
+        return current.mediaCdnCustomIp
+    }
     val useDoH get() = current.useDoH
     val useEch get() = current.useEch
     val dohPreset get() = current.dohPreset

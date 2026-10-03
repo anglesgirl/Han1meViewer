@@ -179,6 +179,17 @@ Some mirrors may not support login, may not share cookies, may fail verification
     <string name="custom_mirror_site_watch_test_failed_http">search test failed: HTTP %1$d\nURL: %2$s</string>
     <string name="use_built_in_hosts">Use Built-in Hosts</string>
     <string name="network_settings">Network Settings</string>
+    <string name="use_backup_media_cdn">Use backup media CDN</string>
+    <string name="use_backup_media_cdn_summary">Switch media (images/videos) CDN to backup host, for networks where the primary CDN is blocked (e.g. China Mobile).</string>
+    <string name="media_cdn_region">Media CDN node</string>
+    <string name="media_cdn_region_auto">Auto (system DNS)</string>
+    <string name="media_cdn_region_preset">Preset</string>
+    <string name="media_cdn_region_custom">Custom</string>
+    <string name="media_cdn_custom_ip_hint">Custom node IP, e.g. 1.2.3.4</string>
+    <string name="mobile_cdn_hint_title">Network tip</string>
+    <string name="mobile_cdn_hint_message">You may be on China Mobile, where vdownload.hembed.com is blocked. Switch the media CDN to 1497203185.rsc.cdn77.org in Settings → Network?</string>
+    <string name="mobile_cdn_hint_go">Go to settings</string>
+    <string name="mobile_cdn_hint_later">Later</string>
     <string name="use_built_in_hosts_summary">Mapping of hosts to IP provided by the app\nCustom hosts take priority if configured\nVPN? What\'s that?</string>
     <string name="custom_hosts">Custom Hosts</string>
     <string name="custom_hosts_format">Multiple IPs separated by commas, e.g. 1.2.3.4,5.6.7.8</string>

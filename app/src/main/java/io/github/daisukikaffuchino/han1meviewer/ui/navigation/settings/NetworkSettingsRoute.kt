@@ -305,6 +305,24 @@ fun NetworkSettingsRouteScreen(embedded: Boolean = false) {
                 }
             }
         },
+        onUseBackupMediaCdnChange = { value ->
+            coroutineScope.launch {
+                SettingsRepository.update { it.copy(useBackupMediaCdn = value) }
+                refreshKey++
+            }
+        },
+        onMediaCdnRegionChange = { region ->
+            coroutineScope.launch {
+                SettingsRepository.update { it.copy(mediaCdnRegion = region, mediaCdnCustomIp = "") }
+                refreshKey++
+            }
+        },
+        onMediaCdnCustomIpSave = { ip ->
+            coroutineScope.launch {
+                SettingsRepository.update { it.copy(mediaCdnCustomIp = ip, mediaCdnRegion = "") }
+                refreshKey++
+            }
+        },
         onOpenDohTest = { runDohTest() },
         onDismissDelayTest = { stopDelayTest() },
         onDismissDohTest = { stopDohTest() },
@@ -477,6 +495,10 @@ private fun buildNetworkSettingsUiState(context: Context): NetworkSettingsUiStat
             else -> context.getString(R.string.direct)
         },
         useBuiltInHosts = SettingsRepository.useBuiltInHosts,
+        useBackupMediaCdn = SettingsRepository.useBackupMediaCdn,
+        mediaCdnSummary = buildMediaCdnSummary(context),
+        mediaCdnRegion = SettingsRepository.mediaCdnRegion,
+        mediaCdnCustomIp = SettingsRepository.mediaCdnCustomIp,
         useCustomMirrorSite = SettingsRepository.useCustomMirrorSite,
         customMirrorSite = SettingsRepository.customMirrorSite,
         appendCustomMirrorPath = SettingsRepository.appendCustomMirrorPath,
@@ -590,6 +612,15 @@ private fun buildDohSummary(context: Context): String {
     }
     val bootstrap = DohConfig.bootstrapIps().takeIf { it.isNotEmpty() }?.joinToString()
     return if (bootstrap != null) "$core\nBootstrap: $bootstrap" else core
+}
+
+private fun buildMediaCdnSummary(context: Context): String {
+    val host = if (SettingsRepository.useBackupMediaCdn)
+        io.github.daisukikaffuchino.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
+    else
+        io.github.daisukikaffuchino.han1meviewer.HANIME_MEDIA_CDN_HOST
+    val nodeIp = SettingsRepository.mediaCdnNodeIp
+    return if (nodeIp.isNotBlank()) "$host\n节点 IP: $nodeIp" else host
 }
 
 /** ECH 代理实际使用的 DoH(远程配置优先,否则当前预设,不依赖 useDoH 开关)。 */

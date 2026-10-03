@@ -12,6 +12,53 @@ const val EMPTY_STRING = ""
 
 const val APP_NAME = "Han1meViewer"
 
+// ===== 媒体 CDN =====
+
+/**
+ * 主站影片与图片使用的 CDN 主机，部分地区（如移动网络）可能无法访问。
+ */
+const val HANIME_MEDIA_CDN_HOST = "vdownload.hembed.com"
+
+/**
+ * 备用媒体 CDN 主机，与 [HANIME_MEDIA_CDN_HOST] 内容完全等价，
+ * 仅域名不同，用于替换主 CDN 以解决部分地区无法访问的问题。
+ */
+const val HANIME_BACKUP_MEDIA_CDN_HOST = "1497203185.rsc.cdn77.org"
+
+/**
+ * CDN77 边缘节点区域 IP（占位符，待填入真实 IP）。
+ * 两个 CDN 域名共用同一套边缘节点。
+ */
+data class CdnRegionNode(
+    val region: String,
+    val ip: String, // TODO: 填入真实 IP
+)
+
+val CDN_REGION_NODES = listOf(
+    CdnRegionNode("日本", "TODO_JP_IP"),
+    CdnRegionNode("香港", "TODO_HK_IP"),
+    CdnRegionNode("俄罗斯", "TODO_RU_IP"),
+    CdnRegionNode("台湾", "TODO_TW_IP"),
+    CdnRegionNode("美国", "TODO_US_IP"),
+    CdnRegionNode("欧洲", "TODO_EU_IP"),
+)
+
+/**
+ * 启用备用媒体 CDN 后，将回應内容中的媒体（图片 / 影片）CDN 主机替换为备用主机。
+ * 如选择了区域节点 IP，则同时将域名解析到指定 IP（通过 Host 映射实现）。
+ */
+fun String.replaceBackupMediaCdnHost(): String {
+    if (!SettingsRepository.useBackupMediaCdn) return this
+    return replace(HANIME_MEDIA_CDN_HOST, HANIME_BACKUP_MEDIA_CDN_HOST, ignoreCase = true)
+}
+
+/**
+ * 获取当前生效的媒体 CDN 主机。
+ */
+fun currentMediaCdnHost(): String =
+    if (SettingsRepository.useBackupMediaCdn) HANIME_BACKUP_MEDIA_CDN_HOST
+    else HANIME_MEDIA_CDN_HOST
+
 // 标准时间格式
 
 /* yyyy-MM-dd */

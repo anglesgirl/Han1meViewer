@@ -177,6 +177,17 @@
     <string name="custom_mirror_site_watch_test_failed_http">search 測試失敗：HTTP %1$d\nURL：%2$s</string>
     <string name="use_built_in_hosts">使用應用內建 Hosts</string>
     <string name="network_settings">網路設定</string>
+    <string name="use_backup_media_cdn">使用備用媒體 CDN</string>
+    <string name="use_backup_media_cdn_summary">將媒體（圖片/影片）CDN 切換到備用域名，解決部分網路（如移動）無法訪問主 CDN 的問題。</string>
+    <string name="media_cdn_region">媒體 CDN 節點</string>
+    <string name="media_cdn_region_auto">自動（系統 DNS 解析）</string>
+    <string name="media_cdn_region_preset">預設節點</string>
+    <string name="media_cdn_region_custom">手動填寫</string>
+    <string name="media_cdn_custom_ip_hint">手動填寫節點 IP，如 1.2.3.4</string>
+    <string name="mobile_cdn_hint_title">網路提示</string>
+    <string name="mobile_cdn_hint_message">檢測到您可能使用移動網路，vdownload.hembed.com 在移動網路下被屏蔽，建議前往「設定 → 網路」將媒體 CDN 切換到 1497203185.rsc.cdn77.org。</string>
+    <string name="mobile_cdn_hint_go">去切換</string>
+    <string name="mobile_cdn_hint_later">稍後</string>
     <string name="use_built_in_hosts_summary">應用提供的主機到 IP 位址的對應\n若已設定自訂 Hosts，則優先使用\nVPN？那是什麼？</string>
     <string name="custom_hosts">自訂 Hosts</string>
     <string name="custom_hosts_format">多個 IP 位址以逗號分隔，例如 1.2.3.4,5.6.7.8</string>

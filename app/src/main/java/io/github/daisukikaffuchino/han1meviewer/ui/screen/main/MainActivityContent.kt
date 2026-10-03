@@ -45,6 +45,7 @@ import io.github.daisukikaffuchino.han1meviewer.ui.activity.MainActivity
 import io.github.daisukikaffuchino.han1meviewer.ui.component.UsageNoticeDialog
 import io.github.daisukikaffuchino.han1meviewer.ui.component.HapticTextButton as TextButton
 import io.github.daisukikaffuchino.han1meviewer.ui.component.ConfirmDialog
+import io.github.daisukikaffuchino.han1meviewer.ui.navigation.settings.NetworkSettingsRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.HomeRoute
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.MainDrawerDestination
 import io.github.daisukikaffuchino.han1meviewer.ui.navigation.main.TopNavigation
@@ -81,6 +82,7 @@ fun MainActivityContent(
     val clipboard = LocalClipboard.current
     val snackbarHostState = remember { SnackbarHostState() }
     var showUsageNotice by remember { mutableStateOf(false) }
+    var showMobileCdnHint by remember { mutableStateOf(false) }
     var showSourceDialog by remember {
         mutableStateOf(false)
     }
@@ -238,6 +240,10 @@ fun MainActivityContent(
                     scope.launch {
                         SettingsRepository.setUsageNoticeAccepted(true)
                         showUsageNotice = false
+                        // 用户须知接受后，检查是否需要显示移动 CDN 提示
+                        if (!SettingsRepository.mobileCdnHintShown && !SettingsRepository.useBackupMediaCdn) {
+                            showMobileCdnHint = true
+                        }
                         if (SettingsRepository.usageSourceVerified) {
                             appAccessGranted = true
                             viewModel.initializeHomePage()
@@ -250,6 +256,23 @@ fun MainActivityContent(
                 },
                 onDeclined = { activity.finish() },
             )
+            if (showMobileCdnHint) {
+                MobileCdnHintDialog(
+                    onGoToSettings = {
+                        scope.launch {
+                            SettingsRepository.update { it.copy(mobileCdnHintShown = true) }
+                        }
+                        showMobileCdnHint = false
+                        backStack.add(NetworkSettingsRoute)
+                    },
+                    onDismiss = {
+                        scope.launch {
+                            SettingsRepository.update { it.copy(mobileCdnHintShown = true) }
+                        }
+                        showMobileCdnHint = false
+                    },
+                )
+            }
             AppSourceDialog(
                 visible = showSourceDialog,
                 onSelect = { source ->
@@ -392,6 +415,28 @@ private fun AppSourceDialog(
                 enabled = selectedSource != null,
                 onClick = { selectedSource?.let(onSelect) },
             ) { Text(stringResource(R.string.app_source_confirm)) }
+        },
+    )
+}
+
+@Composable
+private fun MobileCdnHintDialog(
+    onGoToSettings: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.mobile_cdn_hint_title)) },
+        text = { Text(stringResource(R.string.mobile_cdn_hint_message)) },
+        confirmButton = {
+            TextButton(onClick = onGoToSettings) {
+                Text(stringResource(R.string.mobile_cdn_hint_go))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.mobile_cdn_hint_later))
+            }
         },
     )
 }

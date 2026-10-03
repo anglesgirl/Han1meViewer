@@ -179,6 +179,17 @@
     <string name="custom_mirror_site_watch_test_failed_http">search 测试失败：HTTP %1$d\nURL：%2$s</string>
     <string name="use_built_in_hosts">应用内置 Hosts</string>
     <string name="network_settings">网络设置</string>
+    <string name="use_backup_media_cdn">使用备用媒体 CDN</string>
+    <string name="use_backup_media_cdn_summary">将媒体（图片/视频）CDN 切换到备用域名，解决部分网络（如移动）无法访问主 CDN 的问题。</string>
+    <string name="media_cdn_region">媒体 CDN 节点</string>
+    <string name="media_cdn_region_auto">自动（系统 DNS 解析）</string>
+    <string name="media_cdn_region_preset">预设节点</string>
+    <string name="media_cdn_region_custom">手动填写</string>
+    <string name="media_cdn_custom_ip_hint">手动填写节点 IP，如 1.2.3.4</string>
+    <string name="mobile_cdn_hint_title">网络提示</string>
+    <string name="mobile_cdn_hint_message">检测到您可能使用移动网络，vdownload.hembed.com 在移动网络下被屏蔽，建议前往「设置 → 网络」将媒体 CDN 切换到 1497203185.rsc.cdn77.org。</string>
+    <string name="mobile_cdn_hint_go">去切换</string>
+    <string name="mobile_cdn_hint_later">稍后</string>
     <string name="use_built_in_hosts_summary">应用提供的主机到 IP 的映射\n若已设定自定义 Hosts，则优先使用\nVPN？那是什么？</string>
     <string name="custom_hosts">自定义 Hosts</string>
     <string name="custom_hosts_format">多个 IP 以逗号分隔，如 1.2.3.4,5.6.7.8</string>

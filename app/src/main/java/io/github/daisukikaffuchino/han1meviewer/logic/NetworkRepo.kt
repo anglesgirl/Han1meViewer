@@ -2,6 +2,7 @@ package io.github.daisukikaffuchino.han1meviewer.logic
 
 import io.github.daisukikaffuchino.utils.LogUtil
 import io.github.daisukikaffuchino.han1meviewer.EMPTY_STRING
+import io.github.daisukikaffuchino.han1meviewer.replaceBackupMediaCdnHost
 import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository
 import io.github.daisukikaffuchino.han1meviewer.logic.SettingsRepository.isAlreadyLogin
 import io.github.daisukikaffuchino.han1meviewer.R
@@ -531,7 +532,7 @@ object NetworkRepo {
         action: (String) -> WebsiteState<T>,
     ) = flow {
         val requestResult = request.invoke()
-        val resultBody = requestResult.body()?.string()
+        val resultBody = requestResult.body()?.string()?.replaceBackupMediaCdnHost()
         val permitted = permittedSuccessCode?.contains(requestResult.code()) == true
         if ((permitted || requestResult.isSuccessful)) {
             emit(action.invoke(resultBody ?: EMPTY_STRING))
@@ -550,7 +551,7 @@ object NetworkRepo {
         action: (String) -> PageLoadingState<T>,
     ) = flow {
         val requestResult = request.invoke()
-        val resultBody = requestResult.body()?.string()
+        val resultBody = requestResult.body()?.string()?.replaceBackupMediaCdnHost()
         if (requestResult.isSuccessful && resultBody != null) {
             emit(action.invoke(resultBody))
         } else {
@@ -568,7 +569,7 @@ object NetworkRepo {
         action: (String) -> VideoLoadingState<T>,
     ) = flow {
         val requestResult = request.invoke()
-        val resultBody = requestResult.body()?.string()
+        val resultBody = requestResult.body()?.string()?.replaceBackupMediaCdnHost()
         if (requestResult.isSuccessful && resultBody != null) {
             emit(action.invoke(resultBody))
         } else {
