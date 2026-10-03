@@ -47,6 +47,8 @@ data class NetworkSettingsUiState(
     val proxySummary: String,
     val useBuiltInHosts: Boolean,
     val useBackupMediaCdn: Boolean,
+    val mediaCdnRegion: String,
+    val mediaCdnRegionSummary: String,
     val useCustomMirrorSite: Boolean,
     val customMirrorSite: String,
     val appendCustomMirrorPath: Boolean,
