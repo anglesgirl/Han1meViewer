@@ -324,7 +324,7 @@ object MiniProxy {
                     val cleanValue = value.replace("\r", "").replace("\n", "")
                     val ln = cleanName.lowercase()
                     if (ln == "transfer-encoding" || ln == "content-length" ||
-                        ln == "content-encoding" || ln == "connection"
+                        ln == "connection"
                     ) continue
                     if (ln == "set-cookie") {
                         sb.append("Set-Cookie: ").append(rewriteSetCookie(cleanValue)).append("\r\n")
@@ -332,7 +332,11 @@ object MiniProxy {
                         sb.append(cleanName).append(": ").append(cleanValue).append("\r\n")
                     }
                 }
-                // OkHttp 已解压（gzip/deflate），按原文回写
+                // content-encoding 原样透传：WebView 自己会发 Accept-Encoding，
+                // OkHttp 的 BridgeInterceptor 只在请求没带该头时才透明解压；
+                // WebView 带了该头时 body 是原始压缩字节，必须把 content-encoding
+                // 透传回去让 WebView 自己解，否则直接显示压缩字节就是乱码。
+                // Content-Length 按实际回写的字节数重算。
                 sb.append("Content-Length: ").append(respBody.size).append("\r\n")
                 sb.append("Connection: close\r\n")
                 sb.append("\r\n")
