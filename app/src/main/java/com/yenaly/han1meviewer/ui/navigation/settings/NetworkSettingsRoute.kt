@@ -509,6 +509,8 @@ private fun buildNetworkSettingsUiState(context: Context): NetworkSettingsUiStat
         },
         useBuiltInHosts = Preferences.useBuiltInHosts,
         useBackupMediaCdn = Preferences.useBackupMediaCdn,
+        mediaCdnRegion = Preferences.mediaCdnRegion,
+        mediaCdnRegionSummary = buildMediaCdnSummary(),
         useCustomMirrorSite = Preferences.useCustomMirrorSite,
         customMirrorSite = Preferences.customMirrorSite,
         appendCustomMirrorPath = Preferences.appendCustomMirrorPath,
@@ -620,4 +622,11 @@ private fun buildDohSummary(context: Context): String {
     }
     val bootstrap = DohConfig.bootstrapIps().takeIf { it.isNotEmpty() }?.joinToString()
     return if (bootstrap != null) "$core\nBootstrap: $bootstrap" else core
+}
+
+private fun buildMediaCdnSummary(): String {
+    val ips = Preferences.mediaCdnNodeIps
+    if (ips.isEmpty()) return "未指定（走正常 DNS 解析）"
+    val region = Preferences.mediaCdnRegion
+    return if (region.isNotEmpty()) "$region (${ips.size} 个 IP)" else "${ips.size} 个 IP"
 }

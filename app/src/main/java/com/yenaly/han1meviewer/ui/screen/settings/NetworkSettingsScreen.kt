@@ -798,6 +798,8 @@ private fun NetworkSettingsScreenPreview() {
                 proxySummary = "系统代理",
                 useBuiltInHosts = false,
                 useBackupMediaCdn = false,
+                mediaCdnRegion = "香港",
+                mediaCdnRegionSummary = "香港 (2 个 IP)",
                 useCustomMirrorSite = false,
                 customMirrorSite = "",
                 appendCustomMirrorPath = true,
