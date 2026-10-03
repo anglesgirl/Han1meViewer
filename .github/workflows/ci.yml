@@ -35,7 +35,16 @@ jobs:
 
       - name: Decode keystore
         run: |
-          echo "${{ secrets.YOUR_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          echo "${{ secrets.YOUR_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks || true
+          # 如果 secret 损坏则现场生成一个（clean-ech 测试分支用）
+          if ! keytool -list -keystore keystore.jks -storepass "${{ secrets.YOUR_KEYSTORE_PASSWORD }}" >/dev/null 2>&1; then
+            echo "Keystore invalid, generating a fresh one for CI"
+            rm -f keystore.jks
+            keytool -genkeypair -v -keystore keystore.jks -alias "${{ secrets.KEY_ALIAS }}" -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass "${{ secrets.YOUR_KEYSTORE_PASSWORD }}" \
+              -keypass "${{ secrets.YOUR_KEYSTORE_PASSWORD }}" \
+              -dname "CN=Han1meViewer, OU=CI, O=CI, L=CI, ST=CI, C=CN"
+          fi
 
       - name: Set up keystore for signing
         run: |
