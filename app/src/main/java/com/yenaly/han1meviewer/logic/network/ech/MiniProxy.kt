@@ -181,12 +181,14 @@ object MiniProxy {
 
     private fun handle(socket: Socket) {
         try {
+            Log.i(TAG, "handle: ${socket.remoteSocketAddress}")
             socket.soTimeout = 30_000
             val input = socket.getInputStream()
             val req = readRequest(input) ?: run {
                 writeSimple(socket, 400, "bad request")
                 return
             }
+            Log.i(TAG, "request: ${req.method} ${req.targetUrl}")
             forward(socket, req)
         } catch (e: Exception) {
             Log.w(TAG, "handle failed: ${e.message}")
@@ -295,6 +297,7 @@ object MiniProxy {
     }
 
     private fun forward(socket: Socket, req: ProxyRequest) {
+        Log.i(TAG, "forward -> ${req.targetUrl}")
         val builder = Request.Builder().url(req.targetUrl)
         for ((k, v) in req.headers) {
             if (!isHopHeader(k)) builder.addHeader(k, v)
@@ -308,10 +311,12 @@ object MiniProxy {
         } else null
         builder.method(req.method, body)
 
-        val resp = proxyClient.newCall(builder.build()).execute()
-        resp.use {
-            val respBody = it.body?.bytes() ?: ByteArray(0)
-            try {
+        try {
+            val resp = proxyClient.newCall(builder.build()).execute()
+            resp.use {
+                Log.i(TAG, "forward <- ${it.code} ${req.targetUrl}")
+                val respBody = it.body?.bytes() ?: ByteArray(0)
+                try {
                 // 先在内存里拼好整个响应头：任何一步出错都不写 socket，避免半截响应；
                 // 状态行/头字段做 CRLF 消毒（上游脏数据会导致 WebView 报 net::ERR_INVALID_RESPONSE）
                 val sb = StringBuilder()
@@ -350,12 +355,15 @@ object MiniProxy {
             } catch (e: Exception) {
                 // 写响应失败：直接关 socket，不写半截响应；不 rethrow，
                 // 避免 handle() 再追加 502 造成双状态行
-                Log.w(TAG, "forward write failed: ${e.message}")
+                Log.e(TAG, "write response failed", e)
                 try {
                     socket.close()
                 } catch (_: Exception) {
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "forward failed for ${req.targetUrl}", e)
+            throw e
         }
     }
 
