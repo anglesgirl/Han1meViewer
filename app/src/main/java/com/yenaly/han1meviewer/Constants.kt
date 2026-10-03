@@ -84,6 +84,23 @@ fun String.replaceBackupMediaCdnHost(): String {
     return replace(HANIME_MEDIA_CDN_HOST, HANIME_BACKUP_MEDIA_CDN_HOST, ignoreCase = true)
 }
 
+/**
+ * CDN 区域节点：预设的 CDN77 边缘节点 IP。
+ * 两个媒体 CDN 域名（[HANIME_MEDIA_CDN_HOST] / [HANIME_BACKUP_MEDIA_CDN_HOST]）
+ * 内容完全等价，共用同一套节点。
+ */
+data class CdnRegionNode(val region: String, val ips: List<String>)
+
+val CDN_REGION_NODES = listOf(
+    CdnRegionNode("日本", listOf("178.249.213.26")),
+    CdnRegionNode("香港", listOf("156.146.44.89", "156.146.44.90")),
+    CdnRegionNode("台湾", listOf("203.211.9.12")),
+    CdnRegionNode("俄罗斯", listOf("37.19.202.45")),
+    CdnRegionNode("美国", listOf("156.146.43.178", "156.146.53.36", "143.244.51.58", "89.187.187.19", "89.187.187.18", "84.17.63.146")),
+    CdnRegionNode("欧洲", listOf("95.173.197.105", "95.173.197.104", "79.127.138.30", "79.112.216.203", "79.127.211.90", "212.102.56.179", "195.181.175.40", "195.181.172.3", "89.222.120.8", "84.17.50.8", "84.17.50.9", "109.61.92.54", "212.102.44.18")),
+    CdnRegionNode("新加坡", listOf("79.127.235.6", "79.127.235.2")),
+)
+
 // github url
 
 const val HA1_GITHUB_URL = "https://github.com/misaka10032w/Han1meViewer"

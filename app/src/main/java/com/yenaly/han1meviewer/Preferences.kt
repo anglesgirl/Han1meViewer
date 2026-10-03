@@ -237,6 +237,35 @@ object Preferences {
     val useBackupMediaCdn: Boolean
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_BACKUP_MEDIA_CDN, false)
 
+    var mediaCdnRegion: String
+        get() = preferenceSp.getString(SettingsPreferenceKeys.MEDIA_CDN_REGION, "").orEmpty()
+        set(value) = preferenceSp.edit { putString(SettingsPreferenceKeys.MEDIA_CDN_REGION, value) }
+
+    var mediaCdnCustomIp: String
+        get() = preferenceSp.getString(SettingsPreferenceKeys.MEDIA_CDN_CUSTOM_IP, "").orEmpty()
+        set(value) = preferenceSp.edit { putString(SettingsPreferenceKeys.MEDIA_CDN_CUSTOM_IP, value) }
+
+    var mobileCdnHintShown: Boolean
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.MOBILE_CDN_HINT_SHOWN, false)
+        set(value) = preferenceSp.edit { putBoolean(SettingsPreferenceKeys.MOBILE_CDN_HINT_SHOWN, value) }
+
+    /**
+     * 当前生效的媒体 CDN 节点 IP 列表：手动填写优先，否则用所选区域的预设 IP。
+     * 返回空列表表示不指定，走正常 DoH 解析。
+     */
+    val mediaCdnNodeIps: List<String>
+        get() {
+            val custom = mediaCdnCustomIp.trim()
+            if (custom.isNotEmpty()) {
+                return custom.split(',', ' ', '\n').map { it.trim() }.filter { it.isNotEmpty() }
+            }
+            val region = mediaCdnRegion
+            if (region.isNotEmpty()) {
+                return CDN_REGION_NODES.find { it.region == region }?.ips.orEmpty()
+            }
+            return emptyList()
+        }
+
     val customHostsData: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.CUSTOM_HOSTS_DATA, EMPTY_STRING).orEmpty()
 
@@ -304,9 +333,7 @@ object Preferences {
     // 隐私 相關
 
     val isAnalyticsEnabled: Boolean
-        // clean-ech: 第三方行为统计默认关闭。如需启用，在设置中手动打开。
-        // 自有统计接入点见 util/AppAnalytics.kt（当前为空实现）。
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_ANALYTICS, false)
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_ANALYTICS, true)
 
     // 下载 相關
 

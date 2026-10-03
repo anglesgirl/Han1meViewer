@@ -11,6 +11,7 @@ import com.yenaly.han1meviewer.logic.network.interceptor.GetchuInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.UrlLoggingInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.UserAgentInterceptor
+import com.yenaly.han1meviewer.logic.network.ech.echTransport
 import com.yenaly.yenaly_libs.utils.applicationContext
 import com.yenaly.yenaly_libs.utils.unsafeLazy
 import okhttp3.Cache
@@ -89,7 +90,7 @@ object ServiceCreator {
             .addInterceptor(GetchuInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
             .proxySelector(HProxySelector())
-            .dns(dns)
+            .echTransport(dns)
             .build()
     }
 
@@ -99,7 +100,7 @@ object ServiceCreator {
             .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
-            .dns(dns)
+            .echTransport(dns)
             .build()
     }
 
@@ -115,7 +116,7 @@ object ServiceCreator {
             .cache(cache)
             .cookieJar(HCookieJar())
             .proxySelector(HProxySelector())
-            .dns(dns)
+            .echTransport(dns)
             .build()
     }
 
