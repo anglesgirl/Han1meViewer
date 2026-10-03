@@ -15,7 +15,7 @@ object DohConfig {
             key = "cf-gateway",
             title = "Cloudflare Gateway",
             url = "https://82sew1c85i.cloudflare-gateway.com/dns-query",
-            bootstrapIps = listOf("1.1.1.1", "1.0.0.1"),
+            bootstrapIps = listOf("223.5.5.5", "223.6.6.6"),
         ),
     )
 
