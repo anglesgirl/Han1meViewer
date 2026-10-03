@@ -619,8 +619,8 @@ private fun buildMediaCdnSummary(context: Context): String {
         io.github.daisukikaffuchino.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
     else
         io.github.daisukikaffuchino.han1meviewer.HANIME_MEDIA_CDN_HOST
-    val nodeIp = SettingsRepository.mediaCdnNodeIp
-    return if (nodeIp.isNotBlank()) "$host\n节点 IP: $nodeIp" else host
+    val nodeIps = SettingsRepository.mediaCdnNodeIps
+    return if (nodeIps.isNotEmpty()) "$host\n节点 IP x${nodeIps.size}: ${nodeIps.take(2).joinToString()}${if (nodeIps.size > 2) "…" else ""}" else host
 }
 
 /** ECH 代理实际使用的 DoH(远程配置优先,否则当前预设,不依赖 useDoH 开关)。 */

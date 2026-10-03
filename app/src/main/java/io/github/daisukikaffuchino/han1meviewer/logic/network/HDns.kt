@@ -96,14 +96,16 @@ class HDns : Dns {
             }
         }
 
-        // 媒体 CDN 区域节点 IP：用户在设置中选择后，直接解析到指定 IP
+        // 媒体 CDN 区域节点 IP：用户在设置中选择后，直接解析到指定 IP（多 IP 返回全部，OkHttp 会轮换）
         if (hostname == io.github.daisukikaffuchino.han1meviewer.HANIME_MEDIA_CDN_HOST ||
             hostname == io.github.daisukikaffuchino.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
         ) {
-            val nodeIp = SettingsRepository.mediaCdnNodeIp
-            if (nodeIp.isNotBlank()) {
+            val nodeIps = SettingsRepository.mediaCdnNodeIps
+            if (nodeIps.isNotEmpty()) {
                 return runCatching {
-                    listOf(InetAddress.getByAddress(hostname, InetAddress.getByName(nodeIp).address))
+                    nodeIps.map { ip ->
+                        InetAddress.getByAddress(hostname, InetAddress.getByName(ip).address)
+                    }
                 }.getOrElse { Dns.SYSTEM.lookup(hostname) }
             }
         }

@@ -72,18 +72,23 @@ object SettingsRepository : SettingsStore {
     val mediaCdnCustomIp get() = current.mediaCdnCustomIp
     val mobileCdnHintShown get() = current.mobileCdnHintShown
     /**
-     * 当前选中的 CDN 区域节点 IP（区域选择优先，手动填写次之）。
+     * 当前选中的 CDN 区域节点 IP 列表（区域选择优先，手动填写次之）。
      */
-    val mediaCdnNodeIp: String get() {
+    val mediaCdnNodeIps: List<String> get() {
         val region = current.mediaCdnRegion
         if (region.isNotBlank()) {
             io.github.daisukikaffuchino.han1meviewer.CDN_REGION_NODES
-                .find { it.region == region }?.ip
-                ?.takeIf { !it.startsWith("TODO_") }
+                .find { it.region == region }
+                ?.ips?.takeIf { it.isNotEmpty() }
                 ?.let { return it }
         }
         return current.mediaCdnCustomIp
+            .split(',', '，', ' ', '\n')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
     }
+    /** 兼容旧的单 IP 取法（取第一个） */
+    val mediaCdnNodeIp: String get() = mediaCdnNodeIps.firstOrNull().orEmpty()
     val useDoH get() = current.useDoH
     val useEch get() = current.useEch
     val dohPreset get() = current.dohPreset
