@@ -304,7 +304,9 @@ object Preferences {
     // 隐私 相關
 
     val isAnalyticsEnabled: Boolean
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_ANALYTICS, true)
+        // clean-ech: 第三方行为统计默认关闭。如需启用，在设置中手动打开。
+        // 自有统计接入点见 util/AppAnalytics.kt（当前为空实现）。
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_ANALYTICS, false)
 
     // 下载 相關
 
