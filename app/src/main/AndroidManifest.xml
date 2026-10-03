@@ -50,6 +50,12 @@
             android:exported="false"
             android:launchMode="singleTask"/>
 
+        <activity
+            android:name=".ui.activity.EchDiagActivity"
+            android:theme="@style/Theme.Hanime"
+            android:exported="false"
+            android:label="ECH 诊断"/>
+
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"

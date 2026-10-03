@@ -1,5 +1,6 @@
 package com.yenaly.han1meviewer.ui.screen.settings
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,12 +30,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.ui.activity.EchDiagActivity
 import com.yenaly.han1meviewer.ui.component.ChoiceDialog
 import com.yenaly.han1meviewer.ui.component.SettingNavigationItem
 import com.yenaly.han1meviewer.ui.component.SettingSwitchItem
@@ -292,6 +295,18 @@ fun NetworkSettingsScreen(
                 summary = stringResource(R.string.test_doh_summary),
                 iconRes = R.drawable.baseline_doh_24,
                 onClick = onOpenDohTest,
+            )
+        }
+
+        item {
+            val context = LocalContext.current
+            SettingNavigationItem(
+                title = "ECH 诊断",
+                summary = "排查无网络：Conscrypt / DoH / MiniProxy 状态",
+                iconRes = R.drawable.baseline_doh_24,
+                onClick = {
+                    context.startActivity(Intent(context, EchDiagActivity::class.java))
+                },
             )
         }
     }
