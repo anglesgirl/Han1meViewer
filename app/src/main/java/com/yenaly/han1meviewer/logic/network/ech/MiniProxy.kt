@@ -311,29 +311,47 @@ object MiniProxy {
         val resp = proxyClient.newCall(builder.build()).execute()
         resp.use {
             val respBody = it.body?.bytes() ?: ByteArray(0)
-            val out = socket.getOutputStream()
-            val writer = out.bufferedWriter(Charsets.ISO_8859_1)
-            val code = it.code
-            val msg = it.message.ifBlank { "OK" }
-            writer.write("HTTP/1.1 $code $msg\r\n")
-            for ((name, value) in it.headers) {
-                val ln = name.lowercase()
-                if (ln == "transfer-encoding" || ln == "content-length" ||
-                    ln == "content-encoding" || ln == "connection"
-                ) continue
-                if (ln == "set-cookie") {
-                    writer.write("Set-Cookie: ${rewriteSetCookie(value)}\r\n")
-                } else {
-                    writer.write("$name: $value\r\n")
+            try {
+                // 先在内存里拼好整个响应头：任何一步出错都不写 socket，避免半截响应；
+                // 状态行/头字段做 CRLF 消毒（上游脏数据会导致 WebView 报 net::ERR_INVALID_RESPONSE）
+                val sb = StringBuilder()
+                val code = it.code
+                val msg = it.message.replace("\r", "").replace("\n", "").ifBlank { "OK" }
+                sb.append("HTTP/1.1 ").append(code).append(' ').append(msg).append("\r\n")
+                for ((name, value) in it.headers) {
+                    val cleanName = name.replace("\r", "").replace("\n", "").trim()
+                    if (cleanName.isEmpty()) continue
+                    val cleanValue = value.replace("\r", "").replace("\n", "")
+                    val ln = cleanName.lowercase()
+                    if (ln == "transfer-encoding" || ln == "content-length" ||
+                        ln == "content-encoding" || ln == "connection"
+                    ) continue
+                    if (ln == "set-cookie") {
+                        sb.append("Set-Cookie: ").append(rewriteSetCookie(cleanValue)).append("\r\n")
+                    } else {
+                        sb.append(cleanName).append(": ").append(cleanValue).append("\r\n")
+                    }
+                }
+                // OkHttp 已解压（gzip/deflate），按原文回写
+                sb.append("Content-Length: ").append(respBody.size).append("\r\n")
+                sb.append("Connection: close\r\n")
+                sb.append("\r\n")
+
+                val out = socket.getOutputStream()
+                val writer = out.bufferedWriter(Charsets.ISO_8859_1)
+                writer.write(sb.toString())
+                writer.flush()
+                out.write(respBody)
+                out.flush()
+            } catch (e: Exception) {
+                // 写响应失败：直接关 socket，不写半截响应；不 rethrow，
+                // 避免 handle() 再追加 502 造成双状态行
+                Log.w(TAG, "forward write failed: ${e.message}")
+                try {
+                    socket.close()
+                } catch (_: Exception) {
                 }
             }
-            // OkHttp 已解压（gzip/deflate），按原文回写
-            writer.write("Content-Length: ${respBody.size}\r\n")
-            writer.write("Connection: close\r\n")
-            writer.write("\r\n")
-            writer.flush()
-            out.write(respBody)
-            out.flush()
         }
     }
 
