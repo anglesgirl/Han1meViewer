@@ -316,7 +316,6 @@ object MiniProxy {
             resp.use {
                 Log.i(TAG, "forward <- ${it.code} ${req.targetUrl}")
                 val respBody = it.body?.bytes() ?: ByteArray(0)
-                try {
                 // 先在内存里拼好整个响应头：任何一步出错都不写 socket，避免半截响应；
                 // 状态行/头字段做 CRLF 消毒（上游脏数据会导致 WebView 报 net::ERR_INVALID_RESPONSE）
                 val sb = StringBuilder()
@@ -346,19 +345,21 @@ object MiniProxy {
                 sb.append("Connection: close\r\n")
                 sb.append("\r\n")
 
-                val out = socket.getOutputStream()
-                val writer = out.bufferedWriter(Charsets.ISO_8859_1)
-                writer.write(sb.toString())
-                writer.flush()
-                out.write(respBody)
-                out.flush()
-            } catch (e: Exception) {
-                // 写响应失败：直接关 socket，不写半截响应；不 rethrow，
-                // 避免 handle() 再追加 502 造成双状态行
-                Log.e(TAG, "write response failed", e)
                 try {
-                    socket.close()
-                } catch (_: Exception) {
+                    val out = socket.getOutputStream()
+                    val writer = out.bufferedWriter(Charsets.ISO_8859_1)
+                    writer.write(sb.toString())
+                    writer.flush()
+                    out.write(respBody)
+                    out.flush()
+                } catch (e: Exception) {
+                    // 写响应失败：直接关 socket，不写半截响应；不 rethrow，
+                    // 避免 handle() 再追加 502 造成双状态行
+                    Log.e(TAG, "write response failed", e)
+                    try {
+                        socket.close()
+                    } catch (_: Exception) {
+                    }
                 }
             }
         } catch (e: Exception) {
