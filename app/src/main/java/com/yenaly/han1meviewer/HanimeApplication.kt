@@ -95,6 +95,11 @@ class HanimeApplication : YenalyApplication() {
         }
         val selected = Preferences.fakeLauncherIcon
         switchLauncher(selected)
+        // WebView 专用 mini 代理（127.0.0.1:8080）：登录/人机验证页走它经 ECH 出站。
+        // 后台起，不阻塞启动；真正用时 proxyUrl() 也会 ensureRunning() 兜底。
+        Thread({ runCatching { com.yenaly.han1meviewer.logic.network.ech.MiniProxy.ensureRunning() } }, "mini-proxy-starter")
+            .apply { isDaemon = true }
+            .start()
     }
 
     private fun initFirebase() {

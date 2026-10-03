@@ -21,6 +21,7 @@ import androidx.preference.PreferenceManager
 import com.yenaly.han1meviewer.Preferences.cloudFlareCookie
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
+import com.yenaly.han1meviewer.logic.network.ech.MiniProxy
 import com.yenaly.han1meviewer.ui.screen.web.CloudflareScreen
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
 import com.yenaly.han1meviewer.util.CookieString
@@ -79,30 +80,25 @@ class CloudflareActivity : AppCompatActivity() {
             }
 
             webViewClient = object : WebViewClient() {
-                // 同 LoginActivity：子请求走 OkHttp + ECH（CF 挑战页必须能连上才能过验证）
+                // 子资源经本地 mini 代理（Conscrypt ECH）取
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
-                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
-                        .intercept(request)?.let { return it }
+                    MiniProxy.intercept(request)?.let { return it }
                     return super.shouldInterceptRequest(view, request)
                 }
 
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,
-                ): Boolean = false
+                ): Boolean {
+                    val urlStr = request?.url?.toString() ?: return false
+                    return if (view != null) MiniProxy.overrideUrlLoading(view, urlStr) else false
+                }
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
-                    // 非 GET（挑战页里的 XHR/表单）走原生 ECH 通道，别让它们明文发出去
-                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.injectBridge(view, url)
-                }
-
-                override fun onPageCommitVisible(view: WebView, url: String?) {
-                    super.onPageCommitVisible(view, url)
-                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.injectBridge(view, url)
                 }
             }
 
@@ -143,7 +139,8 @@ class CloudflareActivity : AppCompatActivity() {
                                     !html.contains("#challenge-success-text") &&
                                     !html.contains("#challenge-error-text")
                                 ) {
-                                    val cookies = cookieMgr.getCookie(url) ?: ""
+                                    // Cookie 存在 127.0.0.1 名下（mini 代理改写了 Set-Cookie 的 Domain）
+                                    val cookies = cookieMgr.getCookie(MiniProxy.baseUrl()) ?: ""
                                     if (cookies.contains("cf_clearance")) {
                                         cloudFlareCookie = CookieString(cookies)
                                         cookieMgr.flush()
@@ -157,7 +154,7 @@ class CloudflareActivity : AppCompatActivity() {
                     }
                 }
             }
-            loadUrl(url)
+            loadUrl(MiniProxy.proxyUrl(url))
         }
     }
 

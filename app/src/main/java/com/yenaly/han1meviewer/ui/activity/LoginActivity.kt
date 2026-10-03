@@ -30,6 +30,7 @@ import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.NetworkRepo
 import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.login
+import com.yenaly.han1meviewer.logic.network.ech.MiniProxy
 import com.yenaly.han1meviewer.ui.screen.login.LoginDialog
 import com.yenaly.han1meviewer.ui.screen.login.LoginScreen
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
@@ -86,7 +87,7 @@ class LoginActivity : FrameActivity() {
                 LoginScreen(
                     isRefreshing = isRefreshing,
                     onBack = { onBackPressedDispatcher.onBackPressed() },
-                    onRefresh = { webView?.loadUrl(HANIME_LOGIN_URL) },
+                    onRefresh = { webView?.loadUrl(MiniProxy.proxyUrl(HANIME_LOGIN_URL)) },
                     onShowLoginDialog = { showLoginDialog = true },
                     onOpenQrScanner = { openQrScanner() },
                     webViewFactory = { createWebView() },
@@ -107,57 +108,43 @@ class LoginActivity : FrameActivity() {
             settings.domStorageEnabled = true
             settings.userAgentString = USER_AGENT
 
-            // 非 GET 传输桥：登录表单提交 / 页面里的 fetch、XHR 交给原生走 ECH。
-            // 必须在 loadUrl 之前挂载；只对受保护域名生效（原生侧与 JS 侧都判一次）
-            com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.installWebView(this)
-            // 表单被原生代发后 WebView 不会自己跳转，原 shouldOverrideUrlLoading(isRedirect)
-            // 那条判成功的路永远不触发 —— 这里接上同一套登录完成逻辑（两处调同一个 login()）
-            com.yenaly.han1meviewer.logic.network.ech.EchWebBridge.onFormLoginSuccess = { cookie ->
-                isLoggingIn = false
-                login(cookie)
-                setResult(RESULT_OK)
-                finish()
-            }
+            // WebView 只跟本地 mini 代理说话（明文 localhost，不会被墙），
+            // 代理经 Conscrypt ECH 转发到真实站点。POST body 由代理直接透传，
+            // 不存在 shouldInterceptRequest 拿不到 body 的问题。
+            // （旧 JS 桥方案 HyWebViewHelper/EchWebBridge 已废弃删除）
 
             webViewClient = object : WebViewClient() {
-                // WebView 的子请求在这里接管，交给 OkHttp（Conscrypt + ECH）去发。
-                // 这是"WebView 用上 ECH"的唯一入口 —— 换掉 Go 本地反代后不再需要任何转发层。
+                // 子资源（图片/CSS/JS/XHR）经本地代理取，返回给 WebView
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
-                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
-                        .intercept(request)?.let { return it }
+                    MiniProxy.intercept(request)?.let { return it }
                     return super.shouldInterceptRequest(view, request)
-                }
-
-                override fun onPageCommitVisible(view: WebView, url: String?) {
-                    super.onPageCommitVisible(view, url)
-                    // 尽早注入（页面还在渲染时），别等 onPageFinished —— 页面自己的 XHR 可能更早发出
-                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.injectBridge(view, url)
                 }
 
                 override fun onPageFinished(view: WebView, url: String) {
                     isRefreshing = false
-                    // 页面加载完注入非 GET 传输桥（登录表单提交/页面 fetch、XHR 走原生 ECH）
-                    com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper.injectBridge(view, url)
                 }
 
                 override fun shouldOverrideUrlLoading(
                     view: WebView,
                     request: WebResourceRequest,
                 ): Boolean {
-                    val isSameUrl = HANIME_URL.contains(request.url.toString())
-                    if (request.isRedirect && isSameUrl) {
-                        val url = request.url
-                        val cookieManager = CookieManager.getInstance().getCookie(url.host)
-                        Log.d("login_cookie", cookieManager.toString())
-                        login(cookieManager)
+                    val urlStr = request.url.toString()
+                    // 登录成功：服务端 302 回站点（Location 是真实 https URL，未进代理）。
+                    // Cookie 存在 127.0.0.1 名下（代理改写了 Set-Cookie 的 Domain）。
+                    if (request.isRedirect && HANIME_URL.any { urlStr.startsWith(it) }) {
+                        val cookie = CookieManager.getInstance()
+                            .getCookie(MiniProxy.baseUrl())
+                        Log.d("login_cookie", cookie.toString())
+                        login(cookie.toString())
                         setResult(RESULT_OK)
                         finish()
                         return true
                     }
-                    return super.shouldOverrideUrlLoading(view, request)
+                    // 其余 https 导航改写走代理
+                    return MiniProxy.overrideUrlLoading(view, urlStr)
                 }
 
                 override fun onReceivedError(
@@ -171,7 +158,7 @@ class LoginActivity : FrameActivity() {
                     }
                 }
             }
-            loadUrl(HANIME_LOGIN_URL)
+            loadUrl(MiniProxy.proxyUrl(HANIME_LOGIN_URL))
         }
     }
 
@@ -189,7 +176,6 @@ class LoginActivity : FrameActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        com.yenaly.han1meviewer.logic.network.ech.EchWebBridge.onFormLoginSuccess = null
         webView?.removeAllViews()
         webView?.destroy()
     }
