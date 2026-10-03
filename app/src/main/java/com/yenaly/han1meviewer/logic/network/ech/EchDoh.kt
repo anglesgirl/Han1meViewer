@@ -367,13 +367,6 @@ object EchDoh {
      * @return null 表示该域名没有 ECH 配置或 DoH 拿不到 —— 调用方据此 fail-closed
      */
     fun echConfigList(host: String): ByteArray? {
-        // ★ 提前判定：不在 Cloudflare 的域名**不可能**支持 ECH（ECH 就是 CF 的机制）。
-        //   注入 ECHConfigList 会被这类服务器**静默忽略** —— 不报错、不返回 retry_configs，
-        //   于是靠捕获 ECH_REJECTED 的降级逻辑永不触发，每个新连接都白注入一遍。
-        //   实测：播放页几十张新图，40 秒内刷了几十次 "ECH 已注入 … 核心=false"，
-        //   而 echDegraded(明文) 始终为空 —— 纯白费，还拖慢加载。
-        if (!isCloudflareHost(host)) return null
-
         val now = System.currentTimeMillis()
         echCache[host]?.let { if (it.expireAt > now) return it.wire }
         val failedAt = echFailed[host]
