@@ -273,7 +273,7 @@ object Preferences {
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_DOH, false)
 
     val dohPreset: String
-        get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_PRESET, "alidns") ?: "alidns"
+        get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_PRESET, "cf-gateway") ?: "cf-gateway"
 
     val dohCustomUrl: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_CUSTOM_URL, EMPTY_STRING).orEmpty()
