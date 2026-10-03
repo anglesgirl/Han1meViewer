@@ -4,9 +4,10 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "clean-ech" ]
     paths-ignore:
       - "**.md"
+  workflow_dispatch:
 
 jobs:
   build:
