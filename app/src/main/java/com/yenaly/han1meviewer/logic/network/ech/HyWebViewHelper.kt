@@ -1,10 +1,13 @@
 package com.yenaly.han1meviewer.logic.network.ech
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
+import com.yenaly.yenaly_libs.utils.applicationContext
 import okhttp3.CookieJar
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -23,12 +26,18 @@ import java.util.concurrent.TimeUnit
  * 3. POST 交给 JS 桥（EchWebBridge）：shouldInterceptRequest 拿不到 POST body
  * 4. Cookie 全部由 WebView 的 CookieManager 管理，域名是真实的，无需改写
  *
- * 失败语义：目标站域名一律 fail-closed（502），绝不放行明文 SNI；
- * 非目标域名如实交回 WebView（返回 null）。
+ * ECH 策略（2026-10-04）：所有域名都尝试 ECH，失败则回退到 WebView 直连。
+ * ECH 能力按域名缓存：成功的永久缓存，失败的缓存 24 小时（站点可能后续启用 ECH）。
  */
 object HyWebViewHelper {
 
     private const val TAG = "HyWebViewHelper"
+    private const val PREFS_NAME = "ech_capability_cache"
+    private const val NEGATIVE_CACHE_TTL_MS = 24 * 60 * 60 * 1000L // 24 小时
+
+    private val prefs: SharedPreferences by lazy {
+        applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     /** 经 Conscrypt ECH 的客户端：不跟随重定向（手动处理），不管 Cookie（CookieManager 管） */
     private val echClient: OkHttpClient by lazy {
@@ -45,7 +54,7 @@ object HyWebViewHelper {
             .build()
     }
 
-    /** 是否目标站域名 */
+    /** 是否目标站域名（主站，用于日志区分） */
     fun isTargetHost(host: String?): Boolean {
         if (host.isNullOrBlank()) return false
         val h = host.lowercase()
@@ -56,8 +65,43 @@ object HyWebViewHelper {
     }
 
     /**
+     * ECH 能力缓存查询。
+     * @return true=已知支持ECH，false=已知不支持（且在TTL内），null=未知（需要尝试）
+     */
+    private fun getEchCapability(host: String): Boolean? {
+        val key = "ech_${host.lowercase()}"
+        if (!prefs.contains(key)) return null
+        val value = prefs.getString(key, null) ?: return null
+        val parts = value.split("|")
+        if (parts.size != 2) return null
+        val supported = parts[0] == "1"
+        val timestamp = parts[1].toLongOrNull() ?: return null
+        if (!supported) {
+            // 负缓存：24 小时后过期，重新尝试
+            if (System.currentTimeMillis() - timestamp > NEGATIVE_CACHE_TTL_MS) {
+                prefs.edit().remove(key).apply()
+                return null
+            }
+        }
+        return supported
+    }
+
+    /** 记录 ECH 能力 */
+    private fun setEchCapability(host: String, supported: Boolean) {
+        val key = "ech_${host.lowercase()}"
+        val value = "${if (supported) "1" else "0"}|${System.currentTimeMillis()}"
+        prefs.edit().putString(key, value).apply()
+        Log.d(TAG, "ECH capability cached: $host -> $supported")
+    }
+
+    /** 公开：供 EchWebBridge 在 POST 回退时记录负缓存 */
+    fun markEchUnsupported(host: String) {
+        setEchCapability(host, false)
+    }
+
+    /**
      * shouldInterceptRequest 唯一入口。
-     * 只拦截 GET（POST 返回 null 交给 JS 桥）；只拦截目标站域名。
+     * 只拦截 GET（POST 返回 null 交给 JS 桥）；所有域名都尝试 ECH，失败则回退。
      */
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
         val url = request.url?.toString() ?: return null
@@ -70,8 +114,18 @@ object HyWebViewHelper {
             return null
         }
 
-        // 非目标站域名直接放行
-        if (!isTargetHost(host)) return null
+        // 只处理 HTTPS（HTTP 无需 ECH）
+        if (!url.startsWith("https://", ignoreCase = true)) return null
+
+        // 查 ECH 能力缓存：已知不支持的直接放行（WebView 直连）
+        when (getEchCapability(host)) {
+            false -> {
+                Log.d(TAG, "ECH not supported (cached), passthrough: $host")
+                return null
+            }
+            true -> Log.d(TAG, "ECH supported (cached): $host")
+            null -> Log.d(TAG, "ECH capability unknown, trying: $host")
+        }
 
         var lastError: Exception? = null
         repeat(2) { attempt ->
@@ -89,8 +143,12 @@ object HyWebViewHelper {
                         }
                         val next = resolveUrl(fetchUrl, loc)
                         val nextHost = runCatching { java.net.URI(next).host }.getOrNull()
-                        if (nextHost == null || !isTargetHost(nextHost)) {
-                            // 跨站重定向交回 WebView（非错误，不重试）
+                        if (nextHost == null) {
+                            Log.d(TAG, "bad redirect target, passthrough: $next")
+                            return null
+                        }
+                        // 跨站重定向：检查目标站点的 ECH 能力
+                        if (!isSameOrSubdomain(nextHost, host)) {
                             Log.d(TAG, "cross-site redirect, passthrough: $next")
                             return null
                         }
@@ -99,6 +157,8 @@ object HyWebViewHelper {
                         redirects++
                         continue
                     }
+                    // ECH 成功：缓存能力
+                    setEchCapability(host, true)
                     return toWebResourceResponse(fetchUrl, resp)
                 }
             } catch (e: Exception) {
@@ -114,16 +174,17 @@ object HyWebViewHelper {
             }
         }
 
-        // 两次都失败才 fail-closed
-        Log.w(TAG, "ECH GET failed after retry (fail-closed): $url: ${lastError?.message}")
+        // ECH 失败：缓存负结果，回退到 WebView 直连（返回 null）
+        Log.w(TAG, "ECH failed, fallback to direct: $url: ${lastError?.message}")
+        setEchCapability(host, false)
+        return null
+    }
 
-        // 目标站 fail-closed：宁可失败也不明文直连
-        val page = "<!DOCTYPE html><html><body><h3>ECH 连接失败</h3></body></html>"
-        return WebResourceResponse(
-            "text/html", "utf-8", 502, "Bad Gateway",
-            mapOf("Cache-Control" to "no-store"),
-            ByteArrayInputStream(page.toByteArray()),
-        )
+    /** 判断是否为相同域名或子域名 */
+    private fun isSameOrSubdomain(host: String, base: String): Boolean {
+        val h = host.lowercase()
+        val b = base.lowercase()
+        return h == b || h.endsWith(".$b")
     }
 
     /** 在进程内经 ECH 发送 GET，返回 OkHttp Response（调用方负责 close） */
