@@ -222,7 +222,7 @@ private fun EchDiagScreen(onClose: () -> Unit) {
 
             Spacer(Modifier.height(8.dp))
             val ctx = androidx.compose.ui.platform.LocalContext.current
-            var remoteLog by remember { mutableStateOf(EchLogReporter.enabled) }
+            var remoteLog: Boolean by remember { mutableStateOf(EchLogReporter.enabled) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
