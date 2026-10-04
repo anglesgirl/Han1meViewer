@@ -123,6 +123,9 @@ object EchDoh {
     private val echCache = ConcurrentHashMap<String, EchEntry>()
     private val echFailed = ConcurrentHashMap<String, Long>()
 
+    /** 被服务器拒过的域名：改用「它自己的记录」优先，别一直拿同一份撞。 */
+    private val ownFirst = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+
     /**
      * 取 ECH 活值的候选：**国内三家的纯 IP 端点**（实测三家均返回与 CF 官方逐字节相同的活值）。
      * 纯 IP = 不查 DNS、不被污染；证书直接对 IP 生效。
@@ -373,13 +376,13 @@ object EchDoh {
         // 否则受保护域全部 fail-closed = 整个 App 没网络（用户实测过）。
         val url = echDohUrl()
 
-        // 先走哪条路：优先用域名自己的 HTTPS 记录（如果有 ECH 配置）；
-        // 只有拿不到时，才用 cloudflare-ech.com 的活源做跨 zone 注入。
-        // 之前是反的：先注入，导致有自有配置的域名也被迫用注入的，可能对不上。
-        val first = host
-        val second = LIVE_SOURCE_HOST
+        // 先走哪条路：默认官方活源；被翻过标志位的域名先用它自己的记录。
+        val first = if (host != LIVE_SOURCE_HOST && !ownFirst.contains(host)) LIVE_SOURCE_HOST else host
+        val second = if (first == host) LIVE_SOURCE_HOST else host
         val hit = try {
-            fetchConfig(url, first, now)
+            // 活值优先：国内三家纯 IP（随机一家、失败换下一家）；全失败才回退自有网关的 JSON 链路
+            if (first == LIVE_SOURCE_HOST) fetchLiveEch() ?: fetchConfig(url, first, now)
+            else fetchConfig(url, first, now)
                 ?: (if (second == LIVE_SOURCE_HOST) fetchLiveEch() else fetchConfig(url, second, now))
         } catch (t: Throwable) {
             Log.w(TAG, "ech query failed for $host: ${t.message}")
@@ -415,12 +418,14 @@ object EchDoh {
 
     /**
      * ECH 被服务器拒绝（密钥轮换 / 配置失效）后清缓存，让 OkHttp 的重试换一份配置。
-     * 域名自己的记录和活源都清掉，重试时会重新获取最新的。
+     * 活源那份也一起丢（它可能正是被拒的那份），并把这个域名翻成「用它自己的记录」，
+     * 否则重试会拿回同一个值、一直撞同一堵墙。
      */
     fun invalidateEch(host: String) {
         echCache.remove(host)
         echFailed.remove(host)
         echCache.remove(LIVE_SOURCE_HOST)
+        if (host != LIVE_SOURCE_HOST) ownFirst.add(host)
     }
 
     // ---------------- DNS ----------------
