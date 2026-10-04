@@ -300,8 +300,19 @@ object MiniProxy {
     private fun forward(socket: Socket, req: ProxyRequest) {
         Log.i(TAG, "forward -> ${req.targetUrl}")
         val builder = Request.Builder().url(req.targetUrl)
+        // Referer/Origin 改写：浏览器发的是代理地址（如 http://127.0.0.1:8080/login），
+        // 服务器 CSRF 校验要求 Referer 是本站域名，否则直接 419。改写成目标站地址。
+        val proxyPrefix = "http://127.0.0.1:$port"
         for ((k, v) in req.headers) {
-            if (!isHopHeader(k)) builder.addHeader(k, v)
+            if (isHopHeader(k)) continue
+            val ln = k.lowercase()
+            if ((ln == "referer" || ln == "origin") && v.startsWith(proxyPrefix)) {
+                val rewritten = targetBase + v.removePrefix(proxyPrefix)
+                Log.i(TAG, "rewrite $k: $v -> $rewritten")
+                builder.addHeader(k, rewritten)
+            } else {
+                builder.addHeader(k, v)
+            }
         }
         val contentType = req.headers.entries
             .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
