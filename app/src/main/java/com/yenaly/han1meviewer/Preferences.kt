@@ -59,6 +59,15 @@ object Preferences {
         get() = getSpValue(LAST_HANDLED_CLIPBOARD, EMPTY_STRING)
         set(value) = putSpValue(LAST_HANDLED_CLIPBOARD, value)
 
+    private const val VIDEO_FIX_NOTICE_SHOWN = "video_fix_notice_shown"
+
+    /**
+     * 正式版一次性更新提示：视频播放修复（移动网络用户无法播放）是否已展示
+     */
+    var hasShownVideoFixNotice: Boolean
+        get() = preferenceSp.getBoolean(VIDEO_FIX_NOTICE_SHOWN, false)
+        set(value) = preferenceSp.edit { putBoolean(VIDEO_FIX_NOTICE_SHOWN, value) }
+
     val savedUserId: String
         get() = preferenceSp.getString(SAVED_USER_ID,"") ?: ""
 
