@@ -21,9 +21,18 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * 1. 注入的 JS 劫持登录表单 submit，提取字段后调 `postLogin(action, body)`
  * 2. 原生在后台线程经 ECH 发送 POST（不跟随重定向）
  * 3. Set-Cookie 写回 CookieManager（真实域名）
- * 4. UI 线程 `webView.loadUrl()` 跳转到 Location 或目标页
+ * 4. 成功时直接回调 LoginResultCallback.onLoginSuccess（免去等 WebView 加载跳转页的几秒）；
+ *    失败时 UI 线程 `webView.loadUrl()` 回到登录页
  */
-class EchWebBridge(private val webView: WebView) {
+class EchWebBridge(
+    private val webView: WebView,
+    private val callback: LoginResultCallback? = null,
+) {
+
+    /** 登录结果回调：POST 成功时直接回传会话 cookie，无需等页面加载 */
+    interface LoginResultCallback {
+        fun onLoginSuccess(cookie: String)
+    }
 
     private val TAG = "EchWebBridge"
 
@@ -142,14 +151,26 @@ class EchWebBridge(private val webView: WebView) {
                     }
                     else -> absoluteUrl
                 }
-                // 诊断 Toast：无 logcat 环境下也能看到 POST 实际返回了什么
-                // 不打印 body 内容（可能含密码），只打印是否携带 _token
-                val msg = "POST $code → ${location ?: "(无跳转)"} " +
-                    "cookie:${finalCookie.length} loginCk:$hasLoginCookie " +
-                    "token:${body.contains("_token")}"
-                Toast.makeText(webView.context, msg, Toast.LENGTH_LONG).show()
-                // 重新 loadUrl 真实页面 → 子请求由 HyWebViewHelper 走 ECH，CookieManager 会话生效
-                webView.loadUrl(target)
+                // 登录成功判定：服务器给了跳离登录页的 Location，且 CookieManager 里有会话。
+                // 注意：登录失败（密码错）时服务器也会 302 回 /login 并刷新匿名 session，
+                // 所以不能单靠 hasLoginCookie 判定，必须以 Location 是否离开登录页为准。
+                val loginOk = location != null &&
+                    !location!!.contains("/login", ignoreCase = true) &&
+                    finalCookie.isNotEmpty()
+                if (loginOk && callback != null) {
+                    // 成功：直接回调，不 loadUrl，省掉等 ECH 加载跳转页的几秒
+                    Log.i(TAG, "login success -> callback (skip loadUrl): location=$location")
+                    callback.onLoginSuccess(finalCookie)
+                } else {
+                    // 失败或无回调：保留诊断 Toast + 加载目标页
+                    // 不打印 body 内容（可能含密码），只打印是否携带 _token
+                    val msg = "POST $code → ${location ?: "(无跳转)"} " +
+                        "cookie:${finalCookie.length} loginCk:$hasLoginCookie " +
+                        "token:${body.contains("_token")}"
+                    Toast.makeText(webView.context, msg, Toast.LENGTH_LONG).show()
+                    // 重新 loadUrl 真实页面 → 子请求由 HyWebViewHelper 走 ECH，CookieManager 会话生效
+                    webView.loadUrl(target)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "postLogin loadUrl failed: ${e.message}")
             }
