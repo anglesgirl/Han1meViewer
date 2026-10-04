@@ -87,6 +87,9 @@ fun LoginScreen(
             )
         }
     }
+}
+
+@Composable
 fun LoginDialog(
     isLoggingIn: Boolean,
     onDismiss: () -> Unit,
