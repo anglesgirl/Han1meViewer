@@ -154,20 +154,13 @@ object EchDoh {
      * 这时三家全失败，只剩自家网关这条路。
      */
     private fun fetchLiveEch(): Pair<ByteArray, Long>? {
-        for (ip in ECH_DOH_IPS.shuffled()) {
-            val hit = runCatching { queryEchWire(ip, LIVE_SOURCE_HOST) }.getOrNull()
-            if (hit != null) {
-                EchTrace.event("live ech via $ip: ${hit.first.size} bytes, ttl=${hit.second}ms")
-                return hit
-            }
-            Log.i(TAG, "live ech via $ip failed, next")
-        }
+        // 用户要求：不用国内 DNS，直接走自有 DoH 网关
         val fallback = fetchLiveEchViaGateway()
         if (fallback != null) {
-            EchTrace.event("live ech via gateway(fallback): ${fallback.first.size} bytes, ttl=${fallback.second}ms")
+            EchTrace.event("live ech via gateway: ${fallback.first.size} bytes, ttl=${fallback.second}ms")
             return fallback
         }
-        EchTrace.event("live ech: 三家纯 IP 与网关兜底全部失败")
+        EchTrace.event("live ech: 网关获取失败")
         return null
     }
 
