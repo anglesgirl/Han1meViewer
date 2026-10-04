@@ -222,6 +222,29 @@ private fun EchDiagScreen(onClose: () -> Unit) {
 
             Spacer(Modifier.height(8.dp))
             val ctx = androidx.compose.ui.platform.LocalContext.current
+            var remoteLog by remember { mutableStateOf(EchLogReporter.enabled) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text("远程日志上报", style = MaterialTheme.typography.titleSmall)
+                androidx.compose.material3.Switch(
+                    checked = remoteLog,
+                    onCheckedChange = {
+                        remoteLog = it
+                        EchLogReporter.enabled = it
+                        log("远程日志", if (it) "已开启" else "已关闭")
+                        android.widget.Toast.makeText(ctx, if (it) "远程日志已开启" else "远程日志已关闭", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+            Text(
+                "开启后 ECH 事件实时上报到 log 服务器，开发者可远程查看。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
                     val text = EchTrace.dump()
