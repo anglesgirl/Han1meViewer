@@ -299,6 +299,11 @@ object MiniProxy {
 
     private fun forward(socket: Socket, req: ProxyRequest) {
         Log.i(TAG, "forward -> ${req.targetUrl}")
+        // 419 诊断：POST /login 打印请求头 + body（密码打码）
+        val diagPath = req.targetUrl.removePrefix(targetBase)
+        if (req.method == "POST" && diagPath.contains("login", ignoreCase = true)) {
+            logLoginPostDiag(diagPath, req)
+        }
         val builder = Request.Builder().url(req.targetUrl)
         // Referer/Origin 改写：浏览器发的是代理地址（如 http://127.0.0.1:8080/login），
         // 服务器 CSRF 校验要求 Referer 是本站域名，否则直接 419。改写成目标站地址。
@@ -327,6 +332,17 @@ object MiniProxy {
             val resp = proxyClient.newCall(builder.build()).execute()
             resp.use {
                 Log.i(TAG, "forward <- ${it.code} ${req.targetUrl}")
+                // 419 诊断：GET /login 的 Set-Cookie（值打码，只留名和属性）
+                if (req.method == "GET" && diagPath.contains("login", ignoreCase = true)) {
+                    val setCookies = it.headers.values("Set-Cookie")
+                    if (setCookies.isNotEmpty()) {
+                        logSetCookieDiag(diagPath, setCookies)
+                    }
+                }
+                // 419 诊断：419 响应打印完整响应头
+                if (it.code == 419) {
+                    log419Diag(req.targetUrl, it.headers)
+                }
                 val respBody = it.body?.bytes() ?: ByteArray(0)
                 // 先在内存里拼好整个响应头：任何一步出错都不写 socket，避免半截响应；
                 // 状态行/头字段做 CRLF 消毒（上游脏数据会导致 WebView 报 net::ERR_INVALID_RESPONSE）
@@ -392,6 +408,77 @@ object MiniProxy {
         s = s.replace(Regex("(?i)SameSite=None"), "SameSite=Lax")
         return s.trim().trimEnd(';').trim()
     }
+
+    // ---------- 419 诊断日志 ----------
+
+    /** 419 诊断：POST /login 的请求头 + body（Cookie 值打码，密码字段打码） */
+    private fun logLoginPostDiag(path: String, req: ProxyRequest) {
+        val sb = StringBuilder()
+        sb.append("== 419 diag: POST ").append(path).append(" ==")
+        for ((k, v) in req.headers) {
+            val display = if (k.equals("Cookie", ignoreCase = true) ||
+                k.equals("Authorization", ignoreCase = true) ||
+                k.equals("Proxy-Authorization", ignoreCase = true)
+            ) {
+                maskCookieValues(v)
+            } else {
+                v
+            }
+            sb.append("\n  ").append(k).append(": ").append(display)
+        }
+        if (req.body.isNotEmpty()) {
+            val bodyStr = try {
+                req.body.toString(Charsets.UTF_8)
+            } catch (_: Exception) {
+                "<binary ${req.body.size} bytes>"
+            }
+            sb.append("\n  body(500): ").append(maskPasswordFields(bodyStr.take(500)))
+        } else {
+            sb.append("\n  body: <empty>")
+        }
+        Log.d(TAG, sb.toString())
+    }
+
+    /** 419 诊断：GET /login 的 Set-Cookie（值打码，只留 cookie 名和属性） */
+    private fun logSetCookieDiag(path: String, setCookies: List<String>) {
+        val sb = StringBuilder()
+        sb.append("== 419 diag: GET ").append(path).append(" Set-Cookie ==")
+        for (sc in setCookies) {
+            sb.append("\n  ").append(maskSetCookieValue(sc))
+        }
+        Log.d(TAG, sb.toString())
+    }
+
+    /** 419 诊断：419 响应的完整响应头（Set-Cookie 值打码） */
+    private fun log419Diag(targetUrl: String, headers: okhttp3.Headers) {
+        val sb = StringBuilder()
+        sb.append("== 419 diag: 419 response headers for ").append(targetUrl).append(" ==")
+        for ((name, value) in headers) {
+            val display = if (name.equals("Set-Cookie", ignoreCase = true)) {
+                maskSetCookieValue(value)
+            } else {
+                value
+            }
+            sb.append("\n  ").append(name).append(": ").append(display)
+        }
+        Log.d(TAG, sb.toString())
+    }
+
+    /** 打码 Cookie 请求头：保留名，值→*** */
+    private fun maskCookieValues(cookieHeader: String): String =
+        cookieHeader.split(";").joinToString("; ") { part ->
+            val t = part.trim()
+            val eq = t.indexOf('=')
+            if (eq > 0) t.substring(0, eq + 1) + "***" else t
+        }
+
+    /** 打码 Set-Cookie：只留 cookie 名和属性，值→*** */
+    private fun maskSetCookieValue(setCookie: String): String =
+        setCookie.replace(Regex("^([^=;\\s]+)=[^;]*"), "$1=***")
+
+    /** 打码 form body 里的密码类字段值（_token 等 CSRF 字段保留可见） */
+    private fun maskPasswordFields(body: String): String =
+        body.replace(Regex("(?i)((?:password|passwd|pwd)[^&=]*=)([^&\\s]*)"), "$1***")
 
     private fun writeSimple(socket: Socket, code: Int, text: String) {
         val body = text.toByteArray()
