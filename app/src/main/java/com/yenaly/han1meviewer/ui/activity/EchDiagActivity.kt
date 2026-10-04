@@ -34,6 +34,7 @@ import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.ech.ConscryptEch
 import com.yenaly.han1meviewer.logic.network.ech.EchDoh
+import com.yenaly.han1meviewer.logic.network.ech.EchLogReporter
 import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
