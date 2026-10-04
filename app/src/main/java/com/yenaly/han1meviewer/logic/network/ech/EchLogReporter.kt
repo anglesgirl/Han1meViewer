@@ -28,9 +28,9 @@ object EchLogReporter {
     private const val TAG = "EchLogReporter"
     private const val ENDPOINT = "https://log.anglesgirl.eu.org/v1/events?app=han1meviewer"
 
-    /** 上报开关：测试分支默认开启，正式版由用户关闭 */
+    /** 上报开关：默认关闭，诊断时由用户手动开启 */
     @Volatile
-    var enabled: Boolean = true
+    var enabled: Boolean = false
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

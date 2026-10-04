@@ -268,16 +268,6 @@ fun NetworkSettingsScreen(
         }
 
         item {
-            SettingSwitchItem(
-                title = stringResource(R.string.use_backup_media_cdn),
-                summary = stringResource(R.string.use_backup_media_cdn_summary),
-                checked = useBackupMediaCdn,
-                iconRes = R.drawable.baseline_domain_24,
-                onCheckedChange = onUseBackupMediaCdnChange,
-            )
-        }
-
-        item {
             SettingNavigationItem(
                 title = stringResource(R.string.media_cdn_region),
                 valueText = state.mediaCdnRegionSummary,

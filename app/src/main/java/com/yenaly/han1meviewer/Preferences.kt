@@ -244,7 +244,7 @@ object Preferences {
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_BUILT_IN_HOSTS, false)
 
     val useBackupMediaCdn: Boolean
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_BACKUP_MEDIA_CDN, false)
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_BACKUP_MEDIA_CDN, true)
 
     var mediaCdnRegion: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.MEDIA_CDN_REGION, "").orEmpty()
