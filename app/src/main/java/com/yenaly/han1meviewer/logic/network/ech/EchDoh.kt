@@ -127,18 +127,6 @@ object EchDoh {
 
     /**
      * 取 ECH 活值的候选：**国内三家的纯 IP 端点**（实测三家均返回与 CF 官方逐字节相同的活值）。
-     * 纯 IP = 不查 DNS、不被污染；证书直接对 IP 生效。
-     * **不发 Host 头**：阿里带 Host 会直接失败（实测 http=000）。
-     * **只发 wire**：三家都不支持 JSON（阿里/360 回 400、腾讯 UrlParameterError）。
-     * 策略：随机挑一家试，失败换下一家（不同时打、不重复打同一家）。
-     */
-    private val ECH_DOH_IPS = listOf(
-        "223.5.5.5", "223.6.6.6",           // 阿里
-        "1.12.12.12", "120.53.53.53",       // 腾讯
-        "101.198.193.29", "101.198.192.33", // 360
-    )
-
-    private const val ECH_ONE_TIMEOUT_MS = 2500L
     /** ECH 缓存下限：记录 TTL 只有 ~198s，但公钥实测稳定数天；被轮换时握手被拒会走 invalidateEch 自愈。 */
     private const val ECH_CACHE_MIN_MS = 60 * 60 * 1000L
     private const val ECH_CACHE_MAX_MS = 5 * 60 * 60 * 1000L
@@ -220,27 +208,6 @@ object EchDoh {
         out.write(0)
         out.write(byteArrayOf(0x00, 65, 0x00, 0x01))
         return out.toByteArray()
-    }
-
-    /** 纯 IP + wire 的 DoH 查询（绝不加 Host 头）。 */
-    private fun queryEchWire(ip: String, name: String): Pair<ByteArray, Long>? {
-        val b64 = android.util.Base64.encodeToString(
-            buildQuery(name), android.util.Base64.NO_WRAP or android.util.Base64.URL_SAFE,
-        ).trimEnd('=')
-        val req = Request.Builder()
-            .url("https://$ip/dns-query?dns=$b64")
-            .header("accept", "application/dns-message")
-            .build()
-        val client = bootstrapClient.newBuilder()
-            .connectTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-            .readTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-            .callTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-            .build()
-        val wire = client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) return null
-            resp.body?.bytes() ?: return null
-        }
-        return parseSvcbEch(wire)
     }
 
     /** 解析应答里的 type=65 记录，走 SvcParams 取 key=5（ech）；返回值**含 2 字节长度前缀**。 */
