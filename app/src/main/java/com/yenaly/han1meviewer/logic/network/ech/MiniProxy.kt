@@ -76,9 +76,6 @@ object MiniProxy {
     @Volatile
     private var pendingPostDiag: String = ""
 
-    /** 取最后一次 419 诊断文本，空字符串表示暂无记录 */
-    fun getLast419Diag(): String = last419Diag
-
     private var serverSocket: ServerSocket? = null
     private val running = AtomicBoolean(false)
     private val pool = Executors.newCachedThreadPool { r ->
