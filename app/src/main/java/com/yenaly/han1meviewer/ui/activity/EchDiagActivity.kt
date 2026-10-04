@@ -35,7 +35,7 @@ import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.ech.ConscryptEch
 import com.yenaly.han1meviewer.logic.network.ech.EchDoh
 import com.yenaly.han1meviewer.logic.network.ech.EchTrace
-import com.yenaly.han1meviewer.logic.network.ech.MiniProxy
+import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -80,7 +80,7 @@ private fun EchDiagScreen(onClose: () -> Unit) {
     var conscrypt by remember { mutableStateOf(DiagItem("Conscrypt ECH", "未测试")) }
     var dohResolve by remember { mutableStateOf(DiagItem("EchDoh.resolve(hanime1.me)", "未测试")) }
     var dohEndpoint by remember { mutableStateOf(DiagItem("DoH 端点连通性", "未测试")) }
-    var miniProxy by remember { mutableStateOf(DiagItem("MiniProxy", "未测试")) }
+    var webViewEch by remember { mutableStateOf(DiagItem("WebView ECH", "未测试")) }
     var settings by remember { mutableStateOf(DiagItem("当前 DoH 设置", "未测试")) }
 
     fun log(tag: String, msg: String) = EchTrace.event("ECH诊断[$tag] $msg")
@@ -189,25 +189,20 @@ private fun EchDiagScreen(onClose: () -> Unit) {
                 }
             )
             DiagCard(
-                item = miniProxy,
+                item = webViewEch,
                 onTest = {
-                    miniProxy = miniProxy.copy(testing = true, status = "测试中…")
+                    webViewEch = webViewEch.copy(testing = true, status = "测试中…")
                     scope.launch(Dispatchers.IO) {
-                        val port = MiniProxy.ensureRunning()
-                        val running = MiniProxy.isRunning
-                        // 实际连一下本地端口
-                        val reachable = runCatching {
-                            java.net.Socket().use { s ->
-                                s.connect(java.net.InetSocketAddress("127.0.0.1", port), 3000)
-                                true
-                            }
-                        }.getOrDefault(false)
-                        val msg = "isRunning=$running port=$port 本地连通=$reachable"
-                        log("MiniProxy", msg)
+                        // co3 架构：无本地端口，检查域名判定 + ECH 引擎就绪
+                        val target = HyWebViewHelper.isTargetHost("hanime1.me")
+                        val other = HyWebViewHelper.isTargetHost("example.com")
+                        val ready = com.yenaly.han1meviewer.logic.network.ech.EchHttp.isReady
+                        val msg = "isTarget(hanime1.me)=$target isTarget(example.com)=$other ECH就绪=$ready"
+                        log("WebView ECH", msg)
                         withContext(Dispatchers.Main) {
-                            miniProxy = DiagItem(
-                                "MiniProxy",
-                                if (running && reachable) "✅ $msg" else "❌ $msg"
+                            webViewEch = DiagItem(
+                                "WebView ECH",
+                                if (target && !other) "✅ $msg" else "❌ $msg"
                             )
                         }
                     }

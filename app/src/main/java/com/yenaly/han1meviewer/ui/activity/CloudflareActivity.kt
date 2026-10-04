@@ -20,7 +20,7 @@ import androidx.preference.PreferenceManager
 import com.yenaly.han1meviewer.Preferences.cloudFlareCookie
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
-import com.yenaly.han1meviewer.logic.network.ech.MiniProxy
+import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
 import com.yenaly.han1meviewer.ui.screen.web.CloudflareScreen
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
 import com.yenaly.han1meviewer.util.CookieString
@@ -79,15 +79,19 @@ class CloudflareActivity : AppCompatActivity() {
             }
 
             webViewClient = object : WebViewClient() {
-                // 反向代理模式：WebView 直接打开代理 URL，全量流量经 mini 代理走 ECH，
-                // 不再用 shouldInterceptRequest 拦截子资源。
+                // co3 架构：直接加载真实 URL，GET 由 HyWebViewHelper 在进程内经 ECH 拦截
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): android.webkit.WebResourceResponse? {
+                    return HyWebViewHelper.intercept(request)
+                        ?: super.shouldInterceptRequest(view, request)
+                }
+
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): Boolean {
-                    // 反向代理模式：站内导航本来就在代理域名下，无需改写；保留桩以防万一。
-                    // val urlStr = request?.url?.toString() ?: return false
-                    // return if (view != null) MiniProxy.overrideUrlLoading(view, urlStr) else false
                     return false
                 }
 
@@ -133,8 +137,8 @@ class CloudflareActivity : AppCompatActivity() {
                                     !html.contains("#challenge-success-text") &&
                                     !html.contains("#challenge-error-text")
                                 ) {
-                                    // Cookie 存在 127.0.0.1 名下（mini 代理改写了 Set-Cookie 的 Domain）
-                                    val cookies = cookieMgr.getCookie(MiniProxy.baseUrl()) ?: ""
+                                    // Cookie 存在真实域名下（HyWebViewHelper 写回 CookieManager）
+                                    val cookies = cookieMgr.getCookie(url) ?: ""
                                     if (cookies.contains("cf_clearance")) {
                                         cloudFlareCookie = CookieString(cookies)
                                         cookieMgr.flush()
@@ -148,7 +152,7 @@ class CloudflareActivity : AppCompatActivity() {
                     }
                 }
             }
-            loadUrl(MiniProxy.openTarget(url))
+            loadUrl(url)
         }
     }
 

@@ -340,7 +340,7 @@ fun NetworkSettingsScreen(
             val context = LocalContext.current
             SettingNavigationItem(
                 title = "ECH 诊断",
-                summary = "排查无网络：Conscrypt / DoH / MiniProxy 状态",
+                summary = "排查无网络：Conscrypt / DoH / WebView ECH 状态",
                 iconRes = R.drawable.baseline_doh_24,
                 onClick = {
                     context.startActivity(Intent(context, EchDiagActivity::class.java))

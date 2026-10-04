@@ -35,7 +35,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.yenaly.han1meviewer.R
-import com.yenaly.han1meviewer.logic.network.ech.MiniProxy
 import com.yenaly.han1meviewer.ui.component.appbar.HanimeScaffold
 import com.yenaly.han1meviewer.ui.preview.ComponentPreview
 
@@ -50,20 +49,9 @@ fun LoginScreen(
     webViewFactory: () -> WebView,
 ) {
     val refreshingState = rememberPullToRefreshState()
-    // 仅测试用：419 诊断弹窗开关
-    var showDiagDialog by remember { mutableStateOf(false) }
     HanimeScaffold(
         title = stringResource(R.string.login),
         onBack = onBack,
-        actions = {
-            // 仅测试用：小字"诊断"按钮，看最后一次 419 的打码摘要
-            TextButton(
-                onClick = { showDiagDialog = true },
-                contentPadding = PaddingValues(horizontal = 8.dp),
-            ) {
-                Text("诊断", style = MaterialTheme.typography.labelMedium)
-            }
-        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 text = { Text(stringResource(R.string.scan_for_cookies)) },
@@ -99,29 +87,6 @@ fun LoginScreen(
             )
         }
     }
-    // 仅测试用：419 诊断弹窗（内容已打码，用户截图发回）
-    if (showDiagDialog) {
-        val diag = remember { MiniProxy.last419Diag }
-        AlertDialog(
-            onDismissRequest = { showDiagDialog = false },
-            title = { Text("419 诊断") },
-            text = {
-                Text(
-                    text = diag.ifBlank { "暂无 419 记录" },
-                    fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showDiagDialog = false }) {
-                    Text("关闭")
-                }
-            },
-        )
-    }
-}
-
-@Composable
 fun LoginDialog(
     isLoggingIn: Boolean,
     onDismiss: () -> Unit,
