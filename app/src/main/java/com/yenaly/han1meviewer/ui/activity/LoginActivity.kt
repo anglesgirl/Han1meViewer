@@ -39,7 +39,7 @@ import com.yenaly.yenaly_libs.base.frame.FrameActivity
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-class LoginActivity : FrameActivity() {
+class LoginActivity : FrameActivity(), EchWebBridge.LoginResultCallback {
     private lateinit var scannerLauncher: ActivityResultLauncher<Intent>
     private var isRefreshing by mutableStateOf(true)
     private var showLoginDialog by mutableStateOf(false)
@@ -114,7 +114,7 @@ class LoginActivity : FrameActivity() {
             // 经 ECH 拦截，POST 由 JS 桥（EchWebBridge）接管代发。Cookie 全在
             // CookieManager（真实域名），无需改写。
 
-            val bridge = EchWebBridge(this)
+            val bridge = EchWebBridge(this, this)
             addJavascriptInterface(bridge, "HyBridge")
 
             webViewClient = object : WebViewClient() {
@@ -163,6 +163,19 @@ class LoginActivity : FrameActivity() {
             }
             loadUrl(HANIME_LOGIN_URL)
         }
+    }
+
+    /**
+     * EchWebBridge 登录成功回调（UI 线程，由 webView.post 触发）。
+     * POST 成功后直接拿会话 cookie 收工，无需等 WebView 经 ECH 加载跳转页，
+     * 省掉几秒等待。checkLoginSuccess 保留作兜底。
+     */
+    override fun onLoginSuccess(cookie: String) {
+        Log.d("login_cookie", "bridge onLoginSuccess: cookieLen=${cookie.length}")
+        if (isDestroyed || isFinishing) return
+        login(cookie)
+        setResult(RESULT_OK)
+        finish()
     }
 
     /**
