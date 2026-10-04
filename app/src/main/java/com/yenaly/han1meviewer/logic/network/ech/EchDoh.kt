@@ -516,11 +516,8 @@ class EchDns(private val fallback: Dns = Dns.SYSTEM) : Dns {
         val addrs = runCatching { EchDoh.resolve(hostname) }.getOrNull()
         if (!addrs.isNullOrEmpty()) return addrs
 
-        if (EchHosts.isCoreDomain(hostname)) {
-            throw UnknownHostException("DoH 解析失败（fail-closed）：$hostname")
-        }
-        EchTrace.event("DoH 解析失败，回落系统 DNS：$hostname")
-        return fallback.lookup(hostname)
+        // 只从 DoH 拿 IP，不回落系统 DNS（系统 DNS 被污染，返回假 IP）
+        throw UnknownHostException("DoH 解析失败（只走 DoH，不回落系统 DNS）：$hostname")
     }
 
     private companion object {
