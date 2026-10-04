@@ -228,6 +228,7 @@
     <string name="media_cdn_region_preset">預設</string>
     <string name="media_cdn_region_custom">自定義</string>
     <string name="media_cdn_custom_ip_hint">自定義節點 IP，如 1.2.3.4</string>
+    <string name="media_cdn_latency_timeout">超時</string>
     <string name="custom_hosts">自定義 Hosts</string>
     <string name="custom_hosts_format">多個 IP 以逗號分隔，如 1.2.3.4,5.6.7.8</string>
     <string name="custom_hosts_empty_summary">未設定（使用內建映射）</string>

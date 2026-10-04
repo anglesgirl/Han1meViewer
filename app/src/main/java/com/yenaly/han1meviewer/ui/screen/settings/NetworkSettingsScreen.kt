@@ -23,8 +23,11 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +47,11 @@ import com.yenaly.han1meviewer.ui.component.SettingNavigationItem
 import com.yenaly.han1meviewer.ui.component.SettingSwitchItem
 import com.yenaly.han1meviewer.ui.component.lazy.LazyColumn
 import com.yenaly.han1meviewer.ui.preview.ComponentPreview
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import java.net.InetSocketAddress
+import java.net.Socket
 
 data class NetworkSettingsUiState(
     val domainName: String,
@@ -359,6 +367,22 @@ private fun NetworkChoiceDialog(
     )
 }
 
+/**
+ * 测试到指定 IP 端口的 TCP 连接延迟。
+ * @return 延迟毫秒数，超时/失败返回 null
+ */
+private fun testTcpLatency(host: String, port: Int, timeoutMs: Int): Long? {
+    return try {
+        val start = android.os.SystemClock.elapsedRealtime()
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(host, port), timeoutMs)
+        }
+        android.os.SystemClock.elapsedRealtime() - start
+    } catch (e: Exception) {
+        null
+    }
+}
+
 @Composable
 private fun MediaCdnRegionDialog(
     selectedRegion: String,
@@ -369,6 +393,17 @@ private fun MediaCdnRegionDialog(
 ) {
     var ip by rememberSaveable(customIp) { mutableStateOf(customIp) }
     var tab by rememberSaveable { mutableStateOf(if (customIp.isNotBlank()) 1 else 0) }
+    // 区域 -> 延迟 ms；key 不存在 = 测试中，value 为 null = 超时/失败
+    val latencies = remember { mutableStateMapOf<String, Long?>() }
+    // 对话框打开时并发测试各区域首个 IP 的 TCP 443 延迟；关闭时自动取消
+    LaunchedEffect(Unit) {
+        CDN_REGION_NODES.map { node ->
+            async(Dispatchers.IO) {
+                val latency = node.ips.firstOrNull()?.let { testTcpLatency(it, 443, 3000) }
+                latencies[node.region] = latency
+            }
+        }.awaitAll()
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.media_cdn_region)) },
@@ -409,7 +444,22 @@ private fun MediaCdnRegionDialog(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 RadioButton(selected = selectedRegion == node.region, onClick = { onSelectRegion(node.region) })
-                                Text(node.region, Modifier.padding(start = 8.dp))
+                                Text(node.region, Modifier.padding(start = 8.dp).weight(1f))
+                                val latency = latencies[node.region]
+                                Text(
+                                    text = when {
+                                        !latencies.containsKey(node.region) -> "..."
+                                        latency == null -> stringResource(R.string.media_cdn_latency_timeout)
+                                        else -> "${latency}ms"
+                                    },
+                                    color = when {
+                                        latency == null -> Color.Gray
+                                        latency < 100 -> Color(0xFF4CAF50)
+                                        latency <= 300 -> Color(0xFFFFA000)
+                                        else -> Color(0xFFF44336)
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
                             }
                         }
                     }
