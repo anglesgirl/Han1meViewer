@@ -94,6 +94,7 @@ class EchWebBridge(
     private fun doPostLogin(absoluteUrl: String, body: String) {
         val cm = CookieManager.getInstance()
         val cookie = runCatching { cm.getCookie(absoluteUrl) }.getOrNull().orEmpty()
+        val host = runCatching { java.net.URI(absoluteUrl).host }.getOrNull()
 
         // 照抄浏览器的请求头（参考 co3 的 HAR 1:1 对齐）
         val builder = Request.Builder().url(absoluteUrl)
@@ -114,7 +115,27 @@ class EchWebBridge(
         if (cookie.isNotEmpty()) builder.header("Cookie", cookie)
 
         val reqBody = body.toRequestBody("application/x-www-form-urlencoded".toMediaTypeOrNull())
-        val resp = EchHttp.loginClient.newCall(builder.post(reqBody).build()).execute()
+        val request = builder.post(reqBody).build()
+
+        // 先尝试 ECH，失败则回退到直连
+        val resp = try {
+            Log.d(TAG, "postLogin trying ECH: $absoluteUrl")
+            EchHttp.loginClient.newCall(request).execute()
+        } catch (e: Exception) {
+            Log.w(TAG, "postLogin ECH failed, fallback to direct: ${e.message}")
+            // 回退：普通 OkHttpClient（无 ECH）
+            val fallbackClient = okhttp3.OkHttpClient.Builder()
+                .cookieJar(okhttp3.CookieJar.NO_COOKIES)
+                .followRedirects(false)
+                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+            // 记录负缓存（如果 host 已知）
+            if (host != null) {
+                HyWebViewHelper.markEchUnsupported(host)
+            }
+            fallbackClient.newCall(request).execute()
+        }
 
         var code = -1
         var location: String? = null
