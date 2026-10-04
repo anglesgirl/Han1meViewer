@@ -132,4 +132,3 @@ const val UPDATE_NOTIFICATION_CHANNEL = "update_channel"
 
 const val FILE_PROVIDER_AUTHORITY = "${BuildConfig.APPLICATION_ID}.fileProvider"
 const val GETCHU_BASE_URL = "https://www.getchu.com/"
-// test
