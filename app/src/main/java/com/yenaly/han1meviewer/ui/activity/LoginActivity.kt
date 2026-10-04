@@ -11,7 +11,6 @@ import android.view.KeyEvent
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.enableEdgeToEdge
@@ -87,7 +86,7 @@ class LoginActivity : FrameActivity() {
                 LoginScreen(
                     isRefreshing = isRefreshing,
                     onBack = { onBackPressedDispatcher.onBackPressed() },
-                    onRefresh = { webView?.loadUrl(MiniProxy.proxyUrl(HANIME_LOGIN_URL)) },
+                    onRefresh = { webView?.loadUrl(MiniProxy.openTarget(HANIME_LOGIN_URL)) },
                     onShowLoginDialog = { showLoginDialog = true },
                     onOpenQrScanner = { openQrScanner() },
                     webViewFactory = { createWebView() },
@@ -108,21 +107,13 @@ class LoginActivity : FrameActivity() {
             settings.domStorageEnabled = true
             settings.userAgentString = USER_AGENT
 
-            // WebView 只跟本地 mini 代理说话（明文 localhost，不会被墙），
-            // 代理经 Conscrypt ECH 转发到真实站点。POST body 由代理直接透传，
-            // 不存在 shouldInterceptRequest 拿不到 body 的问题。
+            // 反向代理模式：WebView 只跟本地 mini 代理说话（明文 localhost，不会被墙），
+            // 代理记住目标站（targetBase）经 Conscrypt ECH 转发。页面内所有相对路径
+            //（CSS/JS/图片/表单）天然落在代理域名下，无需 shouldInterceptRequest 拦截，
+            // POST body 由代理直接透传，不存在拦截器拿不到 body 的问题。
             // （旧 JS 桥方案 HyWebViewHelper/EchWebBridge 已废弃删除）
 
             webViewClient = object : WebViewClient() {
-                // 子资源（图片/CSS/JS/XHR）经本地代理取，返回给 WebView
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    MiniProxy.intercept(request)?.let { return it }
-                    return super.shouldInterceptRequest(view, request)
-                }
-
                 override fun onPageFinished(view: WebView, url: String) {
                     isRefreshing = false
                 }
@@ -143,8 +134,9 @@ class LoginActivity : FrameActivity() {
                         finish()
                         return true
                     }
-                    // 其余 https 导航改写走代理
-                    return MiniProxy.overrideUrlLoading(view, urlStr)
+                    // 反向代理模式：站内导航本来就在代理域名下，无需改写；保留桩以防万一。
+                    // return MiniProxy.overrideUrlLoading(view, urlStr)
+                    return false
                 }
 
                 override fun onReceivedError(
@@ -158,7 +150,7 @@ class LoginActivity : FrameActivity() {
                     }
                 }
             }
-            loadUrl(MiniProxy.proxyUrl(HANIME_LOGIN_URL))
+            loadUrl(MiniProxy.openTarget(HANIME_LOGIN_URL))
         }
     }
 

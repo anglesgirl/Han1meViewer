@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -80,21 +79,16 @@ class CloudflareActivity : AppCompatActivity() {
             }
 
             webViewClient = object : WebViewClient() {
-                // 子资源经本地 mini 代理（Conscrypt ECH）取
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    MiniProxy.intercept(request)?.let { return it }
-                    return super.shouldInterceptRequest(view, request)
-                }
-
+                // 反向代理模式：WebView 直接打开代理 URL，全量流量经 mini 代理走 ECH，
+                // 不再用 shouldInterceptRequest 拦截子资源。
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): Boolean {
-                    val urlStr = request?.url?.toString() ?: return false
-                    return if (view != null) MiniProxy.overrideUrlLoading(view, urlStr) else false
+                    // 反向代理模式：站内导航本来就在代理域名下，无需改写；保留桩以防万一。
+                    // val urlStr = request?.url?.toString() ?: return false
+                    // return if (view != null) MiniProxy.overrideUrlLoading(view, urlStr) else false
+                    return false
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
@@ -154,7 +148,7 @@ class CloudflareActivity : AppCompatActivity() {
                     }
                 }
             }
-            loadUrl(MiniProxy.proxyUrl(url))
+            loadUrl(MiniProxy.openTarget(url))
         }
     }
 
