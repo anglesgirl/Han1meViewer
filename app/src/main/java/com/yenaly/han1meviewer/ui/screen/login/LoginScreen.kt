@@ -101,7 +101,7 @@ fun LoginScreen(
     }
     // 仅测试用：419 诊断弹窗（内容已打码，用户截图发回）
     if (showDiagDialog) {
-        val diag = remember { MiniProxy.getLast419Diag() }
+        val diag = remember { MiniProxy.last419Diag }
         AlertDialog(
             onDismissRequest = { showDiagDialog = false },
             title = { Text("419 诊断") },
