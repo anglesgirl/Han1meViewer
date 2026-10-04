@@ -129,7 +129,6 @@ object HyWebViewHelper {
             } catch (e: Exception) {
                 lastError = e
                 Log.w(TAG, "ECH GET attempt ${attempt + 1}/2 failed: $url: ${e.message}")
-                EchTrace.event("ECH GET 失败[${attempt + 1}/2] $host: ${e.javaClass.simpleName}: ${e.message}")
                 if (attempt == 0) {
                     try { Thread.sleep(700) } catch (_: Exception) {}
                 }
