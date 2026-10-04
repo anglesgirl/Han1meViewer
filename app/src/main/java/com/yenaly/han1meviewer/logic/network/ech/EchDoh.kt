@@ -72,7 +72,7 @@ object EchDoh {
      */
     private fun echDohUrl(): String {
         val custom = Preferences.dohCustomUrl.trim()
-        return if (custom.isNotEmpty()) custom else DohConfig.presets.first().url
+        return if (custom.isNotEmpty()) custom else DohConfig.selectedPreset().url
     }
 
     private fun resolver(): Dns? {
@@ -113,7 +113,7 @@ object EchDoh {
             dnsCache.clear()
         }
         echCache.clear()
-        echFailed.clear()
+        ConscryptEch.clearEchUnavailable()
     }
 
     // ---------------- ECH 配置 ----------------
@@ -121,7 +121,6 @@ object EchDoh {
     private class EchEntry(val wire: ByteArray, val expireAt: Long)
 
     private val echCache = ConcurrentHashMap<String, EchEntry>()
-    private val echFailed = ConcurrentHashMap<String, Long>()
 
     /** 被服务器拒过的域名：改用「它自己的记录」优先，别一直拿同一份撞。 */
     private val ownFirst = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
@@ -364,39 +363,35 @@ object EchDoh {
 
     /**
      * 取 ECHConfigList（RFC 9460 wire 格式，**已含 2 字节长度前缀**，可直接喂 Conscrypt）。
-     * @return null 表示该域名没有 ECH 配置或 DoH 拿不到 —— 调用方据此 fail-closed
+     *
+     * 规格（用户定义）：
+     * - 只从 cloudflare-ech.com 经 DoH 取，缓存 4 小时
+     * - 所有域名都用这一份配置尝试 ECH
+     * - 失败由调用方标记不支持（内存，app 重启清空）
+     *
+     * @return null 表示 DoH 拿不到 —— 调用方据此处理
      */
     fun echConfigList(host: String): ByteArray? {
         val now = System.currentTimeMillis()
-        echCache[host]?.let { if (it.expireAt > now) return it.wire }
-        val failedAt = echFailed[host]
-        if (failedAt != null && now - failedAt < FAIL_COOLDOWN_MS) return null
+        // 只缓存一份：cloudflare-ech.com 的配置，4 小时过期
+        echCache[LIVE_SOURCE_HOST]?.let { if (it.expireAt > now) return it.wire }
 
-        // 注意：这里**不看** useDoH 开关。关 DoH 只是停普通解析，ECH 取数必须照旧，
-        // 否则受保护域全部 fail-closed = 整个 App 没网络（用户实测过）。
         val url = echDohUrl()
-
-        // 先走哪条路：默认官方活源；被翻过标志位的域名先用它自己的记录。
-        val first = if (host != LIVE_SOURCE_HOST && !ownFirst.contains(host)) LIVE_SOURCE_HOST else host
-        val second = if (first == host) LIVE_SOURCE_HOST else host
         val hit = try {
             // 活值优先：国内三家纯 IP（随机一家、失败换下一家）；全失败才回退自有网关的 JSON 链路
-            if (first == LIVE_SOURCE_HOST) fetchLiveEch() ?: fetchConfig(url, first, now)
-            else fetchConfig(url, first, now)
-                ?: (if (second == LIVE_SOURCE_HOST) fetchLiveEch() else fetchConfig(url, second, now))
+            fetchLiveEch() ?: fetchConfig(url, LIVE_SOURCE_HOST, now)
         } catch (t: Throwable) {
-            Log.w(TAG, "ech query failed for $host: ${t.message}")
+            Log.w(TAG, "ech query failed: ${t.message}")
             null
         }
         if (hit == null) {
-            EchTrace.event("no ech config for $host（已试：$first / $second）")
-            echFailed[host] = now
+            EchTrace.event("no ech config from $LIVE_SOURCE_HOST")
             return null
         }
-        val (wire, ttlMs) = hit
-        echCache[host] = EchEntry(wire, now + ttlMs)
-        echFailed.remove(host)
-        EchTrace.event("ech config for $host: ${wire.size} bytes（源=$first）")
+        val (wire, _) = hit
+        // 固定 4 小时缓存（用户规格），不用 DNS TTL
+        echCache[LIVE_SOURCE_HOST] = EchEntry(wire, now + 4 * 60 * 60 * 1000L)
+        EchTrace.event("ech config: ${wire.size} bytes（源=$LIVE_SOURCE_HOST，缓存4h）")
         return wire
     }
 
@@ -417,15 +412,10 @@ object EchDoh {
     }
 
     /**
-     * ECH 被服务器拒绝（密钥轮换 / 配置失效）后清缓存，让 OkHttp 的重试换一份配置。
-     * 活源那份也一起丢（它可能正是被拒的那份），并把这个域名翻成「用它自己的记录」，
-     * 否则重试会拿回同一个值、一直撞同一堵墙。
+     * ECH 被服务器拒绝（密钥轮换 / 配置失效）后清缓存，下次重新从 DoH 取。
      */
     fun invalidateEch(host: String) {
-        echCache.remove(host)
-        echFailed.remove(host)
         echCache.remove(LIVE_SOURCE_HOST)
-        if (host != LIVE_SOURCE_HOST) ownFirst.add(host)
     }
 
     // ---------------- DNS ----------------
@@ -480,11 +470,22 @@ object EchDoh {
 
     /** 底层 JSON 查询（仅用于 HTTPS(65) 记录；A/AAAA 交给 DnsOverHttps） */
     private fun query(dohUrl: String, host: String, type: String): String? {
+        // DoH 网关域名本身不能走系统 DNS（被污染），用 bootstrap IP 钉住
+        val pins = DohConfig.bootstrapIps()
+            .mapNotNull { runCatching { java.net.InetAddress.getByName(it) }.getOrNull() }
+        val client = if (pins.isNotEmpty()) {
+            val pinnedDns = object : okhttp3.Dns {
+                override fun lookup(hostname: String): List<java.net.InetAddress> = pins
+            }
+            bootstrapClient.newBuilder().dns(pinnedDns).build()
+        } else {
+            bootstrapClient
+        }
         val req = Request.Builder()
             .url("$dohUrl?name=$host&type=$type")
             .header("Accept", "application/dns-json")
             .build()
-        bootstrapClient.newCall(req).execute().use { resp ->
+        client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) {
                 Log.w(TAG, "doh $type HTTP ${resp.code}")
                 return null
@@ -501,11 +502,8 @@ object EchDoh {
  * 域名不支持 ECH、只能走明文，一样会被污染到假 IP 而连不上。
  * 所以 DoH 是**解析层**的事，与 ECH 的覆盖面无关。
  *
- * 差别只在解析失败之后：
- * - **核心域名**：fail-closed（抛异常）。系统 DNS 对它们必然被污染，
- *   宁可不连也不连假 IP —— 这也是用户明确的底线。
- * - **其他域名**：回落系统 DNS。否则自有网关一挂 = 全 App 解析失败，比系统 DNS 更脆；
- *   而这些域名的污染风险本来就低（不在墙内）。
+ * 规格（用户明确）：所有 IP 只从 DoH 拿，不走系统 DNS。DoH 失败直接抛异常，
+ * 不回落（系统 DNS 被污染，回落等于连假 IP）。
  *
  * 性能：`EchDoh.resolve` 内部带 5 分钟 A 记录缓存，且 OkHttp 有连接池、不会频繁 lookup，
  * 所以全量走 DoH 不会把解析变成瓶颈。
@@ -516,11 +514,8 @@ class EchDns(private val fallback: Dns = Dns.SYSTEM) : Dns {
         val addrs = runCatching { EchDoh.resolve(hostname) }.getOrNull()
         if (!addrs.isNullOrEmpty()) return addrs
 
-        if (EchHosts.isCoreDomain(hostname)) {
-            throw UnknownHostException("DoH 解析失败（fail-closed）：$hostname")
-        }
-        EchTrace.event("DoH 解析失败，回落系统 DNS：$hostname")
-        return fallback.lookup(hostname)
+        // 只从 DoH 拿 IP，不回落系统 DNS（用户规格）
+        throw UnknownHostException("DoH 解析失败（只走 DoH）：$hostname")
     }
 
     private companion object {

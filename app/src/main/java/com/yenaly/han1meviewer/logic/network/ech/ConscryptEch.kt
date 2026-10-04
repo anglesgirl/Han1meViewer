@@ -150,6 +150,12 @@ object ConscryptEch {
     /** 仅供诊断日志：当前已降级为明文的域名快照。 */
     fun echUnavailableHosts(): List<String> = echUnavailable.toList().sorted()
 
+    /** 清空 ECH 不可用标记（用户切换 DoH 后调用） */
+    fun clearEchUnavailable() {
+        echUnavailable.clear()
+        EchTrace.event("ECH 不可用标记已清空")
+    }
+
     /**
      * 包装 Conscrypt 的 SSLSocketFactory：返回 socket 前按 host 注入 ECHConfigList。
      * OkHttp 走的是 `createSocket(Socket, String, int, boolean)` 重载。
