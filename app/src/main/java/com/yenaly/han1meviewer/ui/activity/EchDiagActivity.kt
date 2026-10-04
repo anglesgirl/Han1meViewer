@@ -221,8 +221,22 @@ private fun EchDiagScreen(onClose: () -> Unit) {
             )
 
             Spacer(Modifier.height(8.dp))
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            Button(
+                onClick = {
+                    val text = EchTrace.dump()
+                    val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("ECH日志", text))
+                    android.widget.Toast.makeText(ctx, "ECH 日志已复制（${text.lines().size} 行）", android.widget.Toast.LENGTH_SHORT).show()
+                    log("复制日志", "${text.lines().size} 行已复制到剪贴板")
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("复制 ECH 日志到剪贴板")
+            }
+            Spacer(Modifier.height(4.dp))
             Text(
-                "提示：所有结果已写入 EchTrace，adb logcat 搜 HY-ECH-TRACE 可抓。",
+                "提示：复现问题后点上面复制，发给开发者分析。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
