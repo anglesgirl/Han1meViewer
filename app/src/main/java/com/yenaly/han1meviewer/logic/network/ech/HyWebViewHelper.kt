@@ -73,35 +73,49 @@ object HyWebViewHelper {
         // 非目标站域名直接放行
         if (!isTargetHost(host)) return null
 
-        var fetchUrl = url
-        var redirects = 0
-        try {
-            while (true) {
-                val resp = doGet(fetchUrl, request) ?: break
-                // 手动跟随重定向（WebResourceResponse 不允许 3xx）
-                if (resp.code in 300..399 && redirects < 5) {
-                    val loc = resp.header("Location")?.trim()?.ifEmpty { null }
-                    if (loc == null) {
-                        Log.w(TAG, "redirect without Location: $fetchUrl")
-                        break
+        var lastError: Exception? = null
+        repeat(2) { attempt ->
+            var fetchUrl = url
+            var redirects = 0
+            try {
+                while (true) {
+                    val resp = doGet(fetchUrl, request) ?: break
+                    // 手动跟随重定向（WebResourceResponse 不允许 3xx）
+                    if (resp.code in 300..399 && redirects < 5) {
+                        val loc = resp.header("Location")?.trim()?.ifEmpty { null }
+                        if (loc == null) {
+                            Log.w(TAG, "redirect without Location: $fetchUrl")
+                            break
+                        }
+                        val next = resolveUrl(fetchUrl, loc)
+                        val nextHost = runCatching { java.net.URI(next).host }.getOrNull()
+                        if (nextHost == null || !isTargetHost(nextHost)) {
+                            // 跨站重定向交回 WebView（非错误，不重试）
+                            Log.d(TAG, "cross-site redirect, passthrough: $next")
+                            return null
+                        }
+                        Log.d(TAG, "follow redirect: $fetchUrl -> $next")
+                        fetchUrl = next
+                        redirects++
+                        continue
                     }
-                    val next = resolveUrl(fetchUrl, loc)
-                    val nextHost = runCatching { java.net.URI(next).host }.getOrNull()
-                    if (nextHost == null || !isTargetHost(nextHost)) {
-                        // 跨站重定向交回 WebView
-                        Log.d(TAG, "cross-site redirect, passthrough: $next")
-                        return null
-                    }
-                    Log.d(TAG, "follow redirect: $fetchUrl -> $next")
-                    fetchUrl = next
-                    redirects++
-                    continue
+                    return toWebResourceResponse(fetchUrl, resp)
                 }
-                return toWebResourceResponse(fetchUrl, resp)
+            } catch (e: Exception) {
+                lastError = e
+                Log.w(TAG, "ECH GET attempt ${attempt + 1}/2 failed: $url: ${e.message}")
+                if (attempt == 0) {
+                    // 第一次失败，等 700ms 再试一次（给 DoH/ECH 配置一点时间）
+                    try {
+                        Thread.sleep(700)
+                    } catch (_: Exception) {
+                    }
+                }
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "ECH GET failed (fail-closed): $fetchUrl: ${e.message}")
         }
+
+        // 两次都失败才 fail-closed
+        Log.w(TAG, "ECH GET failed after retry (fail-closed): $url: ${lastError?.message}")
 
         // 目标站 fail-closed：宁可失败也不明文直连
         val page = "<!DOCTYPE html><html><body><h3>ECH 连接失败</h3></body></html>"
