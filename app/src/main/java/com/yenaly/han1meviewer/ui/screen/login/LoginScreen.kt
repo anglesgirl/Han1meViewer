@@ -2,6 +2,7 @@ package com.yenaly.han1meviewer.ui.screen.login
 
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +13,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,10 +30,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.yenaly.han1meviewer.R
+import com.yenaly.han1meviewer.logic.network.ech.MiniProxy
 import com.yenaly.han1meviewer.ui.component.appbar.HanimeScaffold
 import com.yenaly.han1meviewer.ui.preview.ComponentPreview
 
@@ -46,9 +50,20 @@ fun LoginScreen(
     webViewFactory: () -> WebView,
 ) {
     val refreshingState = rememberPullToRefreshState()
+    // 仅测试用：419 诊断弹窗开关
+    var showDiagDialog by remember { mutableStateOf(false) }
     HanimeScaffold(
         title = stringResource(R.string.login),
         onBack = onBack,
+        actions = {
+            // 仅测试用：小字"诊断"按钮，看最后一次 419 的打码摘要
+            TextButton(
+                onClick = { showDiagDialog = true },
+                contentPadding = PaddingValues(horizontal = 8.dp),
+            ) {
+                Text("诊断", style = MaterialTheme.typography.labelMedium)
+            }
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 text = { Text(stringResource(R.string.scan_for_cookies)) },
@@ -83,6 +98,26 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+    }
+    // 仅测试用：419 诊断弹窗（内容已打码，用户截图发回）
+    if (showDiagDialog) {
+        val diag = remember { MiniProxy.getLast419Diag() }
+        AlertDialog(
+            onDismissRequest = { showDiagDialog = false },
+            title = { Text("419 诊断") },
+            text = {
+                Text(
+                    text = diag.ifBlank { "暂无 419 记录" },
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showDiagDialog = false }) {
+                    Text("关闭")
+                }
+            },
+        )
     }
 }
 

@@ -64,6 +64,21 @@ object MiniProxy {
     var targetBase: String = ""
         private set
 
+    /**
+     * 最后一次 419 的诊断文本（已打码），供登录页"诊断"弹窗本地展示。
+     * log 服务器上报不通时，用户截图此文本发回即可定位。
+     */
+    @Volatile
+    var last419Diag: String = ""
+        private set
+
+    /** 最近一次 POST /login 的请求摘要（已打码），419 响应到来时拼入 [last419Diag] */
+    @Volatile
+    private var pendingPostDiag: String = ""
+
+    /** 取最后一次 419 诊断文本，空字符串表示暂无记录 */
+    fun getLast419Diag(): String = last419Diag
+
     private var serverSocket: ServerSocket? = null
     private val running = AtomicBoolean(false)
     private val pool = Executors.newCachedThreadPool { r ->
@@ -462,6 +477,17 @@ object MiniProxy {
         return s.trim().trimEnd(';').trim()
     }
 
+    /**
+     * 把代理地址头（Referer/Origin）改写为目标站地址，与 forward() 的改写规则一致，
+     * 供 419 诊断展示服务器实际收到的值。
+     */
+    private fun rewriteProxyHeader(value: String): String {
+        if (value.isBlank()) return value
+        val proxyPrefix = "http://127.0.0.1:$port"
+        return if (value.startsWith(proxyPrefix)) targetBase + value.removePrefix(proxyPrefix)
+        else value
+    }
+
     // ---------- 419 诊断日志 ----------
 
     /** 419 诊断：POST /login 的请求头 + body（Cookie 值打码，密码字段打码） */
@@ -504,6 +530,16 @@ object MiniProxy {
             sb.append("\n  body(500): ").append(maskPasswordFields(bodyStr.take(500)))
         } else {
             sb.append("\n  body: <empty>")
+        }
+        // 本地 419 诊断弹窗用：拼一份打码摘要，419 响应到来时拼入 last419Diag
+        val cookieCount = if (cookieNames.isBlank()) 0 else cookieNames.split(",").size
+        pendingPostDiag = buildString {
+            append("Cookie: ")
+            if (cookieNames.isBlank()) append("<无>") else append(cookieNames)
+            append(" (").append(cookieCount).append("个)")
+            append("\nHas _token: ").append(hasToken)
+            append("\nReferer: ").append(rewriteProxyHeader(referer).ifBlank { "<无>" })
+            append("\nOrigin: ").append(rewriteProxyHeader(origin).ifBlank { "<无>" })
         }
         Log.d(TAG, sb.toString())
         // 上报到 log 服务器（用户抓不了包，远程看）
@@ -554,8 +590,20 @@ object MiniProxy {
             }
             sb.append("\n  ").append(name).append(": ").append(display)
         }
-        Log.d(TAG, sb.toString())
+        // 本地 419 诊断弹窗：拼请求摘要（已打码）+ 419 标记，供用户截图发回
         val path = targetUrl.removePrefix(targetBase)
+        val postDiag = pendingPostDiag
+        last419Diag = buildString {
+            append(method).append(' ').append(path.ifEmpty { "/" }).append(" → 419")
+            if (postDiag.isNotEmpty() &&
+                method.equals("POST", ignoreCase = true) &&
+                path.contains("login", ignoreCase = true)
+            ) {
+                append('\n').append(postDiag)
+                pendingPostDiag = "" // 消费一次，避免陈旧数据污染下一次
+            }
+        }
+        Log.d(TAG, sb.toString())
         EchLogReporter.report(
             "mini_login_419",
             mapOf(
