@@ -4,6 +4,7 @@ import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import android.widget.Toast
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.USER_AGENT
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -106,9 +107,11 @@ class EchWebBridge(private val webView: WebView) {
         val reqBody = body.toRequestBody("application/x-www-form-urlencoded".toMediaTypeOrNull())
         val resp = EchHttp.loginClient.newCall(builder.post(reqBody).build()).execute()
 
+        var code = -1
         var location: String? = null
         var hasLoginCookie = false
         resp.use {
+            code = it.code
             Log.i(TAG, "postLogin <- ${it.code} $absoluteUrl")
             it.headers("Set-Cookie").forEach { raw ->
                 var fixed = raw
@@ -139,6 +142,12 @@ class EchWebBridge(private val webView: WebView) {
                     }
                     else -> absoluteUrl
                 }
+                // 诊断 Toast：无 logcat 环境下也能看到 POST 实际返回了什么
+                // 不打印 body 内容（可能含密码），只打印是否携带 _token
+                val msg = "POST $code → ${location ?: "(无跳转)"} " +
+                    "cookie:${finalCookie.length} loginCk:$hasLoginCookie " +
+                    "token:${body.contains("_token")}"
+                Toast.makeText(webView.context, msg, Toast.LENGTH_LONG).show()
                 // 重新 loadUrl 真实页面 → 子请求由 HyWebViewHelper 走 ECH，CookieManager 会话生效
                 webView.loadUrl(target)
             } catch (e: Exception) {
