@@ -117,22 +117,29 @@ class EchWebBridge(
         val reqBody = body.toRequestBody("application/x-www-form-urlencoded".toMediaTypeOrNull())
         val request = builder.post(reqBody).build()
 
-        // 先尝试 ECH，失败则回退到直连
+        // 先尝试 ECH，失败则回退到直连（仍走 DoH，不走系统 DNS）
+        // 核心域名不回退明文（fail-closed，明文必被 RST）
         val resp = try {
             Log.d(TAG, "postLogin trying ECH: $absoluteUrl")
             EchHttp.loginClient.newCall(request).execute()
         } catch (e: Exception) {
+            val isCore = host?.let { EchHosts.isCoreDomain(it) } ?: false
+            if (isCore) {
+                Log.w(TAG, "postLogin ECH failed for core domain, fail-closed: ${e.message}")
+                throw e
+            }
             Log.w(TAG, "postLogin ECH failed, fallback to direct: ${e.message}")
-            // 回退：普通 OkHttpClient（无 ECH）
+            // 回退：普通 OkHttpClient（无 ECH，但走 DoH）
             val fallbackClient = okhttp3.OkHttpClient.Builder()
+                .dns(EchDns())
                 .cookieJar(okhttp3.CookieJar.NO_COOKIES)
                 .followRedirects(false)
                 .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
                 .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                 .build()
-            // 记录负缓存（如果 host 已知）
+            // 记录不支持（内存，app 重启清空）
             if (host != null) {
-                HyWebViewHelper.markEchUnsupported(host)
+                ConscryptEch.markEchUnavailable(host)
             }
             fallbackClient.newCall(request).execute()
         }

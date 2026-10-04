@@ -62,6 +62,7 @@ object EchHttp {
             .sslSocketFactory(ConscryptEch.socketFactory, ConscryptEch.trustManager)
             .dns(EchDns())
             .cookieJar(okhttp3.CookieJar.NO_COOKIES)   // Cookie 由 CookieManager 统一管
+            .addInterceptor(EchRetryInterceptor())
             .followRedirects(false)
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
