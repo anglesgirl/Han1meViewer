@@ -10,9 +10,12 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.ServerSocket
 import java.net.Socket
+import java.nio.charset.Charset
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.zip.GZIPInputStream
+import java.util.zip.InflaterInputStream
 
 /**
  * WebView 专用 mini 本地反向代理。
@@ -29,6 +32,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    直接拼出 `https://hanime1.me/login` 再转发。
  *  - 页面内的相对路径（`/css/style.css`、表单 action 等）天然落在代理域名下，
  *    无需 `shouldInterceptRequest` 拦截改写，cookie/CSRF 不会错乱。
+ *  - HTML 响应里的绝对地址（如 `action="https://hanime1.me/login"`）会被改写为
+ *    代理地址，否则 WebView 提交表单时会绕过代理直接发 HTTPS，导致 origin: null
+ *    触发服务器 CSRF 419。改写前若响应是 gzip/deflate 会先解压，改完以明文返回。
  *
  * Cookie：WebView 的 CookieManager 按 `127.0.0.1` 存取，无需跨域同步。
  * 代理会把响应 `Set-Cookie` 里的 `Domain=` / `Secure` 去掉（否则 WebView
@@ -343,7 +349,50 @@ object MiniProxy {
                 if (it.code == 419) {
                     log419Diag(req.targetUrl, it.headers)
                 }
-                val respBody = it.body?.bytes() ?: ByteArray(0)
+                var respBody = it.body?.bytes() ?: ByteArray(0)
+                val respContentType = it.header("Content-Type") ?: ""
+                // HTML 绝对地址改写：页面里的绝对地址（如表单 action="https://hanime1.me/login"）
+                // 会让 WebView 绕过代理直接发 HTTPS，POST 时 origin: null → 服务器 CSRF 报 419。
+                // 把 targetBase 改写为本地代理地址，让所有站内请求都走代理经 ECH 转发。
+                // 只对 HTML 做，其他类型（CSS/JS/图片）不动。
+                var strippedEncoding = false
+                if (respContentType.contains("text/html", ignoreCase = true)) {
+                    val contentEncoding = it.header("Content-Encoding") ?: ""
+                    var htmlBytes = respBody
+                    var canRewrite = contentEncoding.isEmpty()
+                    if (contentEncoding.contains("gzip", ignoreCase = true)) {
+                        try {
+                            htmlBytes = gunzip(htmlBytes)
+                            strippedEncoding = true
+                            canRewrite = true
+                        } catch (e: Exception) {
+                            Log.w(TAG, "gunzip failed, skip html rewrite: ${e.message}")
+                        }
+                    } else if (contentEncoding.contains("deflate", ignoreCase = true)) {
+                        try {
+                            htmlBytes = inflate(htmlBytes)
+                            strippedEncoding = true
+                            canRewrite = true
+                        } catch (e: Exception) {
+                            Log.w(TAG, "inflate failed, skip html rewrite: ${e.message}")
+                        }
+                    }
+                    if (canRewrite) {
+                        val charset = parseCharset(respContentType) ?: Charsets.UTF_8
+                        var html = try {
+                            htmlBytes.toString(charset)
+                        } catch (_: Exception) {
+                            htmlBytes.toString(Charsets.UTF_8)
+                        }
+                        val base = targetBase
+                        if (base.isNotEmpty() && html.contains(base)) {
+                            val proxyBase = "http://127.0.0.1:$port"
+                            html = html.replace(base, proxyBase)
+                            Log.i(TAG, "rewrote absolute urls in html: $base -> $proxyBase")
+                        }
+                        respBody = html.toByteArray(charset)
+                    }
+                }
                 // 先在内存里拼好整个响应头：任何一步出错都不写 socket，避免半截响应；
                 // 状态行/头字段做 CRLF 消毒（上游脏数据会导致 WebView 报 net::ERR_INVALID_RESPONSE）
                 val sb = StringBuilder()
@@ -358,6 +407,8 @@ object MiniProxy {
                     if (ln == "transfer-encoding" || ln == "content-length" ||
                         ln == "connection"
                     ) continue
+                    // HTML 改写时若解压过 gzip/deflate，以明文返回，不再透传 content-encoding
+                    if (ln == "content-encoding" && strippedEncoding) continue
                     if (ln == "set-cookie") {
                         sb.append("Set-Cookie: ").append(rewriteSetCookie(cleanValue)).append("\r\n")
                     } else {
@@ -368,6 +419,8 @@ object MiniProxy {
                 // OkHttp 的 BridgeInterceptor 只在请求没带该头时才透明解压；
                 // WebView 带了该头时 body 是原始压缩字节，必须把 content-encoding
                 // 透传回去让 WebView 自己解，否则直接显示压缩字节就是乱码。
+                // 例外：HTML 改写时已解压（strippedEncoding），此时以明文返回，
+                // 上面循环里已跳过 content-encoding 头。
                 // Content-Length 按实际回写的字节数重算。
                 sb.append("Content-Length: ").append(respBody.size).append("\r\n")
                 sb.append("Connection: close\r\n")
@@ -479,6 +532,24 @@ object MiniProxy {
     /** 打码 form body 里的密码类字段值（_token 等 CSRF 字段保留可见） */
     private fun maskPasswordFields(body: String): String =
         body.replace(Regex("(?i)((?:password|passwd|pwd)[^&=]*=)([^&\\s]*)"), "$1***")
+
+    // ---------- HTML 改写辅助 ----------
+
+    private fun gunzip(data: ByteArray): ByteArray =
+        GZIPInputStream(data.inputStream()).use { it.readBytes() }
+
+    private fun inflate(data: ByteArray): ByteArray =
+        InflaterInputStream(data.inputStream()).use { it.readBytes() }
+
+    /** 从 Content-Type 头解析 charset，如 `text/html; charset=utf-8` */
+    private fun parseCharset(contentType: String): Charset? {
+        val m = Regex("(?i)charset=([^;\\s]+)").find(contentType) ?: return null
+        return try {
+            Charset.forName(m.groupValues[1].trim().trim('"'))
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     private fun writeSimple(socket: Socket, code: Int, text: String) {
         val body = text.toByteArray()
