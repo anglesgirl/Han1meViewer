@@ -103,7 +103,7 @@ val CDN_REGION_NODES = listOf(
 
 // github url
 
-const val HA1_GITHUB_URL = "https://github.com/misaka10032w/Han1meViewer"
+const val HA1_GITHUB_URL = "https://github.com/anglesgirl/Han1meViewer"
 
 const val HA1_GITHUB_ISSUE_URL = "$HA1_GITHUB_URL/issues"
 
@@ -111,7 +111,10 @@ const val HA1_GITHUB_FORUM_URL = "$HA1_GITHUB_URL/discussions"
 
 const val HA1_GITHUB_RELEASES_URL = "$HA1_GITHUB_URL/releases"
 
-const val HA1_GITHUB_API_URL = "https://api.github.com/repos/misaka10032w/Han1meViewer/"
+const val HA1_GITHUB_API_URL = "https://api.github.com/repos/anglesgirl/Han1meViewer/"
+// ⚠️ 已停用：这是上游作者（misaka10032w）的 Firebase 项目，本 fork 没有自己的 RTDB。
+// HomePageViewModel.fetchAnnouncementsFromFirebase() 已改为直接返回空列表，不再请求此处。
+// 如需恢复公告功能：把这里改成自己的 RTDB 地址，并恢复 fetchAnnouncementsFromFirebase() 的原实现。
 const val FIREBASE_REALTIME_DATABASE = "https://han1meviewer-86e5f-default-rtdb.asia-southeast1.firebasedatabase.app/"
 // for Shared Preference
 

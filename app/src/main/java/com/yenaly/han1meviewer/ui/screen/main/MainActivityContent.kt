@@ -40,6 +40,8 @@ import com.yenaly.han1meviewer.ui.navigation.main.MainDestinationSpec
 import com.yenaly.han1meviewer.ui.navigation.main.MainNavHost
 import com.yenaly.han1meviewer.ui.navigation.main.handleMainIntent
 import com.yenaly.han1meviewer.ui.navigation.main.navigateDrawerDestination
+import com.yenaly.han1meviewer.ui.navigation.navigateSafely
+import com.yenaly.han1meviewer.ui.navigation.settings.NetworkSettingsRoute
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.ui.screen.home.homepage.HomePageViewModel
@@ -76,6 +78,7 @@ fun MainActivityContent(
         var currentMainDestination by remember { mutableStateOf(MainDestinationSpec.Home) }
         var pendingUpdate by remember { mutableStateOf<Latest?>(null) }
         var showUsageNotice by remember { mutableStateOf(!Preferences.usageNoticeAccepted) }
+        var showVideoFixNotice by remember { mutableStateOf(!Preferences.hasShownVideoFixNotice) }
         val loginFirst = stringResource(R.string.login_first)
         val updateDownloadBackground = stringResource(R.string.update_download_background)
         val isDrawerOpen =
@@ -210,6 +213,40 @@ fun MainActivityContent(
                     },
                     onDeclined = { activity.finish() },
                 )
+                // 正式版一次性更新提示：视频播放修复
+                if (showVideoFixNotice) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            Preferences.hasShownVideoFixNotice = true
+                            showVideoFixNotice = false
+                        },
+                        title = { Text("视频播放修复") },
+                        text = {
+                            Text("修复了移动网络用户无法播放视频的问题。如仍无法播放，请到 设置 → 网络设置 里启用备用媒体 CDN，或手动选择延迟最低的 CDN 节点。")
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    Preferences.hasShownVideoFixNotice = true
+                                    showVideoFixNotice = false
+                                    composeNavController.navigateSafely(NetworkSettingsRoute)
+                                },
+                            ) {
+                                Text("去设置")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    Preferences.hasShownVideoFixNotice = true
+                                    showVideoFixNotice = false
+                                },
+                            ) {
+                                Text("知道了")
+                            }
+                        },
+                    )
+                }
             }
         }
 

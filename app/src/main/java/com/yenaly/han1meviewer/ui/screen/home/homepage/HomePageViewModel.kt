@@ -106,40 +106,48 @@ class HomePageViewModel: ViewModel() {
             }
         }
     }
-    private suspend fun fetchAnnouncementsFromFirebase(): List<Announcement> =
-        suspendCancellableCoroutine { continuation ->
-            val lastDismissTime = getSpValue("last_dismiss_time", 0L, "setting_pref")
-            val shouldShowAnno = System.currentTimeMillis() - lastDismissTime > 24 * 60 * 60 * 1000L
-            if (!shouldShowAnno) {
-                continuation.resume(emptyList())
-                return@suspendCancellableCoroutine
-            }
-
-            database.getReference("announcements").get()
-                .addOnSuccessListener { snapshot ->
-                    val list = mutableListOf<Announcement>()
-                    if (snapshot.exists()) {
-                        for (announceSnap in snapshot.children) {
-                            val announcement = announceSnap.getValue(Announcement::class.java)
-                            if (announcement != null && announcement.isActive) {
-                                list.add(announcement)
-                            }
-                        }
-                        if (continuation.isActive) {
-                            continuation.resume(list.sortedBy { it.priority })
-                        }
-                    } else {
-                        if (continuation.isActive) {
-                            continuation.resume(emptyList())
-                        }
-                    }
-                }.addOnFailureListener { e ->
-                    Log.e("Announcement", "读取失败: ${e.message}")
-                    if (continuation.isActive) {
-                        continuation.resume(emptyList()) // 失败也容错返回空列表
-                    }
-                }
-        }
+    // fork 停用上游 RTDB 公告：FIREBASE_REALTIME_DATABASE 指向的是上游作者
+    // （misaka10032w）的 Firebase 项目，本 fork 没有自己的 RTDB。
+    // 如需恢复：把 Constants.FIREBASE_REALTIME_DATABASE 改成自己的 RTDB 地址，
+    // 并把下面的 early-return 删掉即可。
+    private suspend fun fetchAnnouncementsFromFirebase(): List<Announcement> {
+        return emptyList()
+    }
+    // 旧实现（保留作参考，RTDB 接入后可恢复）：
+    // private suspend fun fetchAnnouncementsFromFirebase(): List<Announcement> =
+    //     suspendCancellableCoroutine { continuation ->
+    //         val lastDismissTime = getSpValue("last_dismiss_time", 0L, "setting_pref")
+    //         val shouldShowAnno = System.currentTimeMillis() - lastDismissTime > 24 * 60 * 60 * 1000L
+    //         if (!shouldShowAnno) {
+    //             continuation.resume(emptyList())
+    //             return@suspendCancellableCoroutine
+    //         }
+    //
+    //         database.getReference("announcements").get()
+    //             .addOnSuccessListener { snapshot ->
+    //                 val list = mutableListOf<Announcement>()
+    //                 if (snapshot.exists()) {
+    //                     for (announceSnap in snapshot.children) {
+    //                         val announcement = announceSnap.getValue(Announcement::class.java)
+    //                         if (announcement != null && announcement.isActive) {
+    //                             list.add(announcement)
+    //                         }
+    //                     }
+    //                     if (continuation.isActive) {
+    //                         continuation.resume(list.sortedBy { it.priority })
+    //                     }
+    //                 } else {
+    //                     if (continuation.isActive) {
+    //                         continuation.resume(emptyList())
+    //                     }
+    //                 }
+    //             }.addOnFailureListener { e ->
+    //                 Log.e("Announcement", "读取失败: ${e.message}")
+    //                 if (continuation.isActive) {
+    //                     continuation.resume(emptyList()) // 失败也容错返回空列表
+    //                 }
+    //             }
+    //     }
 
     private companion object {
         const val ANNOUNCEMENTS_TIMEOUT_MILLIS = 5_000L
