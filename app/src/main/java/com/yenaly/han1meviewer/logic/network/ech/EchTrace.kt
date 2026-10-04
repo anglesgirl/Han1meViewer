@@ -28,7 +28,7 @@ object EchTrace {
 
     private val fmt = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
-    /** 记录一条关键事件（thread-safe；同时打到 logcat，远程上报如果开了）。 */
+    /** 记录一条关键事件（thread-safe；同时打到 logcat）。 */
     fun event(message: String) {
         val line = "${fmt.format(Date())} $message"
         synchronized(ring) {
@@ -36,8 +36,6 @@ object EchTrace {
             while (ring.size > CAPACITY) ring.removeFirst()
         }
         Log.i(TAG, message)
-        // 远程上报（开关在 EchLogReporter.enabled）
-        EchLogReporter.report("echtrace", mapOf("msg" to message))
     }
 
     /** 当前缓冲内容（按时间顺序），供 [com.yenaly.han1meviewer.util.LogExporter] 落盘。 */
