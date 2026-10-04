@@ -123,7 +123,7 @@ object ConscryptEch {
             CertificateTransparencyVerificationReason.UNKNOWN
 
         override fun getDomainEncryptionMode(hostname: String?): DomainEncryptionMode =
-            if (hostname != null && EchHosts.isProtected(hostname)) DomainEncryptionMode.REQUIRED
+            if (hostname != null && EchHosts.isProtected(hostname)) DomainEncryptionMode.ENABLED
             else DomainEncryptionMode.DISABLED
     }
 
