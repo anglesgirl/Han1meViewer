@@ -347,7 +347,7 @@ object MiniProxy {
                 }
                 // 419 诊断：419 响应打印完整响应头
                 if (it.code == 419) {
-                    log419Diag(req.targetUrl, it.headers)
+                    log419Diag(req.method, req.targetUrl, it.headers)
                 }
                 var respBody = it.body?.bytes() ?: ByteArray(0)
                 val respContentType = it.header("Content-Type") ?: ""
@@ -468,7 +468,21 @@ object MiniProxy {
     private fun logLoginPostDiag(path: String, req: ProxyRequest) {
         val sb = StringBuilder()
         sb.append("== 419 diag: POST ").append(path).append(" ==")
+        var cookieNames = ""
+        var hasCookie = false
+        var referer = ""
+        var origin = ""
+        var contentType = ""
         for ((k, v) in req.headers) {
+            when {
+                k.equals("Cookie", ignoreCase = true) -> {
+                    hasCookie = v.isNotBlank()
+                    cookieNames = cookieNamesOf(v)
+                }
+                k.equals("Referer", ignoreCase = true) -> referer = v
+                k.equals("Origin", ignoreCase = true) -> origin = v
+                k.equals("Content-Type", ignoreCase = true) -> contentType = v
+            }
             val display = if (k.equals("Cookie", ignoreCase = true) ||
                 k.equals("Authorization", ignoreCase = true) ||
                 k.equals("Proxy-Authorization", ignoreCase = true)
@@ -479,31 +493,57 @@ object MiniProxy {
             }
             sb.append("\n  ").append(k).append(": ").append(display)
         }
+        var hasToken = false
         if (req.body.isNotEmpty()) {
             val bodyStr = try {
                 req.body.toString(Charsets.UTF_8)
             } catch (_: Exception) {
                 "<binary ${req.body.size} bytes>"
             }
+            hasToken = bodyStr.contains("_token", ignoreCase = true)
             sb.append("\n  body(500): ").append(maskPasswordFields(bodyStr.take(500)))
         } else {
             sb.append("\n  body: <empty>")
         }
         Log.d(TAG, sb.toString())
+        // 上报到 log 服务器（用户抓不了包，远程看）
+        EchLogReporter.report(
+            "mini_login_post",
+            mapOf(
+                "path" to path,
+                "has_cookie" to hasCookie,
+                "cookie_names" to cookieNames,
+                "has_token" to hasToken,
+                "referer" to referer,
+                "origin" to origin,
+                "content_type" to contentType,
+            ),
+        )
     }
 
     /** 419 诊断：GET /login 的 Set-Cookie（值打码，只留 cookie 名和属性） */
     private fun logSetCookieDiag(path: String, setCookies: List<String>) {
         val sb = StringBuilder()
         sb.append("== 419 diag: GET ").append(path).append(" Set-Cookie ==")
+        val names = ArrayList<String>(setCookies.size)
         for (sc in setCookies) {
             sb.append("\n  ").append(maskSetCookieValue(sc))
+            val eq = sc.indexOf('=')
+            if (eq > 0) names.add(sc.substring(0, eq).trim())
         }
         Log.d(TAG, sb.toString())
+        EchLogReporter.report(
+            "mini_login_get_cookie",
+            mapOf(
+                "path" to path,
+                "cookie_names" to names.joinToString(","),
+                "count" to setCookies.size,
+            ),
+        )
     }
 
     /** 419 诊断：419 响应的完整响应头（Set-Cookie 值打码） */
-    private fun log419Diag(targetUrl: String, headers: okhttp3.Headers) {
+    private fun log419Diag(method: String, targetUrl: String, headers: okhttp3.Headers) {
         val sb = StringBuilder()
         sb.append("== 419 diag: 419 response headers for ").append(targetUrl).append(" ==")
         for ((name, value) in headers) {
@@ -515,7 +555,23 @@ object MiniProxy {
             sb.append("\n  ").append(name).append(": ").append(display)
         }
         Log.d(TAG, sb.toString())
+        val path = targetUrl.removePrefix(targetBase)
+        EchLogReporter.report(
+            "mini_login_419",
+            mapOf(
+                "path" to path,
+                "method" to method,
+            ),
+        )
     }
+
+    /** 取 Cookie 请求头的名列表（值不取）：`a=1; b=2` → `a,b` */
+    private fun cookieNamesOf(cookieHeader: String): String =
+        cookieHeader.split(";").mapNotNull { part ->
+            val t = part.trim()
+            val eq = t.indexOf('=')
+            if (eq > 0) t.substring(0, eq).trim().takeIf { it.isNotEmpty() } else null
+        }.joinToString(",")
 
     /** 打码 Cookie 请求头：保留名，值→*** */
     private fun maskCookieValues(cookieHeader: String): String =
