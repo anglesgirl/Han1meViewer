@@ -363,12 +363,14 @@ object MiniProxy {
                 }
                 var respBody = it.body?.bytes() ?: ByteArray(0)
                 val respContentType = it.header("Content-Type") ?: ""
-                // HTML 绝对地址改写：页面里的绝对地址（如表单 action="https://hanime1.me/login"）
-                // 会让 WebView 绕过代理直接发 HTTPS，POST 时 origin: null → 服务器 CSRF 报 419。
+                // 绝对地址改写：页面/JS/CSS 里的绝对地址（如表单 action="https://hanime1.me/login"、
+                // JS 里 fetch("https://hanime1.me/login")）会让 WebView 绕过代理直接发 HTTPS，
+                // POST 时 origin: null → 服务器 CSRF 报 419。
                 // 把 targetBase 改写为本地代理地址，让所有站内请求都走代理经 ECH 转发。
-                // 只对 HTML 做，其他类型（CSS/JS/图片）不动。
+                // 只对文本类型做，图片/字体等二进制不动。
                 var strippedEncoding = false
-                if (respContentType.contains("text/html", ignoreCase = true)) {
+                val rewriteKind = rewriteKindOf(respContentType)
+                if (rewriteKind != null) {
                     val contentEncoding = it.header("Content-Encoding") ?: ""
                     var htmlBytes = respBody
                     var canRewrite = contentEncoding.isEmpty()
@@ -378,7 +380,7 @@ object MiniProxy {
                             strippedEncoding = true
                             canRewrite = true
                         } catch (e: Exception) {
-                            Log.w(TAG, "gunzip failed, skip html rewrite: ${e.message}")
+                            Log.w(TAG, "gunzip failed, skip rewrite: ${e.message}")
                         }
                     } else if (contentEncoding.contains("deflate", ignoreCase = true)) {
                         try {
@@ -386,7 +388,7 @@ object MiniProxy {
                             strippedEncoding = true
                             canRewrite = true
                         } catch (e: Exception) {
-                            Log.w(TAG, "inflate failed, skip html rewrite: ${e.message}")
+                            Log.w(TAG, "inflate failed, skip rewrite: ${e.message}")
                         }
                     }
                     if (canRewrite) {
@@ -400,7 +402,7 @@ object MiniProxy {
                         if (base.isNotEmpty() && html.contains(base)) {
                             val proxyBase = "http://127.0.0.1:$port"
                             html = html.replace(base, proxyBase)
-                            Log.i(TAG, "rewrote absolute urls in html: $base -> $proxyBase")
+                            Log.i(TAG, "rewrote absolute urls in $rewriteKind: $base -> $proxyBase")
                         }
                         respBody = html.toByteArray(charset)
                     }
@@ -419,7 +421,7 @@ object MiniProxy {
                     if (ln == "transfer-encoding" || ln == "content-length" ||
                         ln == "connection"
                     ) continue
-                    // HTML 改写时若解压过 gzip/deflate，以明文返回，不再透传 content-encoding
+                    // 文本改写（html/js/css/json）时若解压过 gzip/deflate，以明文返回，不再透传 content-encoding
                     if (ln == "content-encoding" && strippedEncoding) continue
                     if (ln == "set-cookie") {
                         sb.append("Set-Cookie: ").append(rewriteSetCookie(cleanValue)).append("\r\n")
@@ -431,7 +433,7 @@ object MiniProxy {
                 // OkHttp 的 BridgeInterceptor 只在请求没带该头时才透明解压；
                 // WebView 带了该头时 body 是原始压缩字节，必须把 content-encoding
                 // 透传回去让 WebView 自己解，否则直接显示压缩字节就是乱码。
-                // 例外：HTML 改写时已解压（strippedEncoding），此时以明文返回，
+                // 例外：文本改写时已解压（strippedEncoding），此时以明文返回，
                 // 上面循环里已跳过 content-encoding 头。
                 // Content-Length 按实际回写的字节数重算。
                 sb.append("Content-Length: ").append(respBody.size).append("\r\n")
@@ -634,7 +636,22 @@ object MiniProxy {
     private fun maskPasswordFields(body: String): String =
         body.replace(Regex("(?i)((?:password|passwd|pwd)[^&=]*=)([^&\\s]*)"), "$1***")
 
-    // ---------- HTML 改写辅助 ----------
+    // ---------- 绝对地址改写辅助 ----------
+
+    /**
+     * 需要改写绝对地址的文本响应类型。返回日志用名；null 表示不改写。
+     * 覆盖 html / js / css / json 等文本类型，二进制（图片/字体/视频）不动。
+     */
+    private fun rewriteKindOf(contentType: String): String? {
+        val ct = contentType.lowercase()
+        return when {
+            ct.contains("text/html") -> "html"
+            ct.contains("text/css") -> "css"
+            ct.contains("application/json") || ct.contains("text/json") -> "json"
+            ct.contains("javascript") || ct.contains("ecmascript") -> "js"
+            else -> null
+        }
+    }
 
     private fun gunzip(data: ByteArray): ByteArray =
         GZIPInputStream(data.inputStream()).use { it.readBytes() }
