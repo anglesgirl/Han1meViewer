@@ -114,7 +114,7 @@ class LoginActivity : FrameActivity(), EchWebBridge.LoginResultCallback {
             // 经 ECH 拦截，POST 由 JS 桥（EchWebBridge）接管代发。Cookie 全在
             // CookieManager（真实域名），无需改写。
 
-            val bridge = EchWebBridge(this, this)
+            val bridge = EchWebBridge(this, this@LoginActivity)
             addJavascriptInterface(bridge, "HyBridge")
 
             webViewClient = object : WebViewClient() {
