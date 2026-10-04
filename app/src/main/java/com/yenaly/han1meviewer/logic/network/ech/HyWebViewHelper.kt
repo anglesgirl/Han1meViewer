@@ -54,6 +54,19 @@ object HyWebViewHelper {
             .build()
     }
 
+    /** 直连客户端：走 DoH 拿 IP，但不做 ECH（用于 ECH 失败时的回退） */
+    private val directClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .dns(EchDns())
+            .cookieJar(CookieJar.NO_COOKIES)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
     /** 是否目标站域名（主站，用于日志区分） */
     fun isTargetHost(host: String?): Boolean {
         if (host.isNullOrBlank()) return false
@@ -101,7 +114,9 @@ object HyWebViewHelper {
 
     /**
      * shouldInterceptRequest 唯一入口。
-     * 只拦截 GET（POST 返回 null 交给 JS 桥）；所有域名都尝试 ECH，失败则回退。
+     * 只拦截 GET（POST 返回 null 交给 JS 桥）。
+     * 所有 HTTPS 请求都经 OkHttp+DoH 处理（永不交回 WebView 用系统 DNS）：
+     * 先尝试 ECH，失败则直连（仍走 DoH 拿 IP）。
      */
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
         val url = request.url?.toString() ?: return null
@@ -114,70 +129,75 @@ object HyWebViewHelper {
             return null
         }
 
-        // 只处理 HTTPS（HTTP 无需 ECH）
+        // 只处理 HTTPS（HTTP 无需 ECH，也不走 DoH，直接放行）
         if (!url.startsWith("https://", ignoreCase = true)) return null
 
-        // 查 ECH 能力缓存：已知不支持的直接放行（WebView 直连）
-        when (getEchCapability(host)) {
+        // 查 ECH 能力缓存
+        val tryEch = when (getEchCapability(host)) {
             false -> {
-                Log.d(TAG, "ECH not supported (cached), passthrough: $host")
-                return null
+                Log.d(TAG, "ECH not supported (cached), direct via DoH: $host")
+                false
             }
-            true -> Log.d(TAG, "ECH supported (cached): $host")
-            null -> Log.d(TAG, "ECH capability unknown, trying: $host")
-        }
-
-        var lastError: Exception? = null
-        repeat(2) { attempt ->
-            var fetchUrl = url
-            var redirects = 0
-            try {
-                while (true) {
-                    val resp = doGet(fetchUrl, request) ?: break
-                    // 手动跟随重定向（WebResourceResponse 不允许 3xx）
-                    if (resp.code in 300..399 && redirects < 5) {
-                        val loc = resp.header("Location")?.trim()?.ifEmpty { null }
-                        if (loc == null) {
-                            Log.w(TAG, "redirect without Location: $fetchUrl")
-                            break
-                        }
-                        val next = resolveUrl(fetchUrl, loc)
-                        val nextHost = runCatching { java.net.URI(next).host }.getOrNull()
-                        if (nextHost == null) {
-                            Log.d(TAG, "bad redirect target, passthrough: $next")
-                            return null
-                        }
-                        // 跨站重定向：检查目标站点的 ECH 能力
-                        if (!isSameOrSubdomain(nextHost, host)) {
-                            Log.d(TAG, "cross-site redirect, passthrough: $next")
-                            return null
-                        }
-                        Log.d(TAG, "follow redirect: $fetchUrl -> $next")
-                        fetchUrl = next
-                        redirects++
-                        continue
-                    }
-                    // ECH 成功：缓存能力
-                    setEchCapability(host, true)
-                    return toWebResourceResponse(fetchUrl, resp)
-                }
-            } catch (e: Exception) {
-                lastError = e
-                Log.w(TAG, "ECH GET attempt ${attempt + 1}/2 failed: $url: ${e.message}")
-                if (attempt == 0) {
-                    // 第一次失败，等 700ms 再试一次（给 DoH/ECH 配置一点时间）
-                    try {
-                        Thread.sleep(700)
-                    } catch (_: Exception) {
-                    }
-                }
+            true -> {
+                Log.d(TAG, "ECH supported (cached): $host")
+                true
+            }
+            null -> {
+                Log.d(TAG, "ECH capability unknown, trying: $host")
+                true
             }
         }
 
-        // ECH 失败：缓存负结果，回退到 WebView 直连（返回 null）
-        Log.w(TAG, "ECH failed, fallback to direct: $url: ${lastError?.message}")
-        setEchCapability(host, false)
-        return null
+        if (tryEch) {
+            // 尝试 ECH
+            var lastError: Exception? = null
+            repeat(2) { attempt ->
+                var fetchUrl = url
+                var redirects = 0
+                try {
+                    while (true) {
+                        val resp = doGet(fetchUrl, request, useEch = true) ?: break
+                        if (resp.code in 300..399 && redirects < 5) {
+                            val loc = resp.header("Location")?.trim()?.ifEmpty { null }
+                            if (loc == null) break
+                            val next = resolveUrl(fetchUrl, loc)
+                            val nextHost = runCatching { java.net.URI(next).host }.getOrNull()
+                            if (nextHost == null || !isSameOrSubdomain(nextHost, host)) {
+                                Log.d(TAG, "cross-site redirect, fallback to direct: $next")
+                                break
+                            }
+                            fetchUrl = next
+                            redirects++
+                            continue
+                        }
+                        setEchCapability(host, true)
+                        return toWebResourceResponse(fetchUrl, resp)
+                    }
+                } catch (e: Exception) {
+                    lastError = e
+                    Log.w(TAG, "ECH GET attempt ${attempt + 1}/2 failed: $url: ${e.message}")
+                    if (attempt == 0) {
+                        try { Thread.sleep(700) } catch (_: Exception) {}
+                    }
+                }
+            }
+            Log.w(TAG, "ECH failed, will try direct via DoH: $url: ${lastError?.message}")
+            setEchCapability(host, false)
+        }
+
+        // ECH 失败或已知不支持：直连（仍走 DoH 拿 IP，不走系统 DNS）
+        return try {
+            doGetDirect(url, request)?.let { toWebResourceResponse(url, it) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Direct GET failed: $url: ${e.message}")
+            // 直连也失败：返回错误页（不交回 WebView，避免系统 DNS 污染）
+            val page = "<!DOCTYPE html><html><body><h3>连接失败</h3><p>${e.message}</p></body></html>"
+            WebResourceResponse(
+                "text/html", "utf-8", 502, "Bad Gateway",
+                mapOf("Cache-Control" to "no-store"),
+                ByteArrayInputStream(page.toByteArray()),
+            )
+        }
     }
 
     /** 判断是否为相同域名或子域名 */
@@ -188,7 +208,7 @@ object HyWebViewHelper {
     }
 
     /** 在进程内经 ECH 发送 GET，返回 OkHttp Response（调用方负责 close） */
-    private fun doGet(url: String, request: WebResourceRequest): okhttp3.Response? {
+    private fun doGet(url: String, request: WebResourceRequest, useEch: Boolean = true): okhttp3.Response? {
         val builder = Request.Builder().url(url)
 
         // 透传 WebView 的请求头（Cookie/Host 单独处理）
@@ -206,7 +226,8 @@ object HyWebViewHelper {
             Log.d(TAG, "cookie send: ${cookie.length} chars to $url")
         }
 
-        val resp = echClient.newCall(builder.get().build()).execute()
+        val client = if (useEch) echClient else directClient
+        val resp = client.newCall(builder.get().build()).execute()
 
         // Set-Cookie 写回 CookieManager（真实域名，属性改写保证 WebView 能存下）
         resp.headers("Set-Cookie").forEach { raw ->
@@ -225,6 +246,11 @@ object HyWebViewHelper {
             throw java.io.IOException("upstream ${resp.code}")
         }
         return resp
+    }
+
+    /** 直连 GET（走 DoH 拿 IP，不做 ECH）：用于 ECH 失败时的回退 */
+    private fun doGetDirect(url: String, request: WebResourceRequest): okhttp3.Response? {
+        return doGet(url, request, useEch = false)
     }
 
     /** OkHttp Response → WebResourceResponse */
