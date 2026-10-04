@@ -129,6 +129,7 @@ object HyWebViewHelper {
             } catch (e: Exception) {
                 lastError = e
                 Log.w(TAG, "ECH GET attempt ${attempt + 1}/2 failed: $url: ${e.message}")
+                EchTrace.event("ECH失败 $host: ${e.javaClass.simpleName}: ${e.message?.take(100)}")
                 if (attempt == 0) {
                     try { Thread.sleep(700) } catch (_: Exception) {}
                 }
@@ -141,6 +142,7 @@ object HyWebViewHelper {
             doGetDirect(url, request)?.let { toWebResourceResponse(url, it) }
         } catch (e: Exception) {
             Log.e(TAG, "Direct GET failed: $url: ${e.message}")
+            EchTrace.event("直连失败 $host: ${e.javaClass.simpleName}: ${e.message?.take(100)}")
             // 直连也失败：返回错误页（不交回 WebView，避免系统 DNS 污染）
             val page = "<!DOCTYPE html><html><body><h3>连接失败</h3><p>${e.message}</p></body></html>"
             WebResourceResponse(
