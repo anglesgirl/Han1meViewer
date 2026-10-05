@@ -206,6 +206,7 @@ fun EchProbeScreen() {
                         }
                     },
                     enabled = !isRunning,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("开始对照测试")
                 }
