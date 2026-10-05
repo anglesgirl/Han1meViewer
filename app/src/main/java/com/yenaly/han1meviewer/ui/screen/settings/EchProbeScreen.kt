@@ -1,5 +1,9 @@
 package com.yenaly.han1meviewer.ui.screen.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -7,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,13 +33,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yenaly.han1meviewer.logic.network.ech.EchProbe
+import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * ECH 探针屏（对标 "ECH-H3 探针" App）。
@@ -44,6 +55,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun EchProbeScreen() {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val logs = remember { mutableStateListOf<String>() }
     var isRunning by remember { mutableStateOf(false) }
@@ -62,6 +74,34 @@ fun EchProbeScreen() {
         if (logs.isNotEmpty()) listState.animateScrollToItem(logs.size - 1)
     }
 
+    fun buildLogText(): String {
+        val ts = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+        return buildString {
+            appendLine("== ECH 探针日志 ==")
+            appendLine("时间：$ts")
+            conclusion?.let { appendLine(it) }
+            appendLine("".padEnd(40, '-'))
+            logs.forEach { appendLine(it) }
+        }
+    }
+
+    fun copyLogs() {
+        val text = buildLogText()
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("ECH 探针日志", text))
+        GlobalToasts.show("日志已复制", level = GlobalToasts.ToastLevel.SUCCESS)
+    }
+
+    fun shareLogs() {
+        val text = buildLogText()
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            putExtra(Intent.EXTRA_SUBJECT, "ECH 探针日志")
+        }
+        context.startActivity(Intent.createChooser(intent, "分享日志"))
+    }
+
     fun runProbe(block: suspend () -> EchProbe.ProbeResult) {
         if (isRunning) return
         logs.clear()
@@ -76,7 +116,12 @@ fun EchProbeScreen() {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()  // 避开状态栏
+            .padding(16.dp)
+    ) {
         // ---- 本机网络检测 ----
         Button(
             onClick = {
@@ -162,7 +207,22 @@ fun EchProbeScreen() {
         }
 
         // ---- 日志 ----
-        Text("日志", style = MaterialTheme.typography.titleSmall)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("日志", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.weight(1f))
+            OutlinedButton(
+                onClick = { copyLogs() },
+                enabled = logs.isNotEmpty(),
+            ) { Text("复制", fontSize = 12.sp) }
+            Spacer(modifier = Modifier.width(8.dp))
+            OutlinedButton(
+                onClick = { shareLogs() },
+                enabled = logs.isNotEmpty(),
+            ) { Text("分享", fontSize = 12.sp) }
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
             LazyColumn(
