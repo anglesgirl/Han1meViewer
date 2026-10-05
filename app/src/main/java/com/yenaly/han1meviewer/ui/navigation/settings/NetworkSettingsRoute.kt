@@ -645,15 +645,11 @@ private fun buildCustomMirrorApiBaseUrl(homeUrl: String, appendPath: Boolean): S
 }
 
 private fun buildDohSummary(context: Context): String {
-    if (!Preferences.useDoH) return context.getString(R.string.doh_disabled_summary)
-    if (Preferences.useBuiltInHosts) return context.getString(R.string.doh_conflict_message)
-    val core = if (Preferences.dohPreset == "custom") {
-        Preferences.dohCustomUrl.ifBlank { context.getString(R.string.custom) }
-    } else {
-        DohConfig.selectedPreset().title
-    }
+    // DoH 已锁定为内置配置，不可修改
+    val core = DohConfig.selectedPreset().title
     val bootstrap = DohConfig.bootstrapIps().takeIf { it.isNotEmpty() }?.joinToString()
-    return if (bootstrap != null) "$core\nBootstrap: $bootstrap" else core
+    val base = if (bootstrap != null) "$core\nBootstrap: $bootstrap" else core
+    return "$base\n（已锁定，不可修改）"
 }
 
 private fun buildMediaCdnSummary(): String {

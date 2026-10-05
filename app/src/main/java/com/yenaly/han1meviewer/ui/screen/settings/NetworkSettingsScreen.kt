@@ -298,10 +298,11 @@ fun NetworkSettingsScreen(
 
         item {
             SettingNavigationItem(
-                title = stringResource(R.string.use_doh),
+                title = "雅💓涵的DOH",
                 summary = state.dohSummary,
                 iconRes = R.drawable.baseline_doh_24,
-                onClick = { showDohDialog = true },
+                onClick = { /* 已锁定，不可修改 */ },
+                enabled = false,
             )
         }
 
