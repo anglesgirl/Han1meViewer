@@ -35,7 +35,6 @@ import com.yenaly.han1meviewer.ui.component.ConfirmDialog
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import com.yenaly.han1meviewer.ui.screen.settings.DelayResultUi
 import com.yenaly.han1meviewer.ui.screen.settings.DohTestResultUi
-import com.yenaly.han1meviewer.ui.screen.settings.EchDiagnosticDialog
 import com.yenaly.han1meviewer.ui.screen.settings.EchProbeScreen
 import com.yenaly.han1meviewer.ui.screen.settings.NetworkSettingsScreen
 import com.yenaly.han1meviewer.ui.screen.settings.NetworkSettingsUiState

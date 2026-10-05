@@ -158,7 +158,7 @@ object ConscryptEch {
 
     /**
      * 诊断用：返回一个对指定 ECH 配置做 ECH 握手的 SSLSocketFactory。
-     * 仅供 [EchDiagnostics] / [EchProbe] 使用，不经过 OkHttp 拦截器链。
+     * 仅供 [EchProbe] 使用，不经过 OkHttp 拦截器链。
      * @param echWire wire 格式的 ECHConfigList（含 2 字节长度前缀），来自 [EchDoh.echConfigList]
      * @return 可用的工厂，或 null（Conscrypt 未安装时）
      */
