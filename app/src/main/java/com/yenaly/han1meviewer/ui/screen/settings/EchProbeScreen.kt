@@ -144,7 +144,7 @@ fun EchProbeScreen() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ---- 高级对照测试（可折叠，默认收起，省空间给日志） ----
+        // ---- 高级对照测试（可折叠，默认收起） ----
         var showAdvanced by remember { mutableStateOf(false) }
         OutlinedButton(
             onClick = { showAdvanced = !showAdvanced },
@@ -153,8 +153,8 @@ fun EchProbeScreen() {
             Text(if (showAdvanced) "▲ 收起高级对照测试" else "▼ 高级：对照测试（指定域名 / IP / ECH 注入）")
         }
         if (showAdvanced) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
 
                 OutlinedTextField(
                     value = customHost,
@@ -208,11 +208,12 @@ fun EchProbeScreen() {
                     Text("开始对照测试")
                 }
             }
-        }  // end if (showAdvanced)
+        }
+        } // 关闭 if (showAdvanced)
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // ---- 结论（置顶显示，一眼看到结果） ----
+        // ---- 结论（置顶高亮卡片） ----
         conclusion?.let {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -230,7 +231,7 @@ fun EchProbeScreen() {
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // ---- 日志（占主要空间） ----
+        // ---- 日志 ----
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
