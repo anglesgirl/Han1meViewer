@@ -107,10 +107,10 @@ object EchDiagnostics {
         val r5 = checkTlsHandshake(ip, host, useEch = false)
         emit(r5)
 
-        // Step 6: ECH 握手
-        val echConfig = r3.extra["ech_config"]
-        val r6 = if (r3.ok && echConfig != null) {
-            checkTlsHandshake(ip, host, useEch = true, echConfigList = echConfig)
+        // Step 6: ECH 握手（用 App 的现成配置，与实际握手一致）
+        val echWire = EchDoh.echConfigList(host)
+        val r6 = if (echWire != null) {
+            checkTlsHandshake(ip, host, useEch = true, echWire = echWire)
         } else {
             DiagResult("TLS_ECH", Status.SKIP, "无 ECH 配置，跳过")
         }
@@ -265,14 +265,14 @@ object EchDiagnostics {
     }
 
     private fun checkTlsHandshake(
-        ip: String, sniHost: String, useEch: Boolean, echConfigList: String? = null,
+        ip: String, sniHost: String, useEch: Boolean, echWire: ByteArray? = null,
     ): DiagResult {
         val step = if (useEch) "TLS_ECH" else "TLS_PLAIN"
         val t0 = System.currentTimeMillis()
         return try {
-            val factory: SSLSocketFactory = if (useEch && echConfigList != null) {
-                // 用 App 的 ECH 工厂（需要 ConscryptEch 提供一个测试用的 SSLSocketFactory）
-                ConscryptEch.testSocketFactoryWithEch(echConfigList)
+            val factory: SSLSocketFactory = if (useEch && echWire != null) {
+                // 用 App 的 ECH 工厂（与实际握手相同的配置和注入方式）
+                ConscryptEch.testSocketFactoryWithEch(echWire)
                     ?: return DiagResult(step, Status.SKIP, "ECH 工厂不可用", System.currentTimeMillis() - t0)
             } else {
                 SSLSocketFactory.getDefault() as SSLSocketFactory

@@ -158,11 +158,11 @@ object ConscryptEch {
 
     /**
      * 诊断用：返回一个对指定 ECH 配置做 ECH 握手的 SSLSocketFactory。
-     * 仅供 [EchDiagnostics] 使用，不经过 OkHttp 拦截器链。
-     * @param echConfigList base64 的 ECHConfigList（DoH HTTPS 记录里 ech= 的值）
+     * 仅供 [EchDiagnostics] / [EchProbe] 使用，不经过 OkHttp 拦截器链。
+     * @param echWire wire 格式的 ECHConfigList（含 2 字节长度前缀），来自 [EchDoh.echConfigList]
      * @return 可用的工厂，或 null（Conscrypt 未安装时）
      */
-    fun testSocketFactoryWithEch(echConfigList: String): SSLSocketFactory? {
+    fun testSocketFactoryWithEch(echWire: ByteArray): SSLSocketFactory? {
         return try {
             val base = sslContext.socketFactory
             object : SSLSocketFactory() {
@@ -171,12 +171,8 @@ object ConscryptEch {
                 private fun prepare(s: Socket): Socket {
                     if (s is SSLSocket) {
                         try {
-                            // 用反射注入 ECH 配置（与 EchSocketFactory.prepare 相同逻辑）
-                            val setEch = s.javaClass.getMethod(
-                                "setEchConfigList", ByteArray::class.java)
-                            val configBytes = android.util.Base64.decode(
-                                echConfigList, android.util.Base64.DEFAULT)
-                            setEch.invoke(s, configBytes)
+                            // 与 EchSocketFactory.prepare 相同的注入方式
+                            Conscrypt.setEchConfigList(s, echWire)
                         } catch (e: Exception) {
                             Log.w("HY-ECH", "test factory setEchConfigList failed: ${e.message}")
                         }
