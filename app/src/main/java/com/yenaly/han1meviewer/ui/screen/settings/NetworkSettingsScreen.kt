@@ -1024,6 +1024,7 @@ private fun NetworkSettingsScreenPreview() {
             onSaveDohSettings = { _, _, _, _, _ -> },
             onOpenDelayTest = {},
             onOpenDohTest = {},
+            onOpenEchDiagnostic = {},
             onDismissDelayTest = {},
             onDismissDohTest = {},
             onApplyProxy = { _, _, _ -> },
