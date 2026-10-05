@@ -144,12 +144,17 @@ fun EchProbeScreen() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ---- 高级对照测试 ----
+        // ---- 高级对照测试（可折叠，默认收起，省空间给日志） ----
+        var showAdvanced by remember { mutableStateOf(false) }
+        OutlinedButton(
+            onClick = { showAdvanced = !showAdvanced },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (showAdvanced) "▲ 收起高级对照测试" else "▼ 高级：对照测试（指定域名 / IP / ECH 注入）")
+        }
+        if (showAdvanced) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
-                Text("高级：对照测试（指定域名 / IP / ECH 注入）",
-                    style = MaterialTheme.typography.titleSmall)
-                Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = customHost,
@@ -201,18 +206,29 @@ fun EchProbeScreen() {
                     Text("开始对照测试")
                 }
             }
-        }
+        }  // end if (showAdvanced)
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // ---- 结论 ----
+        // ---- 结论（置顶显示，一眼看到结果） ----
         conclusion?.let {
-            Text(it, style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+            ) {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // ---- 日志 ----
+        // ---- 日志（占主要空间） ----
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
