@@ -60,14 +60,14 @@ object EchProbe {
         log("测试域名：$testHost")
         log("DoH: ${DohConfig.probeUrl()}")
 
-        // --- 1. 取 ECH 测试域名的配置 ---
+        // --- 1. 取 ECH 配置（用 App 的现成逻辑，与实际握手一致） ---
         log("[1/4] 获取 $testHost 的 ECH 配置…")
-        val echConfig = fetchEchConfig(testHost)
-        if (echConfig == null) {
+        val echWire = EchDoh.echConfigList(testHost)
+        if (echWire == null) {
             log("✗ 拿不到 ECH 配置，DoH 或网络有问题")
             return ProbeResult("本机网络检测", lines, false)
         }
-        log("✓ ECH 配置已拿到（${echConfig.length} 字符）")
+        log("✓ ECH 配置已拿到（${echWire.size} 字节 wire 格式）")
 
         // --- 2. 取 IP ---
         log("[2/4] 解析 $testHost…")
@@ -80,7 +80,7 @@ object EchProbe {
 
         // --- 3. ECH 握手 + 生效验证 ---
         log("[3/4] 发起 ECH 握手…")
-        val echResult = doEchHandshake(ip, testHost, echConfig, onLog)
+        val echResult = doEchHandshake(ip, testHost, echWire, onLog)
         log(if (echResult.accepted) "✓ ECH 真正生效：sni=encrypted（握手 ${echResult.ms}ms）"
             else "✗ ECH 未生效：${echResult.detail}")
 
@@ -126,24 +126,30 @@ object EchProbe {
             }
         }
 
-        val echConfig = if (echBase64.isBlank()) {
+        val echWire: ByteArray? = if (echBase64.isBlank()) {
             log("[ECH] 用 DoH 的 ech=…")
-            fetchEchConfig(host).also {
+            EchDoh.echConfigList(host).also {
                 if (it == null) log("✗ DoH 无 ech=（将走明文 SNI）")
-                else log("✓ DoH ech= 已拿到（${it.length} 字符）")
+                else log("✓ DoH ech= 已拿到（${it.size} 字节 wire 格式）")
             }
         } else {
             log("[ECH] 使用强制注入的配置（${echBase64.length} 字符）")
-            echBase64
+            try {
+                // 用户提供的 base64 解码即为 wire 格式（与 DoH 的 ech= 一致）
+                android.util.Base64.decode(echBase64.trim(), android.util.Base64.DEFAULT)
+            } catch (e: Exception) {
+                log("✗ base64 解码失败：${e.message}")
+                null
+            }
         }
 
         var anyOk = false
         ipList.forEachIndexed { idx, ip ->
             log("")
             log("############ 来源：指定 IP #${idx + 1}（$ip）############")
-            if (echConfig != null) {
+            if (echWire != null) {
                 log("===== 带 ECH =====")
-                val r = doEchHandshake(ip, host, echConfig, onLog)
+                val r = doEchHandshake(ip, host, echWire, onLog)
                 log(if (r.accepted) "✓ ECH 生效（${r.ms}ms）" else "✗ ${r.detail}")
                 if (r.accepted) anyOk = true
             } else {
@@ -167,30 +173,6 @@ object EchProbe {
         val ms: Long,
     )
 
-    /** 经 DoH 取 ECH 配置（HTTPS 记录的 ech=）。 */
-    fun fetchEchConfig(host: String): String? {
-        return try {
-            val url = "${DohConfig.probeUrl()}?name=$host&type=HTTPS"
-            val req = Request.Builder()
-                .url(url)
-                .header("Accept", "application/dns-json")
-                .build()
-            httpClient.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                val body = resp.body?.string() ?: return null
-                val idx = body.indexOf("ech=")
-                if (idx < 0) return null
-                val end = body.indexOf('"', idx).takeIf { it > 0 } ?: body.length
-                // ech= 的值是 base64url，取到引号或逗号为止
-                var ech = body.substring(idx + 4, end)
-                ech = ech.trimEnd(',').trim()
-                ech.ifEmpty { null }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchEchConfig failed: ${e.message}")
-            null
-        }
-    }
 
     /** 经 DoH 解析 A 记录。 */
     fun resolveViaDoh(host: String): String? {
@@ -218,12 +200,12 @@ object EchProbe {
 
     /** 带 ECH 的握手，验证是否真正生效。 */
     fun doEchHandshake(
-        ip: String, sniHost: String, echConfig: String,
+        ip: String, sniHost: String, echWire: ByteArray,
         onLog: (String) -> Unit = {},
     ): EchHandshakeResult {
         val t0 = System.currentTimeMillis()
         return try {
-            val factory = ConscryptEch.testSocketFactoryWithEch(echConfig)
+            val factory = ConscryptEch.testSocketFactoryWithEch(echWire)
                 ?: return EchHandshakeResult(false, "ECH 工厂不可用", 0)
             (factory.createSocket(ip, 443) as SSLSocket).use { sock ->
                 sock.soTimeout = 15_000
