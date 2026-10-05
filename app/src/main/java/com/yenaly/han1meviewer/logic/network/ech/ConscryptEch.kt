@@ -157,6 +157,50 @@ object ConscryptEch {
     }
 
     /**
+     * 诊断用：返回一个对指定 ECH 配置做 ECH 握手的 SSLSocketFactory。
+     * 仅供 [EchDiagnostics] 使用，不经过 OkHttp 拦截器链。
+     * @param echConfigList base64 的 ECHConfigList（DoH HTTPS 记录里 ech= 的值）
+     * @return 可用的工厂，或 null（Conscrypt 未安装时）
+     */
+    fun testSocketFactoryWithEch(echConfigList: String): SSLSocketFactory? {
+        return try {
+            val base = Conscrypt.newClientSslSocketFactory() as? SSLSocketFactory
+                ?: return null
+            object : SSLSocketFactory() {
+                override fun getDefaultCipherSuites(): Array<String> = base.defaultCipherSuites
+                override fun getSupportedCipherSuites(): Array<String> = base.supportedCipherSuites
+                private fun prepare(s: Socket): Socket {
+                    if (s is SSLSocket) {
+                        try {
+                            // 用反射注入 ECH 配置（与 EchSocketFactory.prepare 相同逻辑）
+                            val setEch = s.javaClass.getMethod(
+                                "setEchConfigList", ByteArray::class.java)
+                            val configBytes = android.util.Base64.decode(
+                                echConfigList, android.util.Base64.DEFAULT)
+                            setEch.invoke(s, configBytes)
+                        } catch (e: Exception) {
+                            Log.w("HY-ECH", "test factory setEchConfigList failed: ${e.message}")
+                        }
+                    }
+                    return s
+                }
+                override fun createSocket(s: Socket, h: String, p: Int, a: Boolean): Socket =
+                    prepare(base.createSocket(s, h, p, a))
+                override fun createSocket(h: String, p: Int): Socket = prepare(base.createSocket(h, p))
+                override fun createSocket(h: String, p: Int, l: java.net.InetAddress, lp: Int): Socket =
+                    prepare(base.createSocket(h, p, l, lp))
+                override fun createSocket(h: java.net.InetAddress, p: Int): Socket =
+                    prepare(base.createSocket(h, p))
+                override fun createSocket(h: java.net.InetAddress, p: Int, l: java.net.InetAddress, lp: Int): Socket =
+                    prepare(base.createSocket(h, p, l, lp))
+            }
+        } catch (e: Exception) {
+            Log.w("HY-ECH", "testSocketFactoryWithEch failed: ${e.message}")
+            null
+        }
+    }
+
+    /**
      * 包装 Conscrypt 的 SSLSocketFactory：返回 socket 前按 host 注入 ECHConfigList。
      * OkHttp 走的是 `createSocket(Socket, String, int, boolean)` 重载。
      *

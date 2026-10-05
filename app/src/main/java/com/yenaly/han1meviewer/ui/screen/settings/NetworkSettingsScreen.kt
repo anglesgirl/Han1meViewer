@@ -124,6 +124,7 @@ fun NetworkSettingsScreen(
     onOpenDelayTest: () -> Unit,
     customHostsData: String,
     onOpenDohTest: () -> Unit,
+    onOpenEchDiagnostic: () -> Unit,
     onDismissDelayTest: () -> Unit,
     onDismissDohTest: () -> Unit,
     onApplyProxy: (Int, String, Int) -> Unit,
@@ -323,6 +324,15 @@ fun NetworkSettingsScreen(
                 summary = stringResource(R.string.test_doh_summary),
                 iconRes = R.drawable.baseline_doh_24,
                 onClick = onOpenDohTest,
+            )
+        }
+
+        item {
+            SettingNavigationItem(
+                title = "ECH 连通性诊断",
+                summary = "连不上时逐层定位：DoH / TCP / TLS / ECH / SNI",
+                iconRes = R.drawable.baseline_doh_24,
+                onClick = onOpenEchDiagnostic,
             )
         }
 

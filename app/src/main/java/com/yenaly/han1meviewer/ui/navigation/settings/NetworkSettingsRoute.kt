@@ -35,6 +35,8 @@ import com.yenaly.han1meviewer.ui.component.ConfirmDialog
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import com.yenaly.han1meviewer.ui.screen.settings.DelayResultUi
 import com.yenaly.han1meviewer.ui.screen.settings.DohTestResultUi
+import com.yenaly.han1meviewer.ui.screen.settings.EchDiagnosticDialog
+import com.yenaly.han1meviewer.ui.screen.settings.EchProbeScreen
 import com.yenaly.han1meviewer.ui.screen.settings.NetworkSettingsScreen
 import com.yenaly.han1meviewer.ui.screen.settings.NetworkSettingsUiState
 import com.yenaly.yenaly_libs.ActivityManager
@@ -109,6 +111,9 @@ fun NetworkSettingsRouteScreen() {
         isDohTesting = false
         dohHandler.removeCallbacksAndMessages(null)
     }
+
+    // ---- ECH 探针 ----
+    var showEchDiagDialog by remember { mutableStateOf(false) }
 
     fun measureDelay(ip: String): Int {
         return try {
@@ -334,6 +339,7 @@ fun NetworkSettingsRouteScreen() {
             }
         },
         onOpenDohTest = { runDohTest() },
+        onOpenEchDiagnostic = { showEchDiagDialog = true },
         onDismissDelayTest = { stopDelayTest() },
         onDismissDohTest = { stopDohTest() },
         onApplyProxy = { type, ip, port ->
@@ -489,6 +495,22 @@ fun NetworkSettingsRouteScreen() {
             confirmButton = {
                 TextButton(onClick = { showSocks5Warning = false }) {
                     Text(stringResource(R.string.confirm))
+                }
+            },
+        )
+    }
+
+    // ECH 探针（全屏对话框）
+    if (showEchDiagDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showEchDiagDialog = false },
+            title = { Text("ECH 探针") },
+            text = {
+                EchProbeScreen()
+            },
+            confirmButton = {
+                TextButton(onClick = { showEchDiagDialog = false }) {
+                    Text("关闭")
                 }
             },
         )
