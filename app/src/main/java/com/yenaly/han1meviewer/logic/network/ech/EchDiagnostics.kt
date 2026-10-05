@@ -63,7 +63,7 @@ object EchDiagnostics {
         fun emit(r: DiagResult) { results.add(r); onStep(r); Log.i(TAG, "${r.step}: ${r.status} ${r.detail}") }
 
         // Step 1: DoH 网关可达性
-        val dohUrl = DohConfig.url()
+        val dohUrl = DohConfig.probeUrl()
         val r1 = checkDohReachable(dohUrl)
         emit(r1)
         if (!r1.ok) {

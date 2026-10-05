@@ -53,7 +53,7 @@ object EchProbe {
         fun log(s: String) { lines.add(s); onLog(s); Log.i(TAG, s) }
 
         log("== 本机网络检测（ECH） ==")
-        log("DoH: ${DohConfig.url()}")
+        log("DoH: ${DohConfig.probeUrl()}")
 
         // --- 1. 取 ECH 测试域名的配置 ---
         log("[1/4] 获取 $ECH_TEST_HOST 的 ECH 配置…")
@@ -165,7 +165,7 @@ object EchProbe {
     /** 经 DoH 取 ECH 配置（HTTPS 记录的 ech=）。 */
     fun fetchEchConfig(host: String): String? {
         return try {
-            val url = "${DohConfig.url()}?name=$host&type=HTTPS"
+            val url = "${DohConfig.probeUrl()}?name=$host&type=HTTPS"
             val req = Request.Builder()
                 .url(url)
                 .header("Accept", "application/dns-json")
@@ -190,7 +190,7 @@ object EchProbe {
     /** 经 DoH 解析 A 记录。 */
     fun resolveViaDoh(host: String): String? {
         return try {
-            val url = "${DohConfig.url()}?name=$host&type=A"
+            val url = "${DohConfig.probeUrl()}?name=$host&type=A"
             val req = Request.Builder()
                 .url(url)
                 .header("Accept", "application/dns-json")
