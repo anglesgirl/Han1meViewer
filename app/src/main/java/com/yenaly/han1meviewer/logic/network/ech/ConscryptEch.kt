@@ -164,8 +164,7 @@ object ConscryptEch {
      */
     fun testSocketFactoryWithEch(echConfigList: String): SSLSocketFactory? {
         return try {
-            val base = Conscrypt.newClientSslSocketFactory() as? SSLSocketFactory
-                ?: return null
+            val base = sslContext.socketFactory
             object : SSLSocketFactory() {
                 override fun getDefaultCipherSuites(): Array<String> = base.defaultCipherSuites
                 override fun getSupportedCipherSuites(): Array<String> = base.supportedCipherSuites

@@ -43,4 +43,12 @@ object DohConfig {
             else -> selectedPreset().url
         }
     }
+
+    /** 探针用：不检查 useDoH 开关，直接返回当前配置的 DoH URL。 */
+    fun probeUrl(): String {
+        return when (Preferences.dohPreset) {
+            "custom" -> customUrl().takeIf { it.isNotBlank() } ?: selectedPreset().url
+            else -> selectedPreset().url
+        }
+    }
 }
