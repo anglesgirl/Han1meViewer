@@ -62,21 +62,37 @@ object EchProbe {
 
         // --- 1. 取 ECH 配置（用 App 的现成逻辑，与实际握手一致） ---
         log("[1/4] 获取 $testHost 的 ECH 配置…")
+        log("  DoH 网关：${DohConfig.probeUrl()}")
+        log("  Bootstrap IP：${DohConfig.bootstrapIps().joinToString()}")
         val echWire = EchDoh.echConfigList(testHost)
         if (echWire == null) {
             log("✗ 拿不到 ECH 配置，DoH 或网络有问题")
+            log("  可能原因：DoH 网关不可达 / 网关返回无 ech= 记录 / 网络被阻断")
             return ProbeResult("本机网络检测", lines, false)
         }
         log("✓ ECH 配置已拿到（${echWire.size} 字节 wire 格式）")
+        log("  前 16 字节 hex：${echWire.take(16).joinToString("") { "%02x".format(it) }}…")
 
         // --- 2. 取 IP ---
         log("[2/4] 解析 $testHost…")
         val ip = resolveViaDoh(testHost)
         if (ip == null) {
             log("✗ DoH 解析失败")
+            log("  可能原因：DoH 返回空 / 域名不存在 / 网关故障")
             return ProbeResult("本机网络检测", lines, false)
         }
         log("✓ 解析到 $ip")
+        // 同时显示系统 DNS 的解析结果，用于对比是否被污染
+        try {
+            val sysIps = java.net.InetAddress.getAllByName(testHost)
+                .map { it.hostAddress }.distinct()
+            log("  系统 DNS 解析：${sysIps.joinToString()}")
+            if (!sysIps.contains(ip)) {
+                log("  ⚠ 系统 DNS 与 DoH 结果不一致，可能被污染")
+            }
+        } catch (e: Exception) {
+            log("  系统 DNS 解析失败：${e.message}")
+        }
 
         // --- 3. ECH 握手 + 生效验证 ---
         log("[3/4] 发起 ECH 握手…")

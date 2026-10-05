@@ -1,6 +1,5 @@
 package com.yenaly.han1meviewer.ui.screen.settings
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -41,7 +40,6 @@ import com.yenaly.han1meviewer.CDN_REGION_NODES
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HProxySelector
-import com.yenaly.han1meviewer.ui.activity.EchDiagActivity
 import com.yenaly.han1meviewer.ui.component.ChoiceDialog
 import com.yenaly.han1meviewer.ui.component.SettingNavigationItem
 import com.yenaly.han1meviewer.ui.component.SettingSwitchItem
@@ -333,18 +331,6 @@ fun NetworkSettingsScreen(
                 summary = "连不上时逐层定位：DoH / TCP / TLS / ECH / SNI",
                 iconRes = R.drawable.baseline_doh_24,
                 onClick = onOpenEchDiagnostic,
-            )
-        }
-
-        item {
-            val context = LocalContext.current
-            SettingNavigationItem(
-                title = "ECH 诊断",
-                summary = "排查无网络：Conscrypt / DoH / WebView ECH 状态",
-                iconRes = R.drawable.baseline_doh_24,
-                onClick = {
-                    context.startActivity(Intent(context, EchDiagActivity::class.java))
-                },
             )
         }
     }
