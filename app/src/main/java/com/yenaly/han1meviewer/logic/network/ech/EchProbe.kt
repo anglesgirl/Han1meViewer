@@ -46,18 +46,23 @@ object EchProbe {
 
     /**
      * 本机网络检测：ECH 支持？ECH 真正生效？H3 可用？
+     * @param testHost 测试域名（默认用 App 当前域名，比 cloudflare-ech.com 更贴近实际使用）
      * @param onLog 实时日志回调（UI 展示）
      */
-    fun probeNetwork(onLog: (String) -> Unit): ProbeResult {
+    fun probeNetwork(
+        testHost: String = ECH_TEST_HOST,
+        onLog: (String) -> Unit,
+    ): ProbeResult {
         val lines = mutableListOf<String>()
         fun log(s: String) { lines.add(s); onLog(s); Log.i(TAG, s) }
 
         log("== 本机网络检测（ECH） ==")
+        log("测试域名：$testHost")
         log("DoH: ${DohConfig.probeUrl()}")
 
         // --- 1. 取 ECH 测试域名的配置 ---
-        log("[1/4] 获取 $ECH_TEST_HOST 的 ECH 配置…")
-        val echConfig = fetchEchConfig(ECH_TEST_HOST)
+        log("[1/4] 获取 $testHost 的 ECH 配置…")
+        val echConfig = fetchEchConfig(testHost)
         if (echConfig == null) {
             log("✗ 拿不到 ECH 配置，DoH 或网络有问题")
             return ProbeResult("本机网络检测", lines, false)
@@ -65,8 +70,8 @@ object EchProbe {
         log("✓ ECH 配置已拿到（${echConfig.length} 字符）")
 
         // --- 2. 取 IP ---
-        log("[2/4] 解析 $ECH_TEST_HOST…")
-        val ip = resolveViaDoh(ECH_TEST_HOST)
+        log("[2/4] 解析 $testHost…")
+        val ip = resolveViaDoh(testHost)
         if (ip == null) {
             log("✗ DoH 解析失败")
             return ProbeResult("本机网络检测", lines, false)
@@ -75,13 +80,13 @@ object EchProbe {
 
         // --- 3. ECH 握手 + 生效验证 ---
         log("[3/4] 发起 ECH 握手…")
-        val echResult = doEchHandshake(ip, ECH_TEST_HOST, echConfig, onLog)
+        val echResult = doEchHandshake(ip, testHost, echConfig, onLog)
         log(if (echResult.accepted) "✓ ECH 真正生效：sni=encrypted（握手 ${echResult.ms}ms）"
             else "✗ ECH 未生效：${echResult.detail}")
 
         // --- 4. 普通握手对照 ---
         log("[4/4] 普通 TLS 对照…")
-        val plainOk = doPlainHandshake(ip, ECH_TEST_HOST)
+        val plainOk = doPlainHandshake(ip, testHost)
         log(if (plainOk) "✓ 普通 TLS 握手正常" else "✗ 普通 TLS 也失败（IP 层问题）")
 
         val ok = echResult.accepted

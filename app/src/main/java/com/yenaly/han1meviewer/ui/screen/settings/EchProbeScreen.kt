@@ -123,10 +123,12 @@ fun EchProbeScreen() {
             .padding(16.dp)
     ) {
         // ---- 本机网络检测 ----
+        // 用当前输入框的域名测，更贴近实际使用（而不是写死的 cloudflare-ech.com）
         Button(
             onClick = {
+                val h = customHost.trim().ifEmpty { "javchu.com" }
                 runProbe {
-                    EchProbe.probeNetwork { line ->
+                    EchProbe.probeNetwork(testHost = h) { line ->
                         scope.launch(Dispatchers.Main) { logs.add(line) }
                     }
                 }
@@ -157,11 +159,15 @@ fun EchProbeScreen() {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Row {
+                // 快捷域名：用 FlowRow 自动换行，避免挤成竖排
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+                ) {
                     quickHosts.forEach { h ->
                         androidx.compose.material3.TextButton(
                             onClick = { customHost = h.lowercase() },
-                        ) { Text(h, fontSize = 11.sp) }
+                        ) { Text(h, fontSize = 11.sp, maxLines = 1) }
                     }
                 }
                 OutlinedTextField(
