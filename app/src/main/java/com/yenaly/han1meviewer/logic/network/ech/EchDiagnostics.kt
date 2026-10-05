@@ -133,7 +133,7 @@ object EchDiagnostics {
                 "DoH 网关连不上（${s("DOH_REACHABLE")?.detail}）。" +
                 "可能：DoH 域名被 DNS 污染 / 网关 IP 被封。换 DoH 或检查网络。"
             s("DOH_A_QUERY")?.status == Status.FAIL ->
-                "DoH 通但查不到 ${\"A\"} 记录（${s("DOH_A_QUERY")?.detail}）。" +
+                "DoH 通但查不到 A 记录（${s("DOH_A_QUERY")?.detail}）。" +
                 "可能：DoH 返回被干扰，换 DoH 试试。"
             s("ECH_CONFIG")?.status == Status.FAIL ->
                 "拿不到 ECH 配置（${s("ECH_CONFIG")?.detail}）。" +
