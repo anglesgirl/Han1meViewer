@@ -178,17 +178,19 @@ fun EchProbeScreen() {
                 OutlinedTextField(
                     value = customIps,
                     onValueChange = { customIps = it },
-                    label = { Text("指定 IP（留空=自动；多个逗号分隔）") },
+                    label = { Text("指定 IP（留空=自动；多个逗号分隔）", fontSize = 12.sp) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = customEch,
                     onValueChange = { customEch = it },
-                    label = { Text("强制注入 ECH（base64，留空=用 DoH 的 ech=）") },
+                    label = { Text("强制注入 ECH（base64，留空=用 DoH 的 ech=）", fontSize = 12.sp) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
