@@ -216,6 +216,131 @@ fun EchProbeScreen() {
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // ---- IP 批量扫描（给 IP 被地区封锁的用户找可用 IP）----
+        var showScanner by remember { mutableStateOf(false) }
+        var scanIps by remember { mutableStateOf("") }
+        var scanHost by remember { mutableStateOf("javchu.com") }
+        val scanResults = remember { mutableStateListOf<Triple<String, Boolean, Long>>() }
+        var scanProgress by remember { mutableStateOf("") }
+        OutlinedButton(
+            onClick = { showScanner = !showScanner },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (showScanner) "▲ 收起 IP 批量扫描" else "▼ IP 批量扫描（找可用 IP）")
+        }
+        if (showScanner) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "粘贴一串 IP（一行一个），逐个测 ECH 握手，找出你那能用的。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = scanHost,
+                        onValueChange = { scanHost = it },
+                        label = { Text("域名", fontSize = 12.sp) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = scanIps,
+                        onValueChange = { scanIps = it },
+                        label = { Text("IP 列表（一行一个）", fontSize = 12.sp) },
+                        placeholder = { Text("172.64.229.6\n104.21.5.6\n…", fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontSize = 13.sp, fontFamily = FontFamily.Monospace),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            if (isRunning) return@Button
+                            val h = scanHost.trim().ifEmpty { "javchu.com" }
+                            scanResults.clear()
+                            scanProgress = ""
+                            logs.clear()
+                            conclusion = null
+                            isRunning = true
+                            scope.launch(Dispatchers.IO) {
+                                val result = EchProbe.probeIpScan(
+                                    host = h,
+                                    ips = scanIps,
+                                    onLog = { line ->
+                                        scope.launch(Dispatchers.Main) { logs.add(line) }
+                                    },
+                                    onProgress = { done, total, ip, ok, ms ->
+                                        scope.launch(Dispatchers.Main) {
+                                            scanResults.add(Triple(ip, ok, ms))
+                                            scanProgress = "$done/$total"
+                                        }
+                                    },
+                                )
+                                withContext(Dispatchers.Main) {
+                                    val working = scanResults.filter { it.second }
+                                    conclusion = if (working.isNotEmpty()) {
+                                        "结论：✓ 找到 ${working.size} 个可用 IP"
+                                    } else {
+                                        "结论：✗ 这批 IP 都不可用，换批再试"
+                                    }
+                                    isRunning = false
+                                }
+                            }
+                        },
+                        enabled = !isRunning,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (isRunning && scanProgress.isNotEmpty()) "扫描中 $scanProgress…" else "开始扫描")
+                    }
+                    // 扫描结果：一眼看出哪些可用
+                    if (scanResults.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("结果", style = MaterialTheme.typography.titleSmall)
+                        val working = scanResults.filter { it.second }.sortedBy { it.third }
+                        if (working.isNotEmpty()) {
+                            Card(
+                                colors = androidx.compose.material3.CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text("可用 IP（${working.size} 个）：",
+                                        style = MaterialTheme.typography.labelMedium)
+                                    working.forEach { (ip, _, ms) ->
+                                        Text("✓ $ip（${ms}ms）",
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            val text = working.joinToString("\n") { it.first }
+                                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            cm.setPrimaryClip(ClipData.newPlainText("可用 IP", text))
+                                            GlobalToasts.show("可用 IP 已复制", level = GlobalToasts.ToastLevel.SUCCESS)
+                                        },
+                                    ) { Text("复制可用 IP", fontSize = 12.sp) }
+                                }
+                            }
+                        }
+                        val failed = scanResults.count { !it.second }
+                        if (failed > 0) {
+                            Text("✗ 不可用：$failed 个",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp))
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         // ---- 结论（置顶高亮卡片） ----
         conclusion?.let {
             Card(
