@@ -181,69 +181,6 @@ object EchProbe {
         return ProbeResult("对照测试", lines, anyOk)
     }
 
-    /**
-     * IP 批量扫描：给出一串 IP，逐个测 ECH 握手，找出可用的。
-     * 给福建用户这种"IP 被地区性封锁"场景用的傻瓜式工具。
-     * @param host 目标域名（默认 javchu.com）
-     * @param ips IP 列表（一行一个或逗号分隔）
-     * @param onProgress 进度回调 (已测, 总数, 当前IP, 结果)
-     * @return 可用的 IP 列表
-     */
-    fun probeIpScan(
-        host: String = "javchu.com",
-        ips: String,
-        onLog: (String) -> Unit,
-        onProgress: (done: Int, total: Int, ip: String, ok: Boolean, ms: Long) -> Unit = { _, _, _, _, _ -> },
-    ): ProbeResult {
-        val lines = mutableListOf<String>()
-        fun log(s: String) { lines.add(s); onLog(s); Log.i(TAG, s) }
-
-        log("== IP 可用性扫描 ==")
-        log("目标域名：$host")
-
-        // 解析 IP 列表：支持换行、逗号、空格分隔
-        val ipList = ips.split("\n", ",", "，", " ", "\t")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && it.matches(Regex("""\d{1,3}(\.\d{1,3}){3}""")) }
-            .distinct()
-        if (ipList.isEmpty()) {
-            log("✗ 没有有效的 IPv4 地址")
-            return ProbeResult("IP 扫描", lines, false)
-        }
-        log("待测 IP 共 ${ipList.size} 个")
-
-        // 先拿 ECH 配置（只拿一次）
-        log("获取 ECH 配置…")
-        val echWire = EchDoh.echConfigList(host)
-        if (echWire == null) {
-            log("✗ 拿不到 ECH 配置，DoH 或网络有问题，扫描终止")
-            return ProbeResult("IP 扫描", lines, false)
-        }
-        log("✓ ECH 配置已拿到（${echWire.size} 字节）")
-        log("")
-
-        val working = mutableListOf<Pair<String, Long>>()
-        ipList.forEachIndexed { idx, ip ->
-            val r = doEchHandshake(ip, host, echWire) { }
-            val ok = r.accepted
-            if (ok) working.add(ip to r.ms)
-            onProgress(idx + 1, ipList.size, ip, ok, r.ms)
-            log("${if (ok) "✓" else "✗"} [$idx/${ipList.size}] $ip  ${if (ok) "可用（${r.ms}ms）" else r.detail}")
-        }
-
-        log("")
-        log("===== 扫描完成 =====")
-        log("可用 IP（${working.size}/${ipList.size}）：")
-        if (working.isEmpty()) {
-            log("  一个都没有……换批 IP 再试试")
-        } else {
-            working.sortedBy { it.second }.forEach { (ip, ms) ->
-                log("  ✓ $ip（${ms}ms）")
-            }
-        }
-        return ProbeResult("IP 扫描", lines, working.isNotEmpty())
-    }
-
     // ---------- 内部实现 ----------
 
     data class EchHandshakeResult(
