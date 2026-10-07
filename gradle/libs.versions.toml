@@ -138,6 +138,7 @@ test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core",
 jiaozi-video-player = { group = "cn.jzvd", name = "jiaozivideoplayer", version.ref = "jiaoziVideoPlayer" }
 media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "exoplayer" }
 media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "exoplayer" }
+media3-datasource-cronet = { group = "androidx.media3", name = "media3-datasource-cronet", version.ref = "exoplayer" }
 mpv-lib = { group = "com.github.abdallahmehiz", name = "mpv-android", version.ref = "mpv" }
 
 # Other

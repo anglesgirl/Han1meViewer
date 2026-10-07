@@ -23,6 +23,8 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cronet.CronetDataSource
+import org.chromium.net.CronetEngine
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -149,10 +151,19 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                 }
 
             // Produces DataSource instances through which media data is loaded.
+            // Use Cronet (Chrome's network stack) for TLS fingerprint parity with Chrome,
+            // bypassing DPI that filters by ClientHello fingerprint (e.g. Fujian Mobile).
+            val cronetEngine = CronetEngine.Builder(context)
+                .enableHttp2(true)
+                .enableQuic(true)
+                .build()
+            val cronetDataSourceFactory = CronetDataSource.Factory(
+                cronetEngine,
+                java.util.concurrent.Executors.newSingleThreadExecutor()
+            ).setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
             val dataSourceFactory = DefaultDataSource.Factory(
                 context,
-                DefaultHttpDataSource.Factory()
-                    .setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
+                cronetDataSourceFactory
             )
 
             val currUrl = jzvd.jzDataSource.currentUrl.toString()

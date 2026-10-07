@@ -191,6 +191,7 @@ dependencies {
     implementation(libs.jiaozi.video.player)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.datasource.cronet)
     implementation(libs.mpv.lib)
 
     // view
