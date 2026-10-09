@@ -153,17 +153,25 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             // Produces DataSource instances through which media data is loaded.
             // Use Cronet (Chrome's network stack) for TLS fingerprint parity with Chrome,
             // bypassing DPI that filters by ClientHello fingerprint (e.g. Fujian Mobile).
-            val cronetEngine = CronetEngine.Builder(context)
-                .enableHttp2(true)
-                .enableQuic(true)
-                .build()
-            val cronetDataSourceFactory = CronetDataSource.Factory(
-                cronetEngine,
-                java.util.concurrent.Executors.newSingleThreadExecutor()
-            ).setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
+            // cronet-bundled ships the native provider inside the APK, so Cronet works on
+            // devices without Google Play Services; if no provider is available anyway,
+            // fall back to the platform HTTP stack instead of crashing playback.
+            val httpDataSourceFactory = try {
+                val cronetEngine = CronetEngine.Builder(context)
+                    .enableHttp2(true)
+                    .enableQuic(true)
+                    .build()
+                CronetDataSource.Factory(
+                    cronetEngine,
+                    java.util.concurrent.Executors.newSingleThreadExecutor()
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Cronet unavailable, using platform HTTP", e)
+                DefaultHttpDataSource.Factory()
+            }.setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
             val dataSourceFactory = DefaultDataSource.Factory(
                 context,
-                cronetDataSourceFactory
+                httpDataSourceFactory
             )
 
             val currUrl = jzvd.jzDataSource.currentUrl.toString()
