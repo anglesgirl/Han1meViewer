@@ -192,7 +192,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.datasource.cronet)
-    implementation(libs.cronet.bundled)
+    implementation(libs.cronet.embedded)
     implementation(libs.mpv.lib)
 
     // view

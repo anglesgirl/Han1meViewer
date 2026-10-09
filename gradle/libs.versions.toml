@@ -140,7 +140,7 @@ jiaozi-video-player = { group = "cn.jzvd", name = "jiaozivideoplayer", version.r
 media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "exoplayer" }
 media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "exoplayer" }
 media3-datasource-cronet = { group = "androidx.media3", name = "media3-datasource-cronet", version.ref = "exoplayer" }
-cronet-bundled = { group = "org.chromium.net", name = "cronet-bundled", version.ref = "cronetBundled" }
+cronet-embedded = { group = "org.chromium.net", name = "cronet-embedded", version.ref = "cronetBundled" }
 mpv-lib = { group = "com.github.abdallahmehiz", name = "mpv-android", version.ref = "mpv" }
 
 # Other
