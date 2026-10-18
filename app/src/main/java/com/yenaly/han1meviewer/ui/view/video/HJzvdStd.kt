@@ -48,6 +48,7 @@ import cn.jzvd.JzvdStd
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
 import com.itxca.spannablex.spannable
+import com.yenaly.han1meviewer.util.popBackStackSafe
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.entity.HKeyframeEntity
@@ -738,7 +739,7 @@ class HJzvdStd @JvmOverloads constructor(
             R.id.go_home -> {
                 if (screen != SCREEN_FULLSCREEN) {
                     context.findActivityOrNull<MainActivity>()?.let { activity ->
-                        activity.navController.popBackStack(HomeRoute, false)
+                        activity.navController.popBackStackSafe(HomeRoute, false)
                         return
                     }
                 } else {

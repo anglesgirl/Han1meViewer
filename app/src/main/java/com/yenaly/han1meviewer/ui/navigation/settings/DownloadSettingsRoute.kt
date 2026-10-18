@@ -269,7 +269,7 @@ fun DownloadSettingsRouteScreen(
                     Text(stringResource(R.string.importing))
                     LinearProgressIndicator(
                         progress = {
-                            if (importTotal > 0) importMigrated.toFloat() / importTotal else 0f
+                            if (importTotal > 0) (importMigrated.toFloat() / importTotal).coerceIn(0f, 1f) else 0f
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )

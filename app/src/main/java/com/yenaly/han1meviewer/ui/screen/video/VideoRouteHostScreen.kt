@@ -50,6 +50,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.analytics
 import com.google.firebase.analytics.logEvent
+import com.yenaly.han1meviewer.util.popBackStackSafe
 import com.yenaly.han1meviewer.FirebaseConstants
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
@@ -156,7 +157,7 @@ fun VideoRouteHostScreen(
             onPendingDownloadPromptChange = { pendingDownloadPrompt = it },
             getCheckedQuality = { checkedQuality },
             setCheckedQuality = { checkedQuality = it },
-            onStoragePermissionDenied = { activity.navController.popBackStack() },
+            onStoragePermissionDenied = { activity.navController.popBackStackSafe() },
             onRequestUnsubscribeConfirm = { artist -> unsubscribeArtist = artist },
             onRequestDownloadPermissionSettings = { showDownloadPermissionDialog = true },
         )
@@ -377,7 +378,7 @@ fun VideoRouteHostScreen(
                     dismissButton = {
                         TextButton(onClick = {
                             showDownloadPermissionDialog = false
-                            activity.navController.popBackStack()
+                            activity.navController.popBackStackSafe()
                         }) {
                             Text(activity.getString(R.string.cancel))
                         }
@@ -470,7 +471,7 @@ fun VideoRouteHostScreen(
         player.orientationManager = orientationManager
         player.onGoHomeClickListener = {
             if (activity.resources.getBoolean(R.bool.isTablet)) {
-                activity.navController.popBackStack()
+                activity.navController.popBackStackSafe()
             }
             activity.startActivity<MainActivity>()
         }

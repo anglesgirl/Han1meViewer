@@ -32,6 +32,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.navigation.NavHostController
 import androidx.preference.PreferenceManager
 import com.google.android.material.snackbar.Snackbar
+import com.yenaly.han1meviewer.util.popBackStackSafe
 import com.yenaly.han1meviewer.HanimeConstants.ANIME_URL
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.PermissionRequester
@@ -317,7 +318,7 @@ class MainActivity : FrameActivity(), PermissionRequester {
     fun confirmLogout() {
         showLogoutConfirm = false
         if (logoutCloseCurrentPage) {
-            navController.popBackStack()
+            navController.popBackStackSafe()
         }
         logoutWithRefresh()
     }

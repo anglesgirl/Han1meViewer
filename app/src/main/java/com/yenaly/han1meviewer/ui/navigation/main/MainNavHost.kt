@@ -23,6 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
+import com.yenaly.han1meviewer.util.popBackStackSafe
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.navigation.navigateSafely
 import com.yenaly.han1meviewer.ui.screen.account.AvatarCropScreen
@@ -62,7 +63,7 @@ fun MainNavHost(
     val destinationSpec = MainDestinationSpec.fromDestination(backStackEntry?.destination)
     var pendingAvatarCropResult by remember { mutableStateOf<String?>(null) }
 
-    val onBack: () -> Unit = { navController.popBackStack() }
+    val onBack: () -> Unit = { navController.popBackStackSafe() }
     val onNavigateToVideo: (String) -> Unit = { code -> navController.navigateSafely(VideoRoute(code)) }
     val onNavigateToLocalVideo: (String, String?) -> Unit =
         { code, uri -> navController.navigateSafely(VideoRoute(code, uri)) }
