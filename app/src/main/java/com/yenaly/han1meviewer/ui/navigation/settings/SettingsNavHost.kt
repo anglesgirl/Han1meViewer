@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.window.core.layout.WindowSizeClass
+import com.yenaly.han1meviewer.util.popBackStackSafe
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.navigation.main.navigateSettingsCategoryDestination
@@ -60,7 +61,7 @@ fun SettingsScaffold(
         ?: SettingsScreenDestination.Home
 
     fun navigateBack() {
-        if (!navController.popBackStack()) {
+        if (!navController.popBackStackSafe()) {
             navController.navigate(fallbackDestination)
         }
     }

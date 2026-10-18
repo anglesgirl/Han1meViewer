@@ -208,38 +208,46 @@ object HyWebViewHelper {
         return doGet(url, request, useEch = false)
     }
 
-    /** OkHttp Response → WebResourceResponse */
+    /** OkHttp Response → WebResourceResponse（流式，不进内存，防 OOM） */
     private fun toWebResourceResponse(url: String, resp: okhttp3.Response): WebResourceResponse {
-        resp.use {
-            val body = it.body?.bytes() ?: ByteArray(0)
-            val headers = LinkedHashMap<String, String>()
-            for ((name, value) in it.headers) {
-                when {
-                    name.equals("Set-Cookie", ignoreCase = true) -> Unit // 已写回 CookieManager
-                    name.equals("Content-Length", ignoreCase = true) -> Unit
-                    name.equals("Transfer-Encoding", ignoreCase = true) -> Unit
-                    name.isNotEmpty() -> headers[name] = value
-                }
+        val headers = LinkedHashMap<String, String>()
+        for ((name, value) in resp.headers) {
+            when {
+                name.equals("Set-Cookie", ignoreCase = true) -> Unit // 已写回 CookieManager
+                name.equals("Content-Length", ignoreCase = true) -> Unit
+                name.equals("Transfer-Encoding", ignoreCase = true) -> Unit
+                name.isNotEmpty() -> headers[name] = value
             }
-            val contentType = headers.entries
-                .firstOrNull { e -> e.key.equals("Content-Type", ignoreCase = true) }
-                ?.value ?: "text/html"
-            var mimeType = "text/html"
-            var encoding = "utf-8"
-            contentType.split(";").forEachIndexed { idx, part ->
-                if (idx == 0) mimeType = part.trim().ifEmpty { "text/html" }
-                else if (part.trim().startsWith("charset=", ignoreCase = true)) {
-                    encoding = part.trim().substringAfter("=").trim()
-                }
-            }
-            // 3xx 兜底：跳数用完或无 Location，包装成 200 避免 WebView 抛异常
-            val code = if (it.code in 300..399) 200 else it.code
-            Log.d(TAG, "ECH GET ok: $code ${body.size}b $url")
-            return WebResourceResponse(
-                mimeType, encoding, code, "OK",
-                headers, ByteArrayInputStream(body),
-            )
         }
+        val contentType = headers.entries
+            .firstOrNull { e -> e.key.equals("Content-Type", ignoreCase = true) }
+            ?.value ?: "text/html"
+        var mimeType = "text/html"
+        var encoding = "utf-8"
+        contentType.split(";").forEachIndexed { idx, part ->
+            if (idx == 0) mimeType = part.trim().ifEmpty { "text/html" }
+            else if (part.trim().startsWith("charset=", ignoreCase = true)) {
+                encoding = part.trim().substringAfter("=").trim()
+            }
+        }
+        // 3xx 兜底：跳数用完或无 Location，包装成 200 避免 WebView 抛异常
+        val code = if (resp.code in 300..399) 200 else resp.code
+        val contentLength = resp.body?.contentLength() ?: -1
+        Log.d(TAG, "ECH GET ok: $code ${contentLength}b $url")
+        // 流式：body.byteStream() 直接给 WebView，不经过内存缓冲
+        // 包装一层，流关闭时顺带关闭 OkHttp Response 释放连接
+        val bodyStream = resp.body?.byteStream()?.let { raw ->
+            object : java.io.FilterInputStream(raw) {
+                override fun close() {
+                    try { super.close() } catch (_: Exception) {}
+                    try { resp.close() } catch (_: Exception) {}
+                }
+            }
+        } ?: java.io.ByteArrayInputStream(ByteArray(0))
+        return WebResourceResponse(
+            mimeType, encoding, code, "OK",
+            headers, bodyStream,
+        )
     }
 
     private fun resolveUrl(base: String, location: String): String =
