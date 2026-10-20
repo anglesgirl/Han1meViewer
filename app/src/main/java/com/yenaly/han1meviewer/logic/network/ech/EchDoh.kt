@@ -206,7 +206,9 @@ object EchDoh {
             val addrs = try {
                 dns.lookup(host)
             } catch (e: Exception) {
-                endpointFailed(ip)
+                // NXDOMAIN/无 A、AAAA 并不意味着端点断网，不能让它影响共享 ECH。
+                // DnsOverHttps 会把传输异常放进 UnknownHostException.cause。
+                if (e !is UnknownHostException || e.cause != null) endpointFailed(ip)
                 Log.i(TAG, "public DoH $ip failed for $host: ${e.message}")
                 continue
             }
