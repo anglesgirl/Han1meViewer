@@ -3,8 +3,6 @@ package com.yenaly.han1meviewer.logic.network
 import android.util.Log
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
 import com.yenaly.han1meviewer.Preferences
-import com.yenaly.han1meviewer.logic.network.ech.EchDoh
-import com.yenaly.han1meviewer.logic.network.ech.EchHosts
 import okhttp3.Dns
 import okhttp3.dnsoverhttps.DnsOverHttps
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -108,13 +106,6 @@ class HDns : Dns {
             return cloudFlareIps.map {
                 InetAddress.getByAddress(hostname, InetAddress.getByName(it).address)
             }
-        }
-
-        // 兼容仍使用 HDns 的图片/预览客户端；主域名绝不进入公共解析路径。
-        if (!EchHosts.isCoreDomain(hostname)) {
-            val addrs = EchDoh.resolve(hostname)
-            if (addrs.isNotEmpty()) return addrs
-            throw java.net.UnknownHostException("公共纯 IP DoH 解析失败：$hostname")
         }
 
         val dohUrl = DohConfig.resolveUrl()
