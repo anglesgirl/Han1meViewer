@@ -37,7 +37,7 @@ object EchHosts {
      * 避免"加了新域名但 ECH 名单忘了加"这种静默漏保护。
      */
     fun isCoreDomain(host: String): Boolean {
-        val h = host.lowercase()
+        val h = host.lowercase(java.util.Locale.ROOT).trimEnd('.')
         return HANIME_HOSTNAME.any { h == it || h.endsWith(".$it") }
     }
 
