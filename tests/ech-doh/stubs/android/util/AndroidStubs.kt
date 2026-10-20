@@ -3,6 +3,7 @@ package android.util
 object Base64 {
     const val NO_WRAP: Int = 2
     const val URL_SAFE: Int = 8
+    const val DEFAULT: Int = 0
     @JvmStatic fun encodeToString(input: ByteArray, flags: Int): String =
         if ((flags and URL_SAFE) != 0) java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(input)
         else java.util.Base64.getEncoder().encodeToString(input)

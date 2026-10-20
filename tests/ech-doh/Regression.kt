@@ -1,372 +1,257 @@
 package regression
 
+import com.yenaly.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
+import com.yenaly.han1meviewer.HANIME_MEDIA_CDN_HOST
 import com.yenaly.han1meviewer.Preferences
-import com.yenaly.han1meviewer.StubCounters
+import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HDns
-import com.yenaly.han1meviewer.logic.network.ech.ConscryptEch
-import com.yenaly.han1meviewer.logic.network.ech.EchDoh
 import com.yenaly.han1meviewer.logic.network.ech.EchDns
-import com.yenaly.han1meviewer.logic.network.ech.EchHosts
+import com.yenaly.han1meviewer.logic.network.ech.EchDoh
 import okhttp3.Dns
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
-import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody
 import java.io.File
 import java.io.IOException
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.net.Socket
+import java.net.SocketAddress
+import javax.net.SocketFactory
 import java.net.UnknownHostException
-import java.util.concurrent.Callable
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-private val testDir = File(System.getProperty("ech.test.dir", ".")).canonicalFile
-private val endpointIps = listOf("223.5.5.5", "223.6.6.6", "1.12.12.12", "120.53.53.53", "101.198.193.29", "101.198.192.33")
 private val assertions = AtomicInteger()
-private fun checkThat(ok: Boolean, message: String) { assertions.incrementAndGet(); check(ok) { message } }
+private val testDir = File(System.getProperty("ech.test.dir", ".")).canonicalFile
+private fun expect(value: Boolean, message: String) {
+    assertions.incrementAndGet()
+    check(value) { message }
+}
 
 private object Wire {
-    fun queryName(q: ByteArray): String {
+    fun qname(q: ByteArray): String {
         var p = 12
         val labels = mutableListOf<String>()
         while (p < q.size && q[p].toInt() != 0) {
-            val n = q[p++].toInt() and 255
-            labels += String(q, p, n, Charsets.US_ASCII); p += n
+            val size = q[p++].toInt() and 0xff
+            labels += String(q, p, size, Charsets.US_ASCII)
+            p += size
         }
         return labels.joinToString(".")
     }
-    fun answer(name: String, withEch: Boolean): ByteArray {
-        val qname = name.split('.').flatMap { listOf(it.length.toByte()) + it.toByteArray(Charsets.US_ASCII).toList() }.toByteArray() + byteArrayOf(0)
-        val rdata = if (withEch) byteArrayOf(0, 1, 0, 0, 0, 5, 0, 3, 1, 2, 3) else byteArrayOf(0, 1, 0)
-        val answer = byteArrayOf(0xC0.toByte(), 0x0C, 0, 65, 0, 1, 0, 0, 0, 60, (rdata.size shr 8).toByte(), rdata.size.toByte()) + rdata
-        return byteArrayOf(0x12, 0x34, 0x81.toByte(), 0x80.toByte(), 0, 1, 0, 1, 0, 0, 0, 0) +
-            qname + byteArrayOf(0, 65, 0, 1) + answer
-    }
 }
 
-private data class ProbeState(
-    val mode: String = "fixture",
-    val requests: AtomicInteger = AtomicInteger(),
-    val primary: AtomicInteger = AtomicInteger(),
-    val secondary: AtomicInteger = AtomicInteger(),
-    val errors: AtomicInteger = AtomicInteger(),
-    val ips: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf()),
-    val sources: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf()),
-    val violations: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf()),
-    val slowFirstMs: Long = 0,
-)
-@Volatile private lateinit var state: ProbeState
+private val gatewayUrl = "https://82sew1c85i.cloudflare-gateway.com/dns-query"
+private val expectedBootstrapIp = "172.64.229.69"
+private val eCHWireFixture = File(testDir, "fixtures/223.5.5.5-cloudflare-ech.com.bin")
+private val gatewayRequests = AtomicInteger()
+private val unexpectedRequests = mutableListOf<String>()
 
-private fun fixture(ip: String, host: String): ByteArray {
-    val direct = File(testDir, "fixtures/$ip-$host.bin")
-    // The Tencent source fixture is intentionally allowed to reuse the captured Alibaba response.
-    val file = if (direct.isFile) direct else File(testDir, "fixtures/223.5.5.5-$host.bin")
-    check(file.isFile) { "missing fixture $file" }
-    return file.readBytes()
-}
-
-private fun mockClient(): OkHttpClient = OkHttpClient.Builder()
-    .dns(object : Dns { override fun lookup(hostname: String): List<InetAddress> = throw UnknownHostException("ECH DoH must use an IP literal: $hostname") })
-    .followRedirects(false).followSslRedirects(false).addInterceptor(Interceptor { chain ->
-        val request = chain.request()
-        state.requests.incrementAndGet()
-        val ip = request.url.host
-        state.ips.add(ip)
-        if (request.url.scheme != "https") state.violations.add("non-HTTPS URL: ${request.url}")
-        if (ip !in endpointIps) state.violations.add("not an allowlisted literal IP: ${request.url}")
-        if (request.url.encodedPath != "/dns-query") state.violations.add("unexpected path: ${request.url.encodedPath}")
-        val encoded = request.url.queryParameter("dns") ?: error("missing wire DNS query")
-        val qname = Wire.queryName(java.util.Base64.getUrlDecoder().decode(encoded))
-        if (qname !in setOf("cloudflare-ech.com", "crypto.cloudflare.com")) state.violations.add("unexpected DNS QNAME: $qname")
-        state.sources.add(qname)
-        if (qname == "cloudflare-ech.com") state.primary.incrementAndGet() else state.secondary.incrementAndGet()
-
-        var code = 200
-        val body: ByteArray
-        when (state.mode) {
-            "throw-first" -> {
-                if (state.errors.compareAndSet(0, 1)) throw IOException("synthetic first-endpoint failure")
-                body = fixture(ip, qname)
-            }
-            "slow-first-fail" -> {
-                if (ip == endpointIps.first() && state.errors.compareAndSet(0, 1)) {
-                    Thread.sleep(state.slowFirstMs)
-                    throw IOException("synthetic slow first-endpoint failure")
-                }
-                body = fixture(ip, qname)
-            }
-            "fail-first-ip" -> {
-                if (ip == endpointIps.first() && state.errors.compareAndSet(0, 1)) code = 503
-                body = if (code == 200) fixture(ip, qname) else ByteArray(0)
-            }
-            "missing-primary" -> {
-                body = if (qname == "cloudflare-ech.com") Wire.answer(qname, false) else fixture(ip, qname)
-            }
-            "fail-all" -> { code = 503; body = ByteArray(0) }
-            "redirect" -> { code = 302; body = ByteArray(0) }
-            else -> body = fixture(ip, qname)
+private fun mockBootstrapClient(): OkHttpClient = OkHttpClient.Builder()
+    .dns(object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> =
+            throw UnknownHostException("unexpected unpinned DNS lookup: $hostname")
+    })
+    .addInterceptor(Interceptor { chain ->
+        val req = chain.request()
+        val host = req.url.host
+        val dns = req.url.queryParameter("dns")?.let { java.util.Base64.getUrlDecoder().decode(it) }
+        val qname = dns?.let(Wire::qname)
+        if (req.url.scheme == "https" && host == "82sew1c85i.cloudflare-gateway.com" &&
+            req.url.encodedPath == "/dns-query" && qname == "cloudflare-ech.com" &&
+            req.header("accept") == "application/dns-message"
+        ) {
+            gatewayRequests.incrementAndGet()
+        } else {
+            unexpectedRequests += "${req.url} qname=$qname accept=${req.header("accept")}"
         }
-        val rb = Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(code).message("mock")
-            .body(ResponseBody.create("application/dns-message".toMediaType(), body))
-        if (code == 302) rb.header("Location", "https://trusted.invalid/dns-query")
-        rb.build()
+        val body = eCHWireFixture.readBytes()
+        Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
+            .header("content-type", "application/dns-message")
+            .body(ResponseBody.create("application/dns-message".toMediaType(), body)).build()
     }).build()
 
-private fun objectInstance(): Any = EchDoh
+private fun pinProbeClient(connectAddresses: MutableList<String>, requestHosts: MutableList<String>): OkHttpClient {
+    val sockets = object : SocketFactory() {
+        private fun probeSocket() = object : Socket() {
+            override fun connect(endpoint: SocketAddress, timeout: Int) {
+                val address = endpoint as InetSocketAddress
+                connectAddresses += address.address?.hostAddress ?: address.hostString
+                throw IOException("intentional offline bootstrap-pin probe")
+            }
+        }
+        override fun createSocket(): Socket = probeSocket()
+        override fun createSocket(host: String, port: Int): Socket = probeSocket()
+        override fun createSocket(host: String, port: Int, localHost: InetAddress, localPort: Int): Socket = probeSocket()
+        override fun createSocket(host: InetAddress, port: Int): Socket = probeSocket()
+        override fun createSocket(address: InetAddress, port: Int, localAddress: InetAddress, localPort: Int): Socket = probeSocket()
+    }
+    return OkHttpClient.Builder()
+        .proxy(Proxy.NO_PROXY)
+        .socketFactory(sockets)
+        .addInterceptor(Interceptor { chain ->
+            requestHosts += chain.request().url.host
+            chain.proceed(chain.request())
+        })
+        .build()
+}
+
 private fun field(target: Any, name: String) = target.javaClass.getDeclaredField(name).apply { isAccessible = true }
-private fun setField(target: Any, name: String, value: Any?) { field(target, name).set(target, value) }
-private fun getField(target: Any, name: String): Any? = field(target, name).get(target)
-private fun lazyValue(name: String, value: Any?) {
-    val lazy = getField(objectInstance(), "${name}\$delegate")!!
-    lazy.javaClass.getDeclaredField("_value").apply { isAccessible = true }.set(lazy, value)
+private fun setField(target: Any, name: String, value: Any?) = field(target, name).set(target, value)
+private fun setLazy(target: Any, name: String, value: Any?) {
+    val delegate = field(target, "${name}\$delegate").get(target)
+    delegate.javaClass.getDeclaredField("_value").apply { isAccessible = true }.set(delegate, value)
 }
-private fun getLazyValue(name: String): Any? {
-    val lazy = getField(objectInstance(), "${name}\$delegate")!!
-    return lazy.javaClass.getDeclaredField("_value").apply { isAccessible = true }.get(lazy)
+
+private fun configurePreferences() {
+    Preferences.useDoH = true
+    Preferences.dohPreset = "cf-gateway"
+    Preferences.dohCustomUrl = ""
+    Preferences.dohBootstrapIps = ""
+    Preferences.dohTimeoutSeconds = 5
+    Preferences.useBuiltInHosts = false
+    Preferences.customHostsData = ""
+    Preferences.mediaCdnNodeIps = emptyList()
 }
-private fun setup(mode: String = "fixture", slowFirstMs: Long = 0) {
+
+private fun gatewayWireCacheAndConfigTest() {
+    configurePreferences()
+    expect(DohConfig.selectedPreset().url == gatewayUrl, "production DohConfig preset URL changed unexpectedly")
+    expect(DohConfig.bootstrapIps() == listOf(expectedBootstrapIp), "production DoH bootstrap should be exactly $expectedBootstrapIp; got ${DohConfig.bootstrapIps()}")
+    expect(DohConfig.resolveUrl() == gatewayUrl, "configured DoH URL did not resolve to the production gateway")
+    check(eCHWireFixture.isFile) { "missing local wire fixture: $eCHWireFixture" }
+
     EchDoh.invalidateAll()
-    state = ProbeState(mode = mode, slowFirstMs = slowFirstMs)
-    lazyValue("echIpClient", mockClient())
-    lazyValue("publicResolvers", null)
-    setField(objectInstance(), "cachedResolver", null)
-    setField(objectInstance(), "cachedResolverUrl", null)
-    Preferences.dohCustomUrl = "https://trusted.invalid/dns-query"
-    Preferences.dohUrlReads = 0
-    StubCounters.selectedPreset = 0; StubCounters.bootstrapIps = 0; StubCounters.timeoutSeconds = 0
-}
-private fun verifyMock() = checkThat(state.violations.isEmpty(), "mock request invariant failed: ${state.violations}")
+    gatewayRequests.set(0)
+    unexpectedRequests.clear()
 
-private fun dohRoutingTest() {
-    setup()
-    var trusted = 0
-    val trustedAddrs = listOf(InetAddress.getByName("192.0.2.44"))
-    val trustedDns = object : Dns { override fun lookup(hostname: String): List<InetAddress> { trusted++; return trustedAddrs } }
-    setField(objectInstance(), "cachedResolver", trustedDns)
-    setField(objectInstance(), "cachedResolverUrl", "https://trusted.invalid/dns-query")
-    val publicCalls = mutableListOf<String>()
-    val publicDns = object : Dns { override fun lookup(hostname: String): List<InetAddress> { publicCalls += hostname; return listOf(InetAddress.getByName("198.51.100.7")) } }
-    lazyValue("publicResolvers", endpointIps.associateWith { publicDns })
+    // Let the real OkHttp DNS path run, but replace connect() with a local throwing probe.
+    // This proves the production gateway client actually dials the configured bootstrap IP
+    // while never opening a socket to the Internet.
+    val connectAddresses = mutableListOf<String>()
+    val requestHosts = mutableListOf<String>()
+    setLazy(EchDoh, "bootstrapClient", pinProbeClient(connectAddresses, requestHosts))
+    expect(EchDoh.echConfigList("pin-probe.example") == null, "offline pin probe should stop before receiving a response")
+    expect(requestHosts.isNotEmpty() && requestHosts.all { it == "82sew1c85i.cloudflare-gateway.com" }, "pin probe did not request only the configured gateway domain: $requestHosts")
+    expect(connectAddresses.isNotEmpty() && connectAddresses.all { it == expectedBootstrapIp }, "gateway DNS bootstrap did not pin every socket attempt to $expectedBootstrapIp: $connectAddresses")
 
-    for (host in listOf("JAVCHU.COM.", "api.javchu.com")) checkThat(EchDoh.resolve(host) == trustedAddrs, "core hostname $host must use trusted resolver")
-    checkThat(trusted == 2, "expected trusted lookups for normalized core names, got $trusted")
-    checkThat(publicCalls.isEmpty(), "core names leaked to public resolver: $publicCalls")
-    for (host in listOf("eviljavchu.com", "javchu.com.evil.invalid")) checkThat(EchDoh.resolve(host).isNotEmpty(), "public non-core $host should resolve")
-    checkThat(publicCalls == listOf("eviljavchu.com", "javchu.com.evil.invalid"), "suffix boundary or public routing failed: $publicCalls")
-    checkThat(Preferences.dohUrlReads == 2, "core lookups should use the trusted DoH URL exactly once each; public lookups must not read it")
-    checkThat(EchHosts.isCoreDomain("JAVCHU.COM."), "case/trailing-dot root should be core")
-    checkThat(EchHosts.isCoreDomain("api.javchu.com"), "subdomain should be core")
-    checkThat(!EchHosts.isCoreDomain("eviljavchu.com"), "lookalike suffix must not be core")
-    checkThat(!EchHosts.isCoreDomain("javchu.com.evil.invalid"), "embedded suffix must not be core")
-    checkThat(EchHosts.shouldTryEch("anything.example"), "all hostnames should try ECH")
-    checkThat(EchHosts.isProtected("anything.example"), "compatibility alias must try ECH")
-}
+    EchDoh.invalidateAll()
+    setLazy(EchDoh, "bootstrapClient", mockBootstrapClient())
 
-private fun realFixtureFallbackAndCacheTest() {
-    setup("missing-primary")
-    val result = EchDoh.echConfigList("any-host.example")
-    checkThat(result != null && result.size >= 2, "real secondary-source DNS fixture must parse into ECH config")
-    checkThat(state.primary.get() > 0 && state.secondary.get() > 0, "missing primary ECH must fall through to crypto.cloudflare.com")
-    checkThat(Preferences.dohUrlReads == 0 && StubCounters.bootstrapIps == 0 && StubCounters.selectedPreset == 0 && StubCounters.timeoutSeconds == 0, "ECH query must not touch DoH config / user gateway")
-    val count = state.requests.get()
-    checkThat(EchDoh.echConfigList("different-host.example")!!.contentEquals(result!!), "ECH cache should be shared across requested hosts")
-    checkThat(state.requests.get() == count, "cached ECH value unexpectedly caused another request")
-    val cache = getField(objectInstance(), "echCache") as Map<*, *>
-    val entry = cache["cloudflare-ech.com"]!!
-    val expiry = entry.javaClass.getDeclaredField("expireAt").apply { isAccessible = true }.getLong(entry)
-    val remaining = expiry - System.currentTimeMillis()
-    checkThat(remaining in 3_590_000L..3_600_000L, "ECH cache expiration is not approximately one hour: ${remaining}ms")
-    EchDoh.invalidateEch("anything.example")
-    checkThat(EchDoh.echConfigList("anything.example") != null, "fetch after explicit invalidation failed")
-    checkThat(state.requests.get() > count, "invalidateEch did not cause a new DoH retrieval")
-    verifyMock()
+    val wire = EchDoh.echConfigList("hanime1.me")
+    expect(wire != null && wire.isNotEmpty(), "captured DNS wire response did not yield an ECH config")
+    expect(gatewayRequests.get() == 1, "expected one query to the user gateway, got ${gatewayRequests.get()}")
+    expect(unexpectedRequests.isEmpty(), "ECH query escaped gateway-only route: $unexpectedRequests")
+
+    val cache = field(EchDoh, "echCache").get(EchDoh) as Map<*, *>
+    val entry = cache["cloudflare-ech.com"] ?: error("ECH entry absent from cache")
+    val expiresAt = field(entry, "expireAt").getLong(entry)
+    val remaining = expiresAt - System.currentTimeMillis()
+    expect(remaining in 14_390_000L..14_400_000L, "ECH cache TTL was not four hours: ${remaining}ms")
+    val fromCache = EchDoh.echConfigList("different.example")
+    expect(fromCache != null && fromCache.contentEquals(wire!!), "cached ECH wire value changed across requested hostnames")
+    expect(gatewayRequests.get() == 1, "second ECH lookup should be served from the 4-hour cache")
+
+    EchDoh.invalidateEch("hanime1.me")
+    val afterInvalidation = EchDoh.echConfigList("hanime1.me")
+    expect(afterInvalidation != null && afterInvalidation.contentEquals(wire), "ECH lookup failed after explicit invalidation")
+    expect(gatewayRequests.get() == 2, "explicit invalidateEch did not trigger a fresh gateway request")
 }
 
-private fun exceptionAndFailClosedTest() {
-    setup("throw-first")
-    checkThat(EchDoh.echConfigList("host") != null, "endpoint exception must continue to next endpoint/source")
-    checkThat(state.errors.get() == 1 && state.requests.get() == 2, "exception must skip the failed IP's second source; expected 2 requests, got ${state.requests.get()}")
-    checkThat(state.ips.toList() == listOf(endpointIps[0], endpointIps[1]), "exception continuation order differed: ${state.ips}")
+private fun configuredResolverAndFailClosedTest() {
+    configurePreferences()
+    EchDoh.invalidateAll()
+    val resolved = InetAddress.getByAddress(byteArrayOf(198.toByte(), 51, 100, 40))
+    val queried = mutableListOf<String>()
+    val configured = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            queried += hostname
+            return listOf(resolved)
+        }
+    }
+    setField(EchDoh, "cachedResolver", configured)
+    setField(EchDoh, "cachedResolverUrl", gatewayUrl)
 
-    setup("fail-all")
-    checkThat(EchDoh.echConfigList("host") == null, "all failed endpoints should return null")
-    checkThat(state.requests.get() == 6, "must attempt primary source on all 6 IPs only (got ${state.requests.get()})")
-    checkThat(state.primary.get() == 6 && state.secondary.get() == 0, "HTTP failures should not retry the second ECH source on the same IP")
-    checkThat(EchDoh.echConfigList("host") == null && state.requests.get() == 6, "ECH failure cooldown should suppress an immediate retry")
-    checkThat(Preferences.dohUrlReads == 0 && StubCounters.bootstrapIps == 0 && StubCounters.selectedPreset == 0 && StubCounters.timeoutSeconds == 0, "all-failed ECH improperly fell back to user gateway/bootstrap")
-    val client = getLazyValue("echIpClient") as OkHttpClient
-    checkThat(!client.followRedirects && !client.followSslRedirects, "ECH client must have redirects disabled")
-    checkThat(runCatching { client.dns.lookup("dns-gateway.invalid") }.exceptionOrNull() is UnknownHostException, "ECH client must reject DNS hostname resolution")
-    setup("redirect")
-    checkThat(EchDoh.echConfigList("host") == null, "redirect-only endpoints should not produce a result")
-    checkThat(state.requests.get() == 6, "redirect must not be followed or second source attempted; got ${state.requests.get()}")
-    checkThat(Preferences.dohUrlReads == 0, "redirect path touched user DoH URL")
-    verifyMock()
+    for (host in listOf("hanime1.me", "media.example", "api.javchu.com")) {
+        expect(EchDoh.resolve(host) == listOf(resolved), "configured resolver was not used for $host")
+    }
+    expect(queried == listOf("hanime1.me", "media.example", "api.javchu.com"), "core/non-core DNS routing differed: $queried")
+
+    EchDoh.invalidateAll()
+    queried.clear()
+    val failing = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            queried += hostname
+            throw UnknownHostException("configured resolver fixture failure")
+        }
+    }
+    setField(EchDoh, "cachedResolver", failing)
+    setField(EchDoh, "cachedResolverUrl", gatewayUrl)
+    val fallbackCalls = AtomicInteger()
+    val systemFallback = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            fallbackCalls.incrementAndGet()
+            return listOf(resolved)
+        }
+    }
+    val thrown = runCatching { EchDns(systemFallback).lookup("not-cached.example") }.exceptionOrNull()
+    expect(thrown is UnknownHostException, "failed DoH lookup must throw UnknownHostException rather than return system DNS results")
+    expect(queried == listOf("not-cached.example"), "failed lookup did not reach the configured resolver exactly once: $queried")
+    expect(fallbackCalls.get() == 0, "failed DoH lookup improperly used system DNS fallback")
 }
 
-private fun concurrentEchSingleflightTest() {
-    setup()
-    val workers = 16
-    val ready = CountDownLatch(workers)
-    val start = CountDownLatch(1)
-    val pool = Executors.newFixedThreadPool(workers)
-    try {
-        val futures = (0 until workers).map { pool.submit(Callable {
-            ready.countDown(); check(start.await(5, TimeUnit.SECONDS)); EchDoh.echConfigList("parallel-$it.example")
-        }) }
-        check(ready.await(5, TimeUnit.SECONDS)) { "ECH workers did not become ready" }
-        start.countDown()
-        val results = futures.map { it.get(10, TimeUnit.SECONDS) }
-        checkThat(results.all { it != null && it.contentEquals(results.first()!!) }, "concurrent ECH fetch callers did not get the same config")
-        checkThat(state.requests.get() == 1 && state.primary.get() == 1, "concurrent ECH fetch should make exactly one HTTP request; got ${state.requests.get()}")
-        verifyMock()
-    } finally { pool.shutdownNow() }
-}
-
-private fun concurrentDnsSingleflightTest() {
-    setup()
+private fun customCdnIpBypassTest() {
+    configurePreferences()
+    EchDoh.invalidateAll()
     val lookups = AtomicInteger()
-    val answer = InetAddress.getByName("203.0.113.77")
-    val sharedDns = object : Dns {
+    val configured = object : Dns {
         override fun lookup(hostname: String): List<InetAddress> {
             lookups.incrementAndGet()
-            Thread.sleep(120)
+            return listOf(InetAddress.getByAddress(byteArrayOf(203.toByte(), 0, 113, 20)))
+        }
+    }
+    setField(EchDoh, "cachedResolver", configured)
+    setField(EchDoh, "cachedResolverUrl", gatewayUrl)
+    Preferences.mediaCdnNodeIps = listOf("192.0.2.44", "192.0.2.45")
+
+    for (host in listOf(HANIME_MEDIA_CDN_HOST, HANIME_BACKUP_MEDIA_CDN_HOST)) {
+        val addrs = EchDoh.resolve(host)
+        expect(addrs.map { it.hostAddress } == listOf("192.0.2.44", "192.0.2.45"), "custom CDN IPs not returned for $host: $addrs")
+    }
+    expect(lookups.get() == 0, "custom CDN IPs should bypass configured resolver, resolver calls=${lookups.get()}")
+}
+
+private fun hdnsUsesConfiguredGatewayTest() {
+    configurePreferences()
+    val answer = InetAddress.getByAddress(byteArrayOf(203.toByte(), 0, 113, 70))
+    val queried = mutableListOf<String>()
+    val configuredDns = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            queried += hostname
             return listOf(answer)
         }
     }
-    lazyValue("publicResolvers", endpointIps.associateWith { sharedDns })
-    val workers = 16
-    val ready = CountDownLatch(workers)
-    val start = CountDownLatch(1)
-    val pool = Executors.newFixedThreadPool(workers)
-    try {
-        val futures = (0 until workers).map { pool.submit(Callable {
-            ready.countDown(); check(start.await(5, TimeUnit.SECONDS)); EchDoh.resolve(if (it % 2 == 0) "Concurrent.Example." else "concurrent.example")
-        }) }
-        check(ready.await(5, TimeUnit.SECONDS)) { "DNS workers did not become ready" }
-        start.countDown()
-        val results = futures.map { it.get(10, TimeUnit.SECONDS) }
-        checkThat(results.all { it == listOf(answer) }, "same-domain concurrent DNS callers should receive the same resolution")
-        checkThat(lookups.get() == 1, "same-domain concurrent DNS should perform one upstream lookup; got ${lookups.get()}")
-    } finally { pool.shutdownNow() }
-}
+    val hdns = HDns()
+    val cfgClass = Class.forName("com.yenaly.han1meviewer.logic.network.HDns\$DohRuntimeConfig")
+    val ctor = cfgClass.getDeclaredConstructor(String::class.java, List::class.java, Int::class.javaPrimitiveType)
+        .apply { isAccessible = true }
+    val config = ctor.newInstance(gatewayUrl, listOf(expectedBootstrapIp), 5)
+    setField(hdns, "cachedDohConfig", config)
+    setField(hdns, "cachedDohDns", configuredDns)
 
-private fun preferredEndpointReuseTest() {
-    setup("fail-first-ip")
-    checkThat(EchDoh.echConfigList("host") != null, "should recover from initial endpoint HTTP failure")
-    checkThat(state.ips.take(2) == listOf(endpointIps[0], endpointIps[1]), "expected initial failure then second endpoint: ${state.ips}")
-    val count = state.requests.get()
-    EchDoh.invalidateEch("host")
-    checkThat(EchDoh.echConfigList("host") != null, "refetch via preferred healthy endpoint failed")
-    checkThat(state.requests.get() == count + 1 && state.ips.last() == endpointIps[1], "successful endpoint should be reused without retrying the failed first endpoint: ${state.ips}")
-    verifyMock()
-}
-
-private fun slowEndpointFailureAndSwitchReuseTest() {
-    val delayMs = 450L
-    setup("slow-first-fail", delayMs)
-    val start = System.nanoTime()
-    checkThat(EchDoh.echConfigList("host") != null, "slow first endpoint failure should switch to a healthy endpoint")
-    val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
-    checkThat(state.requests.get() == 2 && state.ips.toList() == listOf(endpointIps[0], endpointIps[1]), "slow transport failure should be paid once, then switch to next IP: ${state.ips}")
-    checkThat(state.sources.toSet() == setOf("cloudflare-ech.com"), "slow transport failure must not wait for another source on the same IP: ${state.sources}")
-    checkThat(elapsedMs in (delayMs - 100)..(delayMs + 1200), "slow endpoint should incur one bounded wait, observed ${elapsedMs}ms")
-    val count = state.requests.get()
-    EchDoh.invalidateEch("host")
-    val retryStart = System.nanoTime()
-    checkThat(EchDoh.echConfigList("host") != null, "request after slow failure should use the healthy preferred endpoint")
-    val retryMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - retryStart)
-    checkThat(state.requests.get() == count + 1 && state.ips.last() == endpointIps[1], "healthy endpoint was not reused after failure: ${state.ips}")
-    checkThat(retryMs < 300, "reused healthy endpoint unexpectedly paid another slow wait (${retryMs}ms)")
-    println("TIMING: injected first-endpoint failure=${elapsedMs}ms (one ${delayMs}ms pause); successful preferred-endpoint refetch=${retryMs}ms")
-    verifyMock()
-}
-
-private fun nxdomainDoesNotCoolSharedEndpointTest() {
-    setup()
-    val publicLookups = AtomicInteger()
-    val nxdomain = object : Dns {
-        override fun lookup(hostname: String): List<InetAddress> {
-            publicLookups.incrementAndGet()
-            throw UnknownHostException("synthetic NXDOMAIN")
-        }
-    }
-    lazyValue("publicResolvers", endpointIps.associateWith { nxdomain })
-    checkThat(EchDoh.resolve("missing.example").isEmpty(), "NXDOMAIN should resolve to empty without system DNS fallback")
-    checkThat(publicLookups.get() == endpointIps.size, "NXDOMAIN should try all public resolvers")
-    checkThat(EchDoh.echConfigList("host") != null, "public DNS NXDOMAIN must not cool endpoints shared with ECH")
-    checkThat(state.ips.firstOrNull() == endpointIps.first(), "ECH should still use the first healthy endpoint after NXDOMAIN: ${state.ips}")
-    verifyMock()
-}
-
-private fun coreDnsRemainsFailClosedDuringEndpointCooldownTest() {
-    setup("fail-all")
-    checkThat(EchDoh.echConfigList("seed") == null && state.requests.get() == 6, "setup should put every public ECH endpoint in failure cooldown")
-    val trusted = object : Dns { override fun lookup(hostname: String): List<InetAddress> = throw UnknownHostException("trusted DoH unavailable") }
-    setField(objectInstance(), "cachedResolver", trusted)
-    setField(objectInstance(), "cachedResolverUrl", "https://trusted.invalid/dns-query")
-    val publicLookups = AtomicInteger()
-    val public = object : Dns { override fun lookup(hostname: String): List<InetAddress> { publicLookups.incrementAndGet(); return listOf(InetAddress.getByName("198.51.100.23")) } }
-    lazyValue("publicResolvers", endpointIps.associateWith { public })
-    checkThat(EchDoh.resolve("api.javchu.com").isEmpty(), "core DNS should fail closed when trusted DNS fails")
-    val fallbackLookups = AtomicInteger()
-    val fallback = object : Dns { override fun lookup(hostname: String): List<InetAddress> { fallbackLookups.incrementAndGet(); return listOf(InetAddress.getByName("192.0.2.88")) } }
-    checkThat(runCatching { EchDns(fallback).lookup("api.javchu.com") }.exceptionOrNull() is UnknownHostException, "EchDns should throw instead of falling back when core trusted DNS fails")
-    checkThat(publicLookups.get() == 0 && fallbackLookups.get() == 0, "core lookup must not use cooled public endpoints or system fallback")
-}
-
-private fun publicDnsFailureNoGatewayTest() {
-    setup()
-    val publicLookups = AtomicInteger()
-    val emptyDns = object : Dns { override fun lookup(hostname: String): List<InetAddress> { publicLookups.incrementAndGet(); return emptyList() } }
-    lazyValue("publicResolvers", endpointIps.associateWith { emptyDns })
-    checkThat(EchDoh.resolve("not-core.invalid").isEmpty(), "all public DNS failures must return empty")
-    checkThat(publicLookups.get() == 6, "public DNS should try all six independent resolvers")
-    checkThat(Preferences.dohUrlReads == 0, "public failure must not fallback to trusted gateway")
-}
-
-private fun legacyHDnsRoutingTest() {
-    setup()
-    val publicCalls = mutableListOf<String>()
-    val publicDns = object : Dns {
-        override fun lookup(hostname: String): List<InetAddress> { publicCalls += hostname; return listOf(InetAddress.getByName("203.0.113.19")) }
-    }
-    lazyValue("publicResolvers", endpointIps.associateWith { publicDns })
-    val dns = HDns()
-    checkThat(dns.lookup("legacy-image.invalid").single().hostAddress == "203.0.113.19", "HDns non-core should resolve through public-only EchDoh")
-    checkThat(publicCalls == listOf("legacy-image.invalid"), "HDns non-core missed public resolver: $publicCalls")
-    checkThat(Preferences.dohUrlReads == 0 && StubCounters.bootstrapIps == 0 && StubCounters.timeoutSeconds == 0, "HDns non-core path must not read the user's DoH settings")
-    Preferences.useBuiltInHosts = true
-    checkThat(dns.lookup("javchu.com").isNotEmpty(), "built-in core-host branch must retain precedence")
-    checkThat(dns.lookup("www.getchu.com").size == 2, "GETCHU hardcoded branch regression")
-    checkThat(publicCalls == listOf("legacy-image.invalid"), "core/GETCHU leaked into public resolvers: $publicCalls")
-    checkThat(StubCounters.selectedPreset == 0 && StubCounters.bootstrapIps == 0, "HDns early branches unexpectedly resolved configured DoH")
+    expect(hdns.lookup("ordinary.example") == listOf(answer), "HDns did not return its configured DoH answer")
+    expect(queried == listOf("ordinary.example"), "HDns did not route through configured resolver: $queried")
+    expect(DohConfig.resolveUrl() == gatewayUrl && DohConfig.bootstrapIps() == listOf(expectedBootstrapIp), "HDns test must use the production gateway configuration")
 }
 
 fun main() {
-    val suite = listOf(
-        "core-vs-public DNS and hostname normalization" to ::dohRoutingTest,
-        "real DNS fixture fallback, parsing, shared cache, 1h expiry, invalidation" to ::realFixtureFallbackAndCacheTest,
-        "endpoint errors, per-IP HTTP failure, cooldown, fail-closed and redirects" to ::exceptionAndFailClosedTest,
-        "concurrent ECH singleflight" to ::concurrentEchSingleflightTest,
-        "concurrent same-domain DNS singleflight" to ::concurrentDnsSingleflightTest,
-        "successful endpoint preference and reuse" to ::preferredEndpointReuseTest,
-        "one slow endpoint wait, failover and healthy endpoint reuse" to ::slowEndpointFailureAndSwitchReuseTest,
-        "public NXDOMAIN does not cool shared ECH endpoints" to ::nxdomainDoesNotCoolSharedEndpointTest,
-        "core DNS stays fail-closed during public endpoint cooldown" to ::coreDnsRemainsFailClosedDuringEndpointCooldownTest,
-        "public DNS exhaustion without gateway fallback" to ::publicDnsFailureNoGatewayTest,
-        "legacy HDns public routing and existing bypass precedence" to ::legacyHDnsRoutingTest,
-    )
-    val completed = mutableListOf<String>()
-    for ((name, test) in suite) {
-        try { test(); completed += name; println("PASS: $name") }
-        catch (t: Throwable) { System.err.println("FAIL: $name: ${t.stackTraceToString()}"); throw t }
-    }
-    println("RESULT: ${completed.size}/${suite.size} suites passed; ${assertions.get()} assertions")
+    gatewayWireCacheAndConfigTest()
+    configuredResolverAndFailClosedTest()
+    customCdnIpBypassTest()
+    hdnsUsesConfiguredGatewayTest()
+    println("PASS: ${assertions.get()} assertions; gateway-only ECH wire/cache, all-domain resolver/fail-closed, CDN IP bypass, and HDns configured-gateway path")
 }
