@@ -950,4 +950,7 @@
         <item>搓手手期待ing……</item>
         <item>◝(⑅•ᴗ•⑅)◜..°♡ 传送中……</item>
     </string-array>
+    <string name="doh_endpoint_locked">DoH 域名已锁定，Bootstrap 可修改</string>
+    <string name="doh_bootstrap_edit_hint">可输入多个 IP，用逗号分隔；留空恢复默认 172.64.229.69</string>
+    <string name="doh_bootstrap_invalid">请输入有效的 IPv4 或 IPv6 地址</string>
 </resources>

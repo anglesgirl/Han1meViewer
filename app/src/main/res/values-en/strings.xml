@@ -945,4 +945,7 @@ Recommendations are as follows:\n
         <item>Excitedly rubbing hands together in anticipation…</item>
         <item>◝(⑅•ᴗ•⑅)◜..°♡ Teleporting…</item>
     </string-array>
+    <string name="doh_endpoint_locked">DoH endpoint locked; Bootstrap is editable</string>
+    <string name="doh_bootstrap_edit_hint">Enter IPs separated by commas. Leave empty to restore 172.64.229.69.</string>
+    <string name="doh_bootstrap_invalid">Enter valid IPv4 or IPv6 addresses</string>
 </resources>

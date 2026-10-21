@@ -944,4 +944,7 @@ hanime1.me以外のドメインは、特定の時間帯にhanime1.meにリダイ
     <string name="download_auto_group_reuse">既存のグループを使用します：%s</string>
     <string name="download_auto_group_create">新しいグループを作成します：%s</string>
     <string name="download_group_script_simplified">簡体字</string>
+    <string name="doh_endpoint_locked">DoH ドメインは固定、Bootstrap は変更可能</string>
+    <string name="doh_bootstrap_edit_hint">IP をカンマ区切りで入力。空欄で既定の 172.64.229.69 に戻します</string>
+    <string name="doh_bootstrap_invalid">有効な IPv4 または IPv6 アドレスを入力してください</string>
 </resources>

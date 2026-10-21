@@ -301,8 +301,7 @@ fun NetworkSettingsScreen(
                 title = "雅💓涵的DOH",
                 summary = state.dohSummary,
                 iconRes = R.drawable.baseline_doh_24,
-                onClick = { /* 已锁定，不可修改 */ },
-                enabled = false,
+                onClick = { showDohDialog = true },
             )
         }
 
@@ -677,89 +676,63 @@ private fun DohDialog(
     onDismiss: () -> Unit,
     onConfirm: (Boolean, String, String, String, Int) -> Unit,
 ) {
-    var dohEnabled by rememberSaveable(enabled) { mutableStateOf(enabled) }
-    var presetValue by rememberSaveable(preset) {
-        mutableStateOf(preset.ifBlank { DohConfig.presets.first().key })
+    // Only bootstrap addresses are editable. Keep the built-in Gateway endpoint fixed.
+    val fixedPreset = DohConfig.presets.first()
+    var bootstrapValue by rememberSaveable(bootstrapIps) {
+        mutableStateOf(bootstrapIps.ifBlank { fixedPreset.bootstrapIps.joinToString(", ") })
     }
-    var customValue by rememberSaveable(customUrl) { mutableStateOf(customUrl) }
-    var bootstrapValue by rememberSaveable(bootstrapIps) { mutableStateOf(bootstrapIps) }
-    var timeoutValue by rememberSaveable(timeoutSeconds) { mutableStateOf(timeoutSeconds.toString()) }
-    var showPresetDialog by rememberSaveable { mutableStateOf(false) }
-
-    if (showPresetDialog) {
-        NetworkChoiceDialog(
-            title = stringResource(R.string.doh_preset),
-            selectedValue = presetValue,
-            options = DohConfig.presets.map { it.title to it.key } + (stringResource(R.string.custom) to "custom"),
-            onDismiss = { showPresetDialog = false },
-            onSelect = {
-                presetValue = it
-                showPresetDialog = false
-            },
-        )
+    val bootstrapTokens = bootstrapValue.split(',', '\n', ';', ' ')
+        .map { it.trim() }.filter { it.isNotEmpty() }
+    val invalidBootstrap = bootstrapTokens.any {
+        android.system.Os.inet_pton(android.system.OsConstants.AF_INET, it) == null &&
+            android.system.Os.inet_pton(android.system.OsConstants.AF_INET6, it) == null
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.doh_settings)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .selectable(selected = dohEnabled, onClick = { dohEnabled = !dohEnabled })
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Checkbox(checked = dohEnabled, onCheckedChange = null)
-                    Text(stringResource(R.string.use_doh))
-                }
-
-                SettingNavigationItem(
-                    title = stringResource(R.string.doh_preset),
-                    valueText = DohConfig.presets.firstOrNull { it.key == presetValue }?.title
-                        ?: stringResource(R.string.custom),
-                    iconRes = R.drawable.baseline_domain_24,
-                    onClick = { showPresetDialog = true },
-                )
-
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 OutlinedTextField(
-                    value = customValue,
-                    onValueChange = { customValue = it },
+                    value = fixedPreset.url,
+                    onValueChange = {},
+                    readOnly = true,
                     label = { Text(stringResource(R.string.doh_custom_url)) },
+                    supportingText = { Text(stringResource(R.string.doh_endpoint_locked)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
                 )
-
                 OutlinedTextField(
                     value = bootstrapValue,
                     onValueChange = { bootstrapValue = it },
                     label = { Text(stringResource(R.string.doh_bootstrap_ips)) },
+                    placeholder = { Text(fixedPreset.bootstrapIps.joinToString(", ")) },
                     modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text(stringResource(R.string.doh_bootstrap_ips_summary)) },
-                )
-
-                OutlinedTextField(
-                    value = timeoutValue,
-                    onValueChange = { timeoutValue = it.filter(Char::isDigit).take(2) },
-                    label = { Text(stringResource(R.string.doh_timeout_seconds)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    supportingText = { Text(stringResource(R.string.doh_timeout_seconds_summary)) },
-                    singleLine = true,
+                    isError = invalidBootstrap,
+                    supportingText = {
+                        Text(stringResource(
+                            if (invalidBootstrap) R.string.doh_bootstrap_invalid
+                            else R.string.doh_bootstrap_edit_hint,
+                        ))
+                    },
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onConfirm(
-                    dohEnabled,
-                    presetValue,
-                    customValue.trim(),
-                    bootstrapValue.trim(),
-                    timeoutValue.toIntOrNull()?.coerceIn(1, 60) ?: 10,
-                )
-            }) {
+            TextButton(
+                enabled = !invalidBootstrap,
+                onClick = {
+                    onConfirm(
+                        enabled,
+                        fixedPreset.key,
+                        "",
+                        bootstrapTokens.distinct().joinToString(", "),
+                        timeoutSeconds,
+                    )
+                },
+            ) {
                 Text(stringResource(R.string.confirm))
             }
         },

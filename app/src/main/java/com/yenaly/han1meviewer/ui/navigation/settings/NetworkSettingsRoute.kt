@@ -645,11 +645,11 @@ private fun buildCustomMirrorApiBaseUrl(homeUrl: String, appendPath: Boolean): S
 }
 
 private fun buildDohSummary(context: Context): String {
-    // DoH 已锁定为内置配置，不可修改
+    // Gateway endpoint stays fixed; bootstrap addresses can be edited.
     val core = DohConfig.selectedPreset().title
     val bootstrap = DohConfig.bootstrapIps().takeIf { it.isNotEmpty() }?.joinToString()
     val base = if (bootstrap != null) "$core\nBootstrap: $bootstrap" else core
-    return "$base\n（已锁定，不可修改）"
+    return "$base\n${context.getString(R.string.doh_endpoint_locked)}"
 }
 
 private fun buildMediaCdnSummary(): String {

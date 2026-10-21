@@ -123,6 +123,11 @@ private fun gatewayWireCacheAndConfigTest() {
     expect(DohConfig.selectedPreset().url == gatewayUrl, "production DohConfig preset URL changed unexpectedly")
     expect(DohConfig.bootstrapIps() == listOf(expectedBootstrapIp), "production DoH bootstrap should be exactly $expectedBootstrapIp; got ${DohConfig.bootstrapIps()}")
     expect(DohConfig.resolveUrl() == gatewayUrl, "configured DoH URL did not resolve to the production gateway")
+    Preferences.dohBootstrapIps = "203.0.113.71, 2001:db8::71;203.0.113.71\n203.0.113.72"
+    expect(DohConfig.bootstrapIps() == listOf("203.0.113.71", "2001:db8::71", "203.0.113.72"), "edited bootstrap IPs were not applied or deduplicated")
+    expect(DohConfig.resolveUrl() == gatewayUrl && DohConfig.probeUrl() == gatewayUrl, "editing bootstrap must not change the DoH endpoint")
+    Preferences.dohBootstrapIps = ""
+    expect(DohConfig.bootstrapIps() == listOf(expectedBootstrapIp), "clearing bootstrap must restore the built-in default")
     check(eCHWireFixture.isFile) { "missing local wire fixture: $eCHWireFixture" }
 
     EchDoh.invalidateAll()
