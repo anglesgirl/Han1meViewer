@@ -934,4 +934,7 @@ hanime1.me以外のドメインは、特定の時間帯にhanime1.meにリダイ
     <string name="meow">ニャー</string>
     <string name="hiss">シャーッ</string>
     <string name="growl">シャーッ</string>
+    <string name="doh_endpoint_locked">DoH ドメインは固定、Bootstrap は変更可能</string>
+    <string name="doh_bootstrap_edit_hint">IP をカンマ区切りで入力。空欄で既定の 172.64.229.69 に戻します</string>
+    <string name="doh_bootstrap_invalid">有効な IPv4 または IPv6 アドレスを入力してください</string>
 </resources>
