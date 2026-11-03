@@ -1151,7 +1151,9 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
                             mpvFallbackDone = true
                             diagLog("[M4] fallback to EXO")
                             release()
-                            jzvd.setUp(jzvd.jzDataSource, Jzvd.SCREEN_NORMAL, HMediaKernel.Type.ExoPlayer)
+                            // 注意：这里的 jzvd 是基类 Jzvd 类型，没有 HJzvdStd 的 Type 重载，
+                            // 必须直接传内核 Class（与 JZVD 基类 setUp(JZDataSource, Int, Class) 对应）
+                            jzvd.setUp(jzvd.jzDataSource, Jzvd.SCREEN_NORMAL, ExoMediaKernel::class.java)
                             jzvd.startVideo()
                         }
                     }
