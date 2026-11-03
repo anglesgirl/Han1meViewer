@@ -124,7 +124,9 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
         }
     }
 
-    private val diagLoadStartMs = ConcurrentHashMap<Long, Long>()
+    // 本项目 Media3 的 LoadEventInfo 没有 loadEventId 字段，耗时改按 URI 键统计
+    //（分片 URI 各不相同；同一 URI 重试时取最近一次开始时间，诊断够用）。
+    private val diagLoadStartMs = ConcurrentHashMap<String, Long>()
 
     // V3：逐请求诊断（分片全覆盖）。只记 host + path 前缀，不记 query，避免 token 外泄。
     private val diagAnalyticsListener = object : AnalyticsListener {
@@ -133,7 +135,7 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             loadEventInfo: LoadEventInfo,
             mediaLoadData: MediaLoadData,
         ) {
-            diagLoadStartMs[loadEventInfo.loadEventId] = eventTime.realtimeMs
+            diagLoadStartMs[loadEventInfo.uri.toString()] = eventTime.realtimeMs
             diagLog("[V3] loadStarted ${hostAndPathPrefix(loadEventInfo.uri.toString())} dataType=${mediaLoadData.dataType}")
         }
 
@@ -142,7 +144,7 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             loadEventInfo: LoadEventInfo,
             mediaLoadData: MediaLoadData,
         ) {
-            val start = diagLoadStartMs.remove(loadEventInfo.loadEventId)
+            val start = diagLoadStartMs.remove(loadEventInfo.uri.toString())
             val cost = if (start != null) "${eventTime.realtimeMs - start}ms" else "?"
             diagLog("[V3] loadCompleted ${hostAndPathPrefix(loadEventInfo.uri.toString())} cost=$cost bytes=${loadEventInfo.bytesLoaded}")
         }
@@ -154,7 +156,7 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             error: IOException,
             wasCanceled: Boolean,
         ) {
-            diagLoadStartMs.remove(loadEventInfo.loadEventId)
+            diagLoadStartMs.remove(loadEventInfo.uri.toString())
             val extra = if (error is HttpDataSource.InvalidResponseCodeException) {
                 "responseCode=${error.responseCode} responseMessage=${error.responseMessage} dataSpecHost=${error.dataSpec?.uri?.host}"
             } else {
