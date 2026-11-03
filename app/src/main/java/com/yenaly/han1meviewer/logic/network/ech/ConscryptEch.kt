@@ -122,9 +122,18 @@ object ConscryptEch {
             CertificateTransparencyVerificationReason =
             CertificateTransparencyVerificationReason.UNKNOWN
 
-        override fun getDomainEncryptionMode(hostname: String?): DomainEncryptionMode =
-            if (hostname != null && EchHosts.isProtected(hostname)) DomainEncryptionMode.REQUIRED
+        override fun getDomainEncryptionMode(hostname: String?): DomainEncryptionMode {
+            // 已确认走不通的域名必须真明文：工厂层跳过注入时，TLS 层若仍返回 REQUIRED，
+            // Conscrypt 会以“No ECH config provided when required”拒握手，降级从未生效。
+            // 核心域名从不进 echUnavailable（拦截器与工厂层对核心域名一律 fail-closed），
+            // 所以放行标记域名不会削弱核心域名的保护。
+            if (hostname != null && echUnavailable.contains(hostname.lowercase())) {
+                EchTrace.event("ECH 策略：已标记域名转明文（DISABLED）: $hostname")
+                return DomainEncryptionMode.DISABLED
+            }
+            return if (hostname != null && EchHosts.isProtected(hostname)) DomainEncryptionMode.REQUIRED
             else DomainEncryptionMode.DISABLED
+        }
     }
 
     /**
