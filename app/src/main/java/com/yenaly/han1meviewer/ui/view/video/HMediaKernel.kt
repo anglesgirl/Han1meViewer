@@ -54,6 +54,7 @@ import com.yenaly.han1meviewer.util.AnimeShaders
 import com.yenaly.han1meviewer.util.AnimeShaders.getCert
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import `is`.xyz.mpv.MPVLib
+import java.io.File
 import java.io.IOException
 import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
@@ -799,6 +800,14 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
             MPVLib.setOptionString(key, value)
         }
         diagLog("[M0] mpv net opts ua=${mpvOptions["user-agent"]} timeout=${mpvOptions["network-timeout"]} tlsVerify=${mpvOptions["tls-verify"]} proxy=${mpvOptions["http-proxy"] ?: "none"}")
+        // ---- M5：把 mpv 自己的日志落到文件，END_FILE 时读回环形缓冲 ----
+        try {
+            val logFile = File(jzvd.context.cacheDir, "mpv-diag.log")
+            MPVLib.setOptionString("log-file", logFile.absolutePath)
+            diagLog("[M5] mpv log-file=${logFile.absolutePath}")
+        } catch (e: Exception) {
+            diagLog("[M5] log-file setup failed ${e.javaClass.simpleName}")
+        }
         try {
             val customParams = parseCustomMpvParams()
             customParams.forEach { (key, value) ->
@@ -1055,6 +1064,24 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
                         // 播放结束（正常播完与加载失败都走这里，elapsed 区分两者）
                         val elapsed = if (mpvLoadStartMs > 0) System.currentTimeMillis() - mpvLoadStartMs else -1
                         diagLog("[M4] END_FILE elapsedMs=$elapsed")
+                        try {
+                            val logFile = File(jzvd.context.cacheDir, "mpv-diag.log")
+                            if (logFile.exists()) {
+                                val tail = ArrayDeque<String>(15)
+                                logFile.bufferedReader().useLines { seq ->
+                                    seq.forEach { line ->
+                                        if (tail.size == 15) tail.removeFirst()
+                                        tail.addLast(line)
+                                    }
+                                }
+                                diagLog("[M5] log-file lines=${tail.size} size=${logFile.length()}")
+                                tail.forEach { line -> diagLog("[M5] ${line.take(200)}") }
+                            } else {
+                                diagLog("[M5] log-file missing")
+                            }
+                        } catch (e: Exception) {
+                            diagLog("[M5] log-file read failed ${e.javaClass.simpleName}")
+                        }
                         releaseCurrentPfd("MPV_EVENT_END_FILE")
                         jzvd.onCompletion()
                     }
