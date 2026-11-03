@@ -1,6 +1,7 @@
 package com.yenaly.han1meviewer.ui.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,6 +12,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.yenaly.han1meviewer.EMPTY_STRING
 import com.yenaly.han1meviewer.HCacheManager
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.HanimeResolution
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.DatabaseRepo
@@ -257,14 +259,25 @@ class VideoViewModel(application: Application) : YenalyViewModel(application) {
             tags = emptyList(),
         )
     }
+    // ---- 诊断日志（diag-log）：每个点同时写 logcat + EchTrace 环形缓冲 ----
+    private fun diagLog(msg: String) {
+        Log.i("HY-DIAG", msg)
+        EchTrace.event(msg)
+    }
+
     fun getHanimeVideo(videoCode: String,localUri: String? = null) {
+        diagLog("[P0] getHanimeVideo videoCode=$videoCode fromDownload=$fromDownload localUriPresent=${localUri != null}")
         if (videoCode == "-1"){
+            diagLog("[P0] local play, skip network videoCode=$videoCode")
             val localPlayInfo = buildLocalPlayInfo(localUri)
             _hanimeVideoStateFlow.value = VideoLoadingState.Success(localPlayInfo)
             _hanimeVideoFlow.value = localPlayInfo
             return
         }
-        if (videoIntroUiStateMap[videoCode]?.introRestored == true) return
+        if (videoIntroUiStateMap[videoCode]?.introRestored == true) {
+            diagLog("[P0] introRestored, skip network videoCode=$videoCode")
+            return
+        }
         viewModelScope.launch {
             val flow = if (fromDownload) {
                 HCacheManager.loadHanimeVideoInfo(application,videoCode).map { hv ->
@@ -298,6 +311,19 @@ class VideoViewModel(application: Application) : YenalyViewModel(application) {
 
                     else -> state
                 }
+                when (emitState) {
+                    is VideoLoadingState.Success -> {
+                        val hosts = try {
+                            emitState.info.videoUrls.values.map { Uri.parse(it.link).host ?: "?" }.distinct()
+                        } catch (e: Exception) {
+                            listOf("?(${e.javaClass.simpleName})")
+                        }
+                        diagLog("[P1] state=Success videoCode=$videoCode urls=${emitState.info.videoUrls.size} keys=${emitState.info.videoUrls.keys} hosts=$hosts")
+                    }
+                    is VideoLoadingState.Error -> diagLog("[P1] state=Error videoCode=$videoCode cause=${emitState.throwable.javaClass.simpleName}: ${emitState.throwable.message?.take(200)}")
+                    is VideoLoadingState.NoContent -> diagLog("[P1] state=NoContent videoCode=$videoCode")
+                    else -> {}
+                }
                 _hanimeVideoStateFlow.value = emitState
                 if (emitState is VideoLoadingState.Success) {
                     _hanimeVideoFlow.update { emitState.info }
@@ -308,10 +334,14 @@ class VideoViewModel(application: Application) : YenalyViewModel(application) {
     }
 
     fun restoreFromCacheIfExists(code: String): Boolean {
-        val cached = videoIntroUiStateMap[code]?.cachedVideo?.withLocalizedLabels() ?: return false
+        val cached = videoIntroUiStateMap[code]?.cachedVideo?.withLocalizedLabels() ?: run {
+            diagLog("[P0] restoreFromCacheIfExists code=$code hit=false")
+            return false
+        }
         updateVideoIntroUiState(code) { copy(introRestored = true) }
         _hanimeVideoFlow.value = cached
         _hanimeVideoStateFlow.value = VideoLoadingState.Success(cached)
+        diagLog("[P0] restoreFromCacheIfExists code=$code hit=true")
         return true
     }
 

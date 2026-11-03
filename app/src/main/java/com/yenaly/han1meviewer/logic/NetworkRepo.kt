@@ -18,6 +18,7 @@ import com.yenaly.han1meviewer.logic.model.VideoCommentArgs
 import com.yenaly.han1meviewer.logic.model.VideoComments
 import com.yenaly.han1meviewer.logic.network.HUpdater
 import com.yenaly.han1meviewer.logic.network.HanimeNetwork
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.logic.state.PageLoadingState
 import com.yenaly.han1meviewer.logic.state.VideoLoadingState
 import com.yenaly.han1meviewer.logic.state.WebsiteState
@@ -585,6 +586,12 @@ object NetworkRepo {
         emit(PageLoadingState.Error(handleException(e)))
     }.flowOn(Dispatchers.IO)
 
+    // ---- 诊断日志（diag-log）：每个点同时写 logcat + EchTrace 环形缓冲 ----
+    private fun diagLog(msg: String) {
+        Log.i("HY-DIAG", msg)
+        EchTrace.event(msg)
+    }
+
     /**
      * 用于影片界面
      */
@@ -600,6 +607,9 @@ object NetworkRepo {
             requestResult.throwRequestException()
         }
     }.catch { e ->
+        // 原始异常先记下来：handleException 会把 SSLHandshakeException 等包成通用文案，
+        // 只看 Error 状态就丢了真正的失败原因（比如 ECH 相关错误）。
+        diagLog("[P0] videoIOFlow catch raw=${e.javaClass.simpleName}: ${e.message?.take(200)} cause0=${e.cause?.let { "${it.javaClass.simpleName}: ${it.message?.take(150)}" } ?: "none"}")
         emit(VideoLoadingState.Error(handleException(e)))
     }.flowOn(Dispatchers.IO)
 
