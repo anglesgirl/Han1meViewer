@@ -684,6 +684,7 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
     private var currentPfd: ParcelFileDescriptor? = null
     private var detachFd: Int? = null
     private var pfdFilePath = false
+    private var mpvLoadStartMs = 0L
     private val certFile = getCert(jzvd.context)
     val defaultSpeed = Preferences.playerSpeed
     private val mpvOptions: Map<String, String>
@@ -766,6 +767,12 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
         "video-params/h" to MPVLib.mpvFormat.MPV_FORMAT_INT64, // 视频高度（像素）
         "demuxer-cache-duration" to MPVLib.mpvFormat.MPV_FORMAT_DOUBLE
     )
+    // ---- 诊断日志（diag-log）：与 Exo 内核同格式 ----
+    private fun diagLog(msg: String) {
+        Log.i("HY-DIAG", msg)
+        EchTrace.event(msg)
+    }
+
     fun parseCustomMpvParams(): LinkedHashMap<String, String> {
         val rawInput = Preferences.customMpvParams
         val map = linkedMapOf<String, String>()
@@ -791,6 +798,7 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
             Log.i("MPV_config","$key,$value")
             MPVLib.setOptionString(key, value)
         }
+        diagLog("[M0] mpv net opts ua=${mpvOptions["user-agent"]} timeout=${mpvOptions["network-timeout"]} tlsVerify=${mpvOptions["tls-verify"]} proxy=${mpvOptions["http-proxy"] ?: "none"}")
         try {
             val customParams = parseCustomMpvParams()
             customParams.forEach { (key, value) ->
@@ -867,22 +875,31 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
         val url = jzvd.jzDataSource.currentUrl.toString()
         if (url.isEmpty()) {
             Log.e(TAG, "视频链接为空")
+            diagLog("[M0] prepare aborted, empty url")
             return
         }
 
         Log.e(TAG, "URL Link = $url")
+        val urlHost = try { Uri.parse(url).host } catch (e: Exception) { "?" }
+        val urlSuffix = url.substringAfterLast('/').take(20)
+        diagLog("[M0] prepare host=$urlHost suffix=$urlSuffix")
         MPVLib.setOptionString("force-window", "yes")
 
         val uri = url.toUri()
         val path = prepareUri(jzvd.context, uri)
         if (path != null) {
+            mpvLoadStartMs = System.currentTimeMillis()
+            diagLog("[M0] loadfile ${if (path.startsWith("fd://")) "fd" else "host=$urlHost"}")
             MPVLib.command(arrayOf("loadfile", path))
             val surfaceTexture = jzvd.textureView?.surfaceTexture
             surfaceTexture?.let { MPVLib.attachSurface(Surface(it)) }
+        } else {
+            diagLog("[M0] loadfile skipped, prepareUri null scheme=${uri.scheme}")
         }
     }
 
     override fun start() {
+        diagLog("[M0] start pause=false")
         MPVLib.setPropertyBoolean("pause", false)
     }
 
@@ -1017,6 +1034,7 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
                 when (eventId) {
                     MPVLib.mpvEventId.MPV_EVENT_START_FILE -> {
                         // 文件开始加载
+                        diagLog("[M4] START_FILE")
                         mpvTimePos = 0.0
                         mpvCacheDuration = 0.0
                         mpvDuration = 0.0
@@ -1024,19 +1042,24 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
                     }
                     MPVLib.mpvEventId.MPV_EVENT_FILE_LOADED -> {
                         // 文件加载成功
+                        diagLog("[M4] FILE_LOADED")
                         jzvd.onPrepared()
                         MPVLib.setPropertyDouble("speed", defaultSpeed.toDouble())
                     }
                     MPVLib.mpvEventId.MPV_EVENT_PLAYBACK_RESTART -> {
                         // 播放重新开始
+                        diagLog("[M4] PLAYBACK_RESTART")
                         jzvd.onStatePlaying()
                     }
                     MPVLib.mpvEventId.MPV_EVENT_END_FILE -> {
-                        // 播放结束
+                        // 播放结束（正常播完与加载失败都走这里，elapsed 区分两者）
+                        val elapsed = if (mpvLoadStartMs > 0) System.currentTimeMillis() - mpvLoadStartMs else -1
+                        diagLog("[M4] END_FILE elapsedMs=$elapsed")
                         releaseCurrentPfd("MPV_EVENT_END_FILE")
                         jzvd.onCompletion()
                     }
                     MPVLib.mpvEventId.MPV_EVENT_SHUTDOWN -> {
+                        diagLog("[M4] SHUTDOWN")
                         Log.e(TAG, "event: $eventId")
                     }
                 }
