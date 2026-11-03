@@ -244,7 +244,9 @@ object Preferences {
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_BUILT_IN_HOSTS, false)
 
     val useBackupMediaCdn: Boolean
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_BACKUP_MEDIA_CDN, true)
+        // 2026-11-03 验证结论：移动下改写后 cdn77 播不出、没改写的 hembed 能播，
+        // 改写策略失效，故默认关闭（设置界面未渲染此开关，改默认是唯一生效方式）。
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_BACKUP_MEDIA_CDN, false)
 
     var mediaCdnRegion: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.MEDIA_CDN_REGION, "").orEmpty()
