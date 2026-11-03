@@ -5,11 +5,14 @@ import android.content.pm.ActivityInfo
 import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
 import android.media.PlaybackParams
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.telephony.TelephonyManager
 import android.util.Log
 import android.view.Surface
 import androidx.annotation.OptIn
@@ -23,13 +26,17 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cronet.CronetDataSource
 import org.chromium.net.CronetEngine
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.LoadControl
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -41,10 +48,15 @@ import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.ech.EchDoh
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.util.AnimeShaders
 import com.yenaly.han1meviewer.util.AnimeShaders.getCert
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import `is`.xyz.mpv.MPVLib
+import java.io.IOException
+import java.net.InetAddress
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -96,6 +108,62 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
         }
     }
 
+    // ---- 诊断日志（diag-log）：每个点同时写 logcat + EchTrace 环形缓冲 ----
+    private fun diagLog(msg: String) {
+        Log.i("HY-DIAG", msg)
+        EchTrace.event(msg)
+    }
+
+    private fun hostAndPathPrefix(rawUrl: String): String {
+        return try {
+            val u = Uri.parse(rawUrl)
+            val path = (u.path ?: "").take(80)
+            "host=${u.host} pathPrefix=$path"
+        } catch (e: Exception) {
+            "host=? (parse failed: ${e.javaClass.simpleName})"
+        }
+    }
+
+    private val diagLoadStartMs = ConcurrentHashMap<Long, Long>()
+
+    // V3：逐请求诊断（分片全覆盖）。只记 host + path 前缀，不记 query，避免 token 外泄。
+    private val diagAnalyticsListener = object : AnalyticsListener {
+        override fun onLoadStarted(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData,
+        ) {
+            diagLoadStartMs[loadEventInfo.loadEventId] = eventTime.realtimeMs
+            diagLog("[V3] loadStarted ${hostAndPathPrefix(loadEventInfo.uri.toString())} dataType=${mediaLoadData.dataType}")
+        }
+
+        override fun onLoadCompleted(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData,
+        ) {
+            val start = diagLoadStartMs.remove(loadEventInfo.loadEventId)
+            val cost = if (start != null) "${eventTime.realtimeMs - start}ms" else "?"
+            diagLog("[V3] loadCompleted ${hostAndPathPrefix(loadEventInfo.uri.toString())} cost=$cost bytes=${loadEventInfo.bytesLoaded}")
+        }
+
+        override fun onLoadError(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData,
+            error: IOException,
+            wasCanceled: Boolean,
+        ) {
+            diagLoadStartMs.remove(loadEventInfo.loadEventId)
+            val extra = if (error is HttpDataSource.InvalidResponseCodeException) {
+                "responseCode=${error.responseCode} responseMessage=${error.responseMessage} dataSpecHost=${error.dataSpec?.uri?.host}"
+            } else {
+                "cause=${error.javaClass.simpleName}: ${error.message?.take(200)}"
+            }
+            diagLog("[V3] loadError ${hostAndPathPrefix(loadEventInfo.uri.toString())} wasCanceled=$wasCanceled $extra")
+        }
+    }
+
     companion object {
         const val TAG = "ExoMediaKernel"
     }
@@ -129,6 +197,59 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
         mMediaHandler = Handler(mMediaHandlerThread.looper)
         handler = Handler(Looper.getMainLooper())
         mMediaHandler?.post {
+            // ---- 诊断 V1：建播放器前的上下文 ----
+            val diagDs = jzvd.jzDataSource
+            val diagCurrUrl = diagDs.currentUrl.toString()
+            val diagNetDesc = try {
+                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+                when {
+                    caps == null -> "unknown(no caps)"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
+                        val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+                        val op = try { tm.networkOperatorName?.takeIf { it.isNotBlank() } ?: "?" } catch (e: Exception) { "?" }
+                        "移动(运营商=$op)"
+                    }
+                    else -> "other"
+                }
+            } catch (e: Exception) {
+                "?(${e.javaClass.simpleName})"
+            }
+            val diagUrlKeys = try { diagDs.urlsMap.keys.map { it.toString() } } catch (e: Exception) { listOf("?(${e.javaClass.simpleName})") }
+            val diagResKey = diagUrlKeys.getOrNull(diagDs.currentUrlIndex) ?: "unknown"
+            val diagHeaderDesc = try {
+                val hm = diagDs.headerMap
+                if (hm.isEmpty()) "空" else "keys=${hm.keys} (values omitted)"
+            } catch (e: Exception) {
+                "?(${e.javaClass.simpleName})"
+            }
+            diagLog("[V1] prepare net=$diagNetDesc url=${hostAndPathPrefix(diagCurrUrl)} isM3u8=${diagCurrUrl.contains(".m3u8")} resKey=$diagResKey urlIndex=${diagDs.currentUrlIndex} urlsMapKeys=$diagUrlKeys")
+            diagLog("[V1] cdn useBackupMediaCdn=${Preferences.useBackupMediaCdn} mediaCdnRegion=${Preferences.mediaCdnRegion} mediaCdnNodeIps=${Preferences.mediaCdnNodeIps}")
+            diagLog("[V1] headerMap=$diagHeaderDesc")
+            // ---- 诊断 V2：DNS 对照（后台线程，不阻塞播放） ----
+            val diagHost = try { Uri.parse(diagCurrUrl).host } catch (e: Exception) { null }
+            if (diagHost != null) {
+                Thread {
+                    try {
+                        val sysAddrs = try {
+                            InetAddress.getAllByName(diagHost).map { it.hostAddress ?: "?" }
+                        } catch (e: Exception) {
+                            listOf("FAIL:${e.javaClass.simpleName}")
+                        }
+                        val dohAddrs = try {
+                            EchDoh.resolve(diagHost).map { it.hostAddress ?: "?" }
+                        } catch (e: Exception) {
+                            listOf("FAIL:${e.javaClass.simpleName}")
+                        }
+                        val nodeIps = Preferences.mediaCdnNodeIps
+                        val pinned = nodeIps.isNotEmpty() && dohAddrs.toSet() == nodeIps.toSet()
+                        diagLog("[V2] dns host=$diagHost system=$sysAddrs echDoh=$dohAddrs pinned=$pinned (钉住只对 echTransport 生效，Cronet 不用)")
+                    } catch (e: Exception) {
+                        diagLog("[V2] dns failed host=$diagHost cause=${e.javaClass.simpleName}")
+                    }
+                }.start()
+            }
             val videoTrackSelectionFactory = AdaptiveTrackSelection.Factory()
             val trackSelector = DefaultTrackSelector(context, videoTrackSelectionFactory)
 
@@ -156,6 +277,7 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             // cronet-bundled ships the native provider inside the APK, so Cronet works on
             // devices without Google Play Services; if no provider is available anyway,
             // fall back to the platform HTTP stack instead of crashing playback.
+            var diagDataSourceKind = "Cronet"
             val httpDataSourceFactory = try {
                 val cronetEngine = CronetEngine.Builder(context)
                     .enableHttp2(true)
@@ -167,8 +289,11 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                 )
             } catch (e: Exception) {
                 Log.w(TAG, "Cronet unavailable, using platform HTTP", e)
+                diagDataSourceKind = "DefaultHttpDataSource"
+                diagLog("[V1] dataSourceFactory fallback cause=${e.javaClass.simpleName}: ${e.message?.take(200)}")
                 DefaultHttpDataSource.Factory()
             }.setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
+            diagLog("[V1] dataSourceFactory=$diagDataSourceKind player path: no ECH / no DoH / plain SNI ($diagDataSourceKind)")
             val dataSourceFactory = DefaultDataSource.Factory(
                 context,
                 httpDataSourceFactory
@@ -186,6 +311,8 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             Log.i(TAG, "URL Link = $currUrl")
 
             exoPlayer.addListener(this)
+            // ---- 诊断 V3：逐请求 AnalyticsListener ----
+            exoPlayer.addAnalyticsListener(diagAnalyticsListener)
 
             val isLoop = jzvd.jzDataSource.looping
             if (isLoop) {
@@ -388,6 +515,18 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
 
     override fun onPlayerError(error: PlaybackException) {
         Log.e(TAG, "onPlayerError: $error")
+        // ---- 诊断 V4：不再只留 1000/1000，记真实错误码与 cause 链 ----
+        diagLog("[V4] onPlayerError errorCode=${error.errorCode} errorCodeName=${error.errorCodeName}")
+        var diagCause: Throwable? = error.cause
+        var diagDepth = 0
+        while (diagCause != null && diagDepth < 10) {
+            diagLog("[V4] cause[$diagDepth] ${diagCause.javaClass.simpleName}: ${diagCause.message?.take(300)}")
+            if (diagCause is HttpDataSource.InvalidResponseCodeException) {
+                diagLog("[V4] InvalidResponseCode responseCode=${diagCause.responseCode} responseMessage=${diagCause.responseMessage} dataSpecHost=${diagCause.dataSpec?.uri?.host}")
+            }
+            diagCause = diagCause.cause
+            diagDepth++
+        }
         handler?.post { jzvd.onError(1000, 1000) }
     }
 

@@ -30,6 +30,7 @@ import com.yenaly.han1meviewer.logic.DatabaseRepo
 import com.yenaly.han1meviewer.logic.entity.download.DownloadGroupEntity
 import com.yenaly.han1meviewer.logic.entity.download.HanimeDownloadEntity
 import com.yenaly.han1meviewer.logic.network.ServiceCreator
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.logic.state.DownloadState
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import com.yenaly.han1meviewer.util.HImageMeower
@@ -186,10 +187,31 @@ class HanimeDownloadWorker(
     private val mainScope = CoroutineScope(Dispatchers.Main.immediate)
     private val dbScope = CoroutineScope(Dispatchers.IO)
 
+    // ---- 诊断日志（diag-log）：每个点同时写 logcat + EchTrace 环形缓冲 ----
+    private fun diagLog(msg: String) {
+        Log.i("HY-DIAG", msg)
+        EchTrace.event(msg)
+    }
+
     override suspend fun doWork(): Result {
+        // ---- 诊断 D3：入口 ----
+        diagLog("[D3] doWork entry downloadUrlEmpty=${downloadUrl.isEmpty()} quality=$quality videoCode=$videoCode isInWaitingQueue=$isInWaitingQueue")
         if (fastPathCancel) return Result.success()
-        setForeground(createForegroundInfo())
-        return download()
+        try {
+            setForeground(createForegroundInfo())
+            diagLog("[D3] setForeground ok videoCode=$videoCode")
+        } catch (e: Exception) {
+            diagLog("[D3] setForeground exception videoCode=$videoCode cause=${e.javaClass.simpleName}: ${e.message?.take(300)}")
+            throw e
+        }
+        val result = try {
+            download()
+        } catch (e: Exception) {
+            diagLog("[D3] download() threw videoCode=$videoCode cause=${e.javaClass.simpleName}: ${e.message?.take(300)}")
+            throw e
+        }
+        diagLog("[D3] download() final Result=${result.javaClass.simpleName} output=${result.outputData.keyValueMap} videoCode=$videoCode")
+        return result
     }
 
     private suspend fun createNewRaf(file: File): HanimeDownloadEntity? {
@@ -206,7 +228,9 @@ class HanimeDownloadWorker(
                     raf = RandomAccessFile(file, "rwd")
                 }
 
-                val len = fetchContentLength() ?: return@withContext null
+                val len = fetchContentLength()
+                diagLog("[D3] createNewRaf fetchContentLength=$len videoCode=$videoCode quality=$quality")
+                if (len == null) return@withContext null
                 if (len > 0) {
                     // 创建数据库记录
                     val entity = HanimeDownloadEntity(
@@ -224,6 +248,7 @@ class HanimeDownloadWorker(
                         state = DownloadState.Queued
                     )
                     DatabaseRepo.HanimeDownload.insert(entity)
+                    diagLog("[D3] createNewRaf inserted len=$len videoCode=$videoCode quality=$quality")
                     // 预写入长度（只有 File 支持）
                     raf?.setLength(len)
                     return@withContext entity
@@ -259,6 +284,7 @@ class HanimeDownloadWorker(
         }
         return try {
             ServiceCreator.downloadClient.newCall(request).await().use { response ->
+                diagLog("[D3] contentLength ${if (useHead) "HEAD" else "Range: bytes=0-0"} code=${response.code} downloadUrlEmpty=${downloadUrl.isEmpty()}")
                 if (!response.isSuccessful) return@use null
                 if (useHead) {
                     response.header("Content-Length")?.toLongOrNull()?.takeIf { it > 0 }
@@ -270,6 +296,7 @@ class HanimeDownloadWorker(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            diagLog("[D3] contentLength ${if (useHead) "HEAD" else "Range: bytes=0-0"} exception=${e.javaClass.simpleName}")
             if (e.isRetryableNetworkError()) throw e
             null
         }
@@ -299,7 +326,9 @@ class HanimeDownloadWorker(
             var entity = try {
                 DatabaseRepo.HanimeDownload.find(videoCode, quality) ?: run {
                     createNewRaf(file)
-                    DatabaseRepo.HanimeDownload.find(videoCode, quality)
+                    val foundAfterCreate = DatabaseRepo.HanimeDownload.find(videoCode, quality)
+                    diagLog("[D3] after createNewRaf find found=${foundAfterCreate != null} videoCode=$videoCode quality=$quality")
+                    foundAfterCreate
                         ?: return@withContext run {
                             Log.d(TAG, "entity is null, create new raf failed")
                             val reason = context.getString(R.string.download_error_file_info)

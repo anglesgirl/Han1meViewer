@@ -37,7 +37,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yenaly.han1meviewer.BuildConfig
 import com.yenaly.han1meviewer.logic.network.ech.EchProbe
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -100,6 +102,38 @@ fun EchProbeScreen() {
             putExtra(Intent.EXTRA_SUBJECT, "ECH 探针日志")
         }
         context.startActivity(Intent.createChooser(intent, "分享日志"))
+    }
+
+    // ---- 导出诊断日志（diag-log）：EchTrace.dump() 的首个调用方 ----
+    // 各诊断点（V1-V4 / D1-D4）都已写入 EchTrace 环形缓冲，这里全文导出；
+    // 不走远程上报（log.anglesya.win 已下线，不加回）。
+    fun buildDiagLogText(): String {
+        val ts = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+        return buildString {
+            appendLine("== Han1meViewer 诊断日志 ==")
+            appendLine("时间：$ts")
+            appendLine("版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine("包名：${context.packageName}")
+            appendLine("".padEnd(40, '-'))
+            append(EchTrace.dump())
+        }
+    }
+
+    fun copyDiagLogs() {
+        val text = buildDiagLogText()
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("诊断日志", text))
+        GlobalToasts.show("诊断日志已复制", level = GlobalToasts.ToastLevel.SUCCESS)
+    }
+
+    fun shareDiagLogs() {
+        val text = buildDiagLogText()
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+            putExtra(Intent.EXTRA_SUBJECT, "诊断日志")
+        }
+        context.startActivity(Intent.createChooser(intent, "分享诊断日志"))
     }
 
     fun runProbe(block: suspend () -> EchProbe.ProbeResult) {
@@ -233,6 +267,23 @@ fun EchProbeScreen() {
             }
             Spacer(modifier = Modifier.height(8.dp))
         }
+
+        // ---- 导出诊断日志（diag-log） ----
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("诊断日志", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.weight(1f))
+            OutlinedButton(
+                onClick = { copyDiagLogs() },
+            ) { Text("复制诊断日志", fontSize = 12.sp) }
+            Spacer(modifier = Modifier.width(8.dp))
+            OutlinedButton(
+                onClick = { shareDiagLogs() },
+            ) { Text("分享诊断日志", fontSize = 12.sp) }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
 
         // ---- 日志 ----
         Row(

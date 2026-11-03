@@ -11,9 +11,11 @@ import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.DatabaseRepo
 import com.yenaly.han1meviewer.logic.dao.DownloadDatabase
 import com.yenaly.han1meviewer.logic.entity.download.HanimeDownloadEntity
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.logic.state.DownloadState
 import com.yenaly.han1meviewer.util.runSuspendCatching
 import com.yenaly.yenaly_libs.utils.applicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +33,12 @@ import kotlin.coroutines.resume
 object HanimeDownloadManagerV2 {
 
     private const val TAG = "HanimeDownloadManager"
+
+    // ---- 诊断日志（diag-log）：每个点同时写 logcat + EchTrace 环形缓冲 ----
+    private fun diagLog(msg: String) {
+        Log.i("HY-DIAG", msg)
+        EchTrace.event(msg)
+    }
 
     const val MAX_CONCURRENT_DOWNLOAD_DEF = 2
     var maxConcurrentDownloadCount = 0
@@ -95,12 +103,16 @@ object HanimeDownloadManagerV2 {
     init {
         scope.launch {
             for (msg in downloadChannel) {
-                when (msg) {
+                // ---- 诊断 D2：循环体内加 try/catch，异常不杀死循环（取消除外） ----
+                try {
+                    when (msg) {
                     is DownloadMsg.Add -> {
                         if (msg.args.videoCode in activeDownloads) {
                             Log.d(TAG, "任务已存在：${msg.args.videoCode}")
+                            diagLog("[D2] Add 判重丢弃 videoCode=${msg.args.videoCode} state=${msg.state} branch=已在active active=${activeDownloads.size} max=$maxConcurrentDownloadCount")
                         } else if (waitingQueue.any { it.videoCode == msg.args.videoCode }) {
                             Log.d(TAG, "任务已在等待队列：${msg.args.videoCode}")
+                            diagLog("[D2] Add 判重丢弃 videoCode=${msg.args.videoCode} state=${msg.state} branch=已在waiting active=${activeDownloads.size} max=$maxConcurrentDownloadCount")
                         } else {
                             // Unknown 代表任务刚添加，未开始状态流转
                             if (activeDownloads.size < maxConcurrentDownloadCount &&
@@ -108,9 +120,11 @@ object HanimeDownloadManagerV2 {
                             ) {
                                 Log.d(TAG, "添加任务：${msg.args.videoCode}")
                                 activeDownloads[msg.args.videoCode] = msg.args
+                                diagLog("[D2] Add 进active videoCode=${msg.args.videoCode} state=${msg.state} active=${activeDownloads.size} max=$maxConcurrentDownloadCount")
                                 launchDownload(msg.args, msg.redownload, msg.waiting)
                             } else {
                                 Log.d(TAG, "任务已满，加入等待队列：${msg.args.videoCode}")
+                                diagLog("[D2] Add 进waiting videoCode=${msg.args.videoCode} state=${msg.state} active=${activeDownloads.size} max=$maxConcurrentDownloadCount")
                                 when (msg.state) {
                                     DownloadState.Downloading -> {
                                         // 之前为 Downloading 的优先级更高
@@ -173,6 +187,11 @@ object HanimeDownloadManagerV2 {
                     }
 
                     DownloadMsg.ProcessNext -> processNext()
+                    }
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    Log.e(TAG, "download channel loop error, continuing", t)
+                    diagLog("[D2] channel loop exception (caught, loop continues): ${t.javaClass.simpleName}: ${t.message?.take(300)}")
                 }
             }
         }
@@ -256,7 +275,14 @@ object HanimeDownloadManagerV2 {
                 semaphore.withPermit {
                     Log.d(TAG, "launchDownload (start): ${args.videoCode}")
                     // 启动 WorkManager 任务
-                    val workId = startWork(args, redownload)
+                    // ---- 诊断 D2：记 work id 或异常（异常重抛，行为不变） ----
+                    val workId = try {
+                        startWork(args, redownload)
+                    } catch (e: Exception) {
+                        diagLog("[D2] startWork exception videoCode=${args.videoCode} cause=${e.javaClass.simpleName}: ${e.message?.take(300)}")
+                        throw e
+                    }
+                    diagLog("[D2] startWork ok videoCode=${args.videoCode} workId=$workId")
                     // 阻塞等待 WorkManager 任务完成
                     awaitWorkCompletion(args.videoCode, workId.toString())
                 }

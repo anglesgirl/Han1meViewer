@@ -2,7 +2,10 @@ package com.yenaly.han1meviewer.ui.screen.video
 
 import android.content.Context
 import android.content.Intent
+import android.os.StatFs
 import android.provider.Settings
+import android.util.Log
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import com.yenaly.han1meviewer.HAdvancedSearch
 import com.yenaly.han1meviewer.HCacheManager
@@ -12,6 +15,7 @@ import com.yenaly.han1meviewer.getHanimeVideoDownloadLink
 import com.yenaly.han1meviewer.getHanimeVideoLink
 import com.yenaly.han1meviewer.logic.DatabaseRepo
 import com.yenaly.han1meviewer.logic.entity.download.DownloadGroupEntity
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.logic.model.HanimeVideo
 import com.yenaly.han1meviewer.logic.model.SearchOption
 import com.yenaly.han1meviewer.ui.activity.MainActivity
@@ -48,6 +52,12 @@ class VideoRouteActions(
     private val onRequestUnsubscribeConfirm: (HanimeVideo.Artist) -> Unit,
     private val onRequestDownloadPermissionSettings: () -> Unit,
 ) {
+    // ---- 诊断日志（diag-log）：每个点同时写 logcat + EchTrace 环形缓冲 ----
+    private fun diagLog(msg: String) {
+        Log.i("HY-DIAG", msg)
+        EchTrace.event(msg)
+    }
+
     fun openArtistSearch(artist: HanimeVideo.Artist) {
         val searchKey = genres.firstOrNull { option ->
             option.lang?.let { lang ->
@@ -209,6 +219,22 @@ class VideoRouteActions(
                 level = GlobalToasts.ToastLevel.SUCCESS,
             )
         }
+        // ---- 诊断 D1：入队前参数（addTask 之前） ----
+        val diagLink = videoData.videoUrls[quality]?.link
+        diagLog("[D1] enqueue quality=$quality qualityNull=${quality == null} videoUrlsKeys=${videoData.videoUrls.keys} linkEmpty=${diagLink.isNullOrEmpty()} videoCode=${viewModel.videoCode}")
+        // ---- 诊断 D4：设备状态（一行） ----
+        val diagFreeBytes = try {
+            val dir = context.getExternalFilesDir(null) ?: context.cacheDir
+            StatFs(dir.path).availableBytes
+        } catch (e: Exception) {
+            -1L
+        }
+        val diagNotifGranted = try {
+            NotificationManagerCompat.from(context).areNotificationsEnabled()
+        } catch (e: Exception) {
+            false
+        }
+        diagLog("[D4] enqueue freeBytes=$diagFreeBytes notificationGranted=$diagNotifGranted")
         HanimeDownloadManagerV2.addTask(
             HanimeDownloadWorker.Args(
                 quality = quality,
