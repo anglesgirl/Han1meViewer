@@ -277,11 +277,11 @@ fun EchProbeScreen() {
             Spacer(modifier = Modifier.weight(1f))
             OutlinedButton(
                 onClick = { copyDiagLogs() },
-            ) { Text("复制诊断日志", fontSize = 12.sp) }
+            ) { Text("复制", fontSize = 12.sp) }
             Spacer(modifier = Modifier.width(8.dp))
             OutlinedButton(
                 onClick = { shareDiagLogs() },
-            ) { Text("分享诊断日志", fontSize = 12.sp) }
+            ) { Text("分享", fontSize = 12.sp) }
         }
         Spacer(modifier = Modifier.height(8.dp))
 
