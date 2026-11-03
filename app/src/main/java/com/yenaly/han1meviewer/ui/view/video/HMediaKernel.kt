@@ -186,8 +186,10 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
         private set
     @OptIn(UnstableApi::class)
     override fun prepare() {
+        diagLog("[V0] prepare entry hasExistingPlayer=${_exoPlayer != null}")
         if (_exoPlayer != null) {
             Log.w(TAG, "prepare called, but player already exists.")
+            diagLog("[V0] prepare skipped, player already exists")
             return // 防止误调用
         }
         Log.i(TAG, "prepare")
@@ -336,6 +338,7 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
     }
 
     override fun start() {
+        diagLog("[V0] start entry hasPlayer=${_exoPlayer != null} hasHandler=${mMediaHandler != null}")
         mMediaHandler?.post {
             _exoPlayer?.playWhenReady = true
         }

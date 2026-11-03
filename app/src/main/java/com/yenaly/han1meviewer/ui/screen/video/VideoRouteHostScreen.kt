@@ -10,6 +10,7 @@ import android.content.res.Configuration
 import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.util.Log
+import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import android.util.Rational
 import android.view.ContextThemeWrapper
 import android.view.View
@@ -585,6 +586,8 @@ fun VideoRouteHostScreen(
                                 Jzvd.SCREEN_NORMAL,
                                 kernel,
                             )
+                            Log.i("HY-DIAG", "[P2] setUp videoCode=${route.videoCode} urls=${state.info.videoUrls.size} autoPlay=${route.autoPlay}")
+                            EchTrace.event("[P2] setUp videoCode=${route.videoCode} urls=${state.info.videoUrls.size} autoPlay=${route.autoPlay}")
                         }
                         player.posterImageView.load(state.info.coverUrl) {
                             crossfade(true)
@@ -603,6 +606,8 @@ fun VideoRouteHostScreen(
                         val history = DatabaseRepo.WatchHistory.findBy(route.videoCode)
                         player.savedProgress = history?.progress ?: 0L
                         if (route.autoPlay) {
+                            Log.i("HY-DIAG", "[P2] autoPlay startVideo videoCode=${route.videoCode}")
+                            EchTrace.event("[P2] autoPlay startVideo videoCode=${route.videoCode}")
                             player.startVideo()
                         }
                     }
