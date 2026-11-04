@@ -28,6 +28,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cronet.CronetDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import org.chromium.net.CronetEngine
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -45,10 +46,14 @@ import cn.jzvd.JZMediaInterface
 import cn.jzvd.JZMediaSystem
 import cn.jzvd.Jzvd
 import com.yenaly.han1meviewer.BuildConfig
+import com.yenaly.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
+import com.yenaly.han1meviewer.HANIME_MEDIA_CDN_HOST
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.logic.network.ech.EchDoh
+import com.yenaly.han1meviewer.logic.network.ech.echTransport
+import okhttp3.OkHttpClient
 import com.yenaly.han1meviewer.logic.network.ech.EchTrace
 import com.yenaly.han1meviewer.util.AnimeShaders
 import com.yenaly.han1meviewer.util.AnimeShaders.getCert
@@ -282,8 +287,17 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             // cronet-bundled ships the native provider inside the APK, so Cronet works on
             // devices without Google Play Services; if no provider is available anyway,
             // fall back to the platform HTTP stack instead of crashing playback.
+            // 指定节点 IP 时 EXO 也走 echTransport（OkHttp 栈）：EchDns 把媒体域名钉到指定 IP，
+            // CdnHostRewriter 按开关改写备用域名；未指定时保持 Cronet 原样。
+            val useNodeIps = Preferences.mediaCdnNodeIps.isNotEmpty() &&
+                (diagHost.equals(HANIME_MEDIA_CDN_HOST, ignoreCase = true) ||
+                 diagHost.equals(HANIME_BACKUP_MEDIA_CDN_HOST, ignoreCase = true))
             var diagDataSourceKind = "Cronet"
-            val httpDataSourceFactory = try {
+            val httpDataSourceFactory = if (useNodeIps) {
+                diagDataSourceKind = "OkHttp-echTransport"
+                diagLog("[V1] dataSourceFactory=OkHttp-echTransport nodeIps=${Preferences.mediaCdnNodeIps} useBackupMediaCdn=${Preferences.useBackupMediaCdn}")
+                OkHttpDataSource.Factory(OkHttpClient.Builder().echTransport().build())
+            } else try {
                 val cronetEngine = CronetEngine.Builder(context)
                     .enableHttp2(true)
                     .enableQuic(true)
@@ -298,7 +312,11 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                 diagLog("[V1] dataSourceFactory fallback cause=${e.javaClass.simpleName}: ${e.message?.take(200)}")
                 DefaultHttpDataSource.Factory()
             }.setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
-            diagLog("[V1] dataSourceFactory=$diagDataSourceKind player path: no ECH / no DoH / plain SNI ($diagDataSourceKind)")
+            if (diagDataSourceKind == "OkHttp-echTransport") {
+                diagLog("[V1] dataSourceFactory=OkHttp-echTransport player path: echTransport (EchDns node IPs + CdnHostRewriter + ECH policy)")
+            } else {
+                diagLog("[V1] dataSourceFactory=$diagDataSourceKind player path: no ECH / no DoH / plain SNI ($diagDataSourceKind)")
+            }
             val dataSourceFactory = DefaultDataSource.Factory(
                 context,
                 httpDataSourceFactory
