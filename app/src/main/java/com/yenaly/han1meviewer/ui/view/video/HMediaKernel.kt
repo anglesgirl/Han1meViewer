@@ -57,7 +57,6 @@ import `is`.xyz.mpv.MPVLib
 import java.io.File
 import java.io.IOException
 import java.net.InetAddress
-import java.net.Inet4Address
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -882,36 +881,6 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
     }
 
 
-    /**
-     * MPV 直连 IP 实验（diag）：DoH 取 host 的 IPv4，把 URL host 换成 IP 字面量，
-     * 绕开 SNI / IPv6 路径上的掐断；任何一步失败都返回原 URL（行为不变）。
-     * 返回 (播放地址, 需补的 Host 头或 null)。
-     */
-    private fun rewriteToIpLiteral(url: String): Pair<String, String?> {
-        val parsed = try { Uri.parse(url) } catch (e: Exception) { return url to null }
-        val scheme = parsed.scheme ?: return url to null
-        if (scheme != "http" && scheme != "https") return url to null
-        val host = parsed.host ?: return url to null
-        // 已是 IP 字面量则不动
-        if (host.matches(Regex("^\\d+\\.\\d+\\.\\d+\\.\\d+$")) || host.contains(':')) return url to null
-        val ipv4 = try {
-            EchDoh.resolve(host).filterIsInstance<Inet4Address>().firstOrNull()?.hostAddress
-        } catch (e: Exception) {
-            null
-        }
-        if (ipv4.isNullOrEmpty()) {
-            diagLog("[M0] ip rewrite skipped, no ipv4 for $host")
-            return url to null
-        }
-        return try {
-            val rewritten = parsed.buildUpon().encodedAuthority(ipv4).build().toString()
-            diagLog("[M0] ip rewrite $host -> $ipv4")
-            rewritten to host
-        } catch (e: Exception) {
-            diagLog("[M0] ip rewrite failed ${e.javaClass.simpleName}")
-            url to null
-        }
-    }
 
     override fun prepare() {
         init()
@@ -930,40 +899,24 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
         Log.e(TAG, "URL Link = $url")
         val urlHost = try { Uri.parse(url).host } catch (e: Exception) { "?" }
         val urlSuffix = url.substringAfterLast('/').take(20)
-        diagLog("[M0] prepare host=$urlHost suffix=$urlSuffix")
+        diagLog("[M0] prepare host=$urlHost suffix=$urlSuffix (original url, same as EXO)")
         MPVLib.setOptionString("force-window", "yes")
 
-        // DoH 解析不能占主线程，改写在后台做完再回主线程 loadfile；
-        // prepareSeq 防止旧 prepare 的 loadfile 在新 prepare / release 后误发。
-        val seq = prepareSeq
-        Thread({
-            val (playUrl, hostHeader) = rewriteToIpLiteral(url)
-            handler.post {
-                if (seq != prepareSeq) {
-                    diagLog("[M0] stale prepare skipped")
-                    return@post
-                }
-                // 每路都重设 Host 头，避免上一视频的 Host 漏到下一视频
-                if (hostHeader != null) {
-                    MPVLib.setOptionString("http-header-fields", "Host: $hostHeader")
-                } else {
-                    MPVLib.setOptionString("http-header-fields", "")
-                }
-                val uri = playUrl.toUri()
-                val path = prepareUri(jzvd.context, uri)
-                if (path != null) {
-                    mpvLoadStartMs = System.currentTimeMillis()
-                    mpvLoadSeq = seq
-                    val pathHost = if (path.startsWith("fd://")) "fd" else try { Uri.parse(path).host } catch (e: Exception) { "?" }
-                    diagLog("[M0] loadfile host=$pathHost")
-                    MPVLib.command(arrayOf("loadfile", path))
-                    val surfaceTexture = jzvd.textureView?.surfaceTexture
-                    surfaceTexture?.let { MPVLib.attachSurface(Surface(it)) }
-                } else {
-                    diagLog("[M0] loadfile skipped, prepareUri null scheme=${uri.scheme}")
-                }
-            }
-        }, "MPV-IP-Rewrite").start()
+        // 与 EXO 一致：直接播原 URL，不做 IP 改写、不补 Host 头（plain SNI，系统解析）。
+        MPVLib.setOptionString("http-header-fields", "")
+        val uri = url.toUri()
+        val path = prepareUri(jzvd.context, uri)
+        if (path != null) {
+            mpvLoadStartMs = System.currentTimeMillis()
+            mpvLoadSeq = prepareSeq
+            val pathHost = if (path.startsWith("fd://")) "fd" else try { Uri.parse(path).host } catch (e: Exception) { "?" }
+            diagLog("[M0] loadfile host=$pathHost")
+            MPVLib.command(arrayOf("loadfile", path))
+            val surfaceTexture = jzvd.textureView?.surfaceTexture
+            surfaceTexture?.let { MPVLib.attachSurface(Surface(it)) }
+        } else {
+            diagLog("[M0] loadfile skipped, prepareUri null scheme=${uri.scheme}")
+        }
     }
 
     override fun start() {
@@ -1128,14 +1081,25 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
                         try {
                             val logFile = File(jzvd.context.cacheDir, "mpv-diag.log")
                             if (logFile.exists()) {
-                                val tail = ArrayDeque<String>(15)
+                                val errTail = ArrayDeque<String>(15)
+                                val rawTail = ArrayDeque<String>(15)
                                 logFile.bufferedReader().useLines { seq ->
                                     seq.forEach { line ->
-                                        if (tail.size == 15) tail.removeFirst()
-                                        tail.addLast(line)
+                                        if (rawTail.size == 15) rawTail.removeFirst()
+                                        rawTail.addLast(line)
+                                        val isErr = line.contains("[e]") || line.contains("Failed") ||
+                                            line.contains("failed") || line.contains("aborted") ||
+                                            line.contains("reset", ignoreCase = true) ||
+                                            line.contains("timed out", ignoreCase = true) ||
+                                            line.contains("error", ignoreCase = true)
+                                        if (isErr) {
+                                            if (errTail.size == 15) errTail.removeFirst()
+                                            errTail.addLast(line)
+                                        }
                                     }
                                 }
-                                diagLog("[M5] log-file lines=${tail.size} size=${logFile.length()}")
+                                val tail = if (errTail.isNotEmpty()) errTail else rawTail
+                                diagLog("[M5] log-file lines=${tail.size} size=${logFile.length()} errOnly=${errTail.isNotEmpty()}")
                                 tail.forEach { line -> diagLog("[M5] ${line.take(200)}") }
                             } else {
                                 diagLog("[M5] log-file missing")
@@ -1155,6 +1119,14 @@ class MpvMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd) {
                             // 必须直接传内核 Class（与 JZVD 基类 setUp(JZDataSource, Int, Class) 对应）
                             jzvd.setUp(jzvd.jzDataSource, Jzvd.SCREEN_NORMAL, ExoMediaKernel::class.java)
                             jzvd.startVideo()
+                        } else if (!mpvFileLoaded) {
+                            val reason = when {
+                                mpvFallbackDone -> "already done"
+                                mpvLoadSeq != prepareSeq -> "seq mismatch load=$mpvLoadSeq prepare=$prepareSeq"
+                                jzvd.parent == null -> "parent null (page gone)"
+                                else -> "unknown"
+                            }
+                            diagLog("[M4] fallback skipped reason=$reason")
                         }
                     }
                     MPVLib.mpvEventId.MPV_EVENT_SHUTDOWN -> {
