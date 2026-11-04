@@ -388,6 +388,8 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
 
     override fun onRenderedFirstFrame() {
         Log.i(TAG, "onRenderedFirstFrame")
+        // ---- 诊断 V4：首帧 = 确实播出来了，对齐 MPV 的 PLAYBACK_RESTART ----
+        diagLog("[V4] first frame rendered (playing)")
     }
 
     override fun pause() {
@@ -543,11 +545,6 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                 }
             }
         }
-    }
-
-    override fun onRenderedFirstFrame() {
-        // ---- 诊断 V4：首帧 = 确实播出来了，对齐 MPV 的 PLAYBACK_RESTART ----
-        diagLog("[V4] first frame rendered (playing)")
     }
 
     override fun onPlayerError(error: PlaybackException) {
