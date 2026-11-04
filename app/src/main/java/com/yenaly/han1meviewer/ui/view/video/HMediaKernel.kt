@@ -509,6 +509,14 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
 
     override fun onPlaybackStateChanged(playbackState: Int) {
         Log.i(TAG, "onPlaybackStateChanged: $playbackState")
+        // ---- 诊断 V4：播放状态必须进诊断日志，否则 loadStarted 之后是播是卡看不出来 ----
+        diagLog("[V4] playbackState=${when (playbackState) {
+            Player.STATE_IDLE -> "IDLE"
+            Player.STATE_BUFFERING -> "BUFFERING"
+            Player.STATE_READY -> "READY"
+            Player.STATE_ENDED -> "ENDED"
+            else -> "$playbackState"
+        }} playWhenReady=${_exoPlayer?.playWhenReady}")
         handler?.post {
             when (playbackState) {
                 Player.STATE_BUFFERING -> {
@@ -535,6 +543,11 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                 }
             }
         }
+    }
+
+    override fun onRenderedFirstFrame() {
+        // ---- 诊断 V4：首帧 = 确实播出来了，对齐 MPV 的 PLAYBACK_RESTART ----
+        diagLog("[V4] first frame rendered (playing)")
     }
 
     override fun onPlayerError(error: PlaybackException) {
