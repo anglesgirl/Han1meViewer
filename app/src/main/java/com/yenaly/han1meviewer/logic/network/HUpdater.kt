@@ -168,7 +168,17 @@ object HUpdater {
                 reason = HUpdaterException.VersionCheck.Reason.NO_RELEASE,
             )
         }
-        return Latest(ver.tagName, ver.body, asset.browserDownloadURL, asset.nodeID)
+        return Latest(ver.tagName, ver.body, toOwnMirror(asset.browserDownloadURL), asset.nodeID)
+    }
+
+    /**
+     * 把 GitHub Release 下载地址改写到自家镜像 gh.anglesya.win（EdgeOne）。
+     * 第三方镜像（gh-proxy.com、ghproxy.net）不稳定，经常 403 / 超时，自家镜像最稳。
+     * 只有 github.com 开头的地址才改写，其他地址原样返回。
+     */
+    private fun toOwnMirror(url: String): String {
+        val prefix = "https://github.com/"
+        return if (url.startsWith(prefix)) "https://gh.anglesya.win/" + url.substring(prefix.length) else url
     }
 
     private suspend fun requestLatestRelease() = try {
