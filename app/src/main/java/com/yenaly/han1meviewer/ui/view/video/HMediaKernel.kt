@@ -25,6 +25,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cronet.CronetDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import org.chromium.net.CronetEngine
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -39,13 +40,17 @@ import cn.jzvd.JZMediaInterface
 import cn.jzvd.JZMediaSystem
 import cn.jzvd.Jzvd
 import com.yenaly.han1meviewer.BuildConfig
+import com.yenaly.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
+import com.yenaly.han1meviewer.HANIME_MEDIA_CDN_HOST
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.ech.echTransport
 import com.yenaly.han1meviewer.util.AnimeShaders
 import com.yenaly.han1meviewer.util.AnimeShaders.getCert
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import `is`.xyz.mpv.MPVLib
+import okhttp3.OkHttpClient
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -201,7 +206,20 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
             // cronet-bundled ships the native provider inside the APK, so Cronet works on
             // devices without Google Play Services; if no provider is available anyway,
             // fall back to the platform HTTP stack instead of crashing playback.
-            val httpDataSourceFactory = try {
+            // 指定了媒体 CDN 节点 IP 时 EXO 也走 echTransport（OkHttp 栈）：EchDns 把媒体域名
+            // 钉到指定 IP，CdnHostRewriter 按开关改写备用域名；未指定时保持 Cronet 原样。
+            val currUrl = jzvd.jzDataSource.currentUrl.toString()
+            val currHost = try {
+                Uri.parse(currUrl).host
+            } catch (e: Exception) {
+                null
+            }
+            val useNodeIps = Preferences.mediaCdnNodeIps.isNotEmpty() &&
+                (currHost.equals(HANIME_MEDIA_CDN_HOST, ignoreCase = true) ||
+                    currHost.equals(HANIME_BACKUP_MEDIA_CDN_HOST, ignoreCase = true))
+            val httpDataSourceFactory = if (useNodeIps) {
+                OkHttpDataSource.Factory(OkHttpClient.Builder().echTransport().build())
+            } else try {
                 val cronetEngine = CronetEngine.Builder(context)
                     .enableHttp2(true)
                     .enableQuic(true)
@@ -219,7 +237,6 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                 httpDataSourceFactory
             )
 
-            val currUrl = jzvd.jzDataSource.currentUrl.toString()
             val videoSource = if (currUrl.contains(".m3u8")) {
                 HlsMediaSource.Factory(dataSourceFactory)
                     .createMediaSource(MediaItem.fromUri(currUrl))
