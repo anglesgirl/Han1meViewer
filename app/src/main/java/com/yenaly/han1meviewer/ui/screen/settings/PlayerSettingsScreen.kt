@@ -26,6 +26,8 @@ data class PlayerSettingsUiState(
     val mpvSettingsEnabled: Boolean,
     val mpvSettingsSummary: String,
     val showBottomProgress: Boolean,
+    val useCronet: Boolean,
+    val useCronetEnabled: Boolean,
     val playerSpeed: String,
     val playerSpeedLabel: String,
     val longPressSpeedTimes: String,
@@ -48,6 +50,7 @@ fun PlayerSettingsScreen(
     longPressSpeedOptions: List<Pair<String, String>>,
     onKernelChange: (String) -> Unit,
     onShowBottomProgressChange: (Boolean) -> Unit,
+    onUseCronetChange: (Boolean) -> Unit,
     onPlayerSpeedChange: (String) -> Unit,
     onLongPressSpeedChange: (String) -> Unit,
     onSlideSensitivityChange: (Int) -> Unit,
@@ -126,6 +129,17 @@ fun PlayerSettingsScreen(
         }
 
         item {
+            SettingSwitchItem(
+                title = stringResource(R.string.use_cronet),
+                summary = stringResource(R.string.use_cronet_summary),
+                checked = state.useCronet,
+                iconRes = R.drawable.baseline_atomic_24,
+                enabled = state.useCronetEnabled,
+                onCheckedChange = onUseCronetChange,
+            )
+        }
+
+        item {
             SettingNavigationItem(
                 title = stringResource(R.string.default_playback_speed),
                 valueText = state.playerSpeedLabel,
@@ -167,6 +181,8 @@ private fun PlayerSettingsScreenPreview() {
                 mpvSettingsEnabled = false,
                 mpvSettingsSummary = stringResource(R.string.mpv_settings_disabled_summary),
                 showBottomProgress = true,
+                useCronet = false,
+                useCronetEnabled = true,
                 playerSpeed = "1.0",
                 playerSpeedLabel = "1.0x",
                 longPressSpeedTimes = "2.5",
@@ -186,6 +202,7 @@ private fun PlayerSettingsScreenPreview() {
             longPressSpeedOptions = listOf("2.0倍" to "2", "2.5倍" to "2.5", "3.0倍" to "3"),
             onKernelChange = {},
             onShowBottomProgressChange = {},
+            onUseCronetChange = {},
             onPlayerSpeedChange = {},
             onLongPressSpeedChange = {},
             onSlideSensitivityChange = {},

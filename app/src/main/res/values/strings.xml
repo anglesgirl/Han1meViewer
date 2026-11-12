@@ -460,6 +460,8 @@
     <string name="apply_deep_links_summary">允許在這個應用程式中開啟網頁連結</string>
     <string name="apply_deep_links_tips">MIUI 隱藏了這個介面，所以你需要從這裡打開然後添加連結</string>
     <string name="switch_player_kernel">切換播放器內核</string>
+    <string name="use_cronet">使用 Cronet 播放（EXO）</string>
+    <string name="use_cronet_summary">僅在封鎖嚴重地區開啟嘗試，包體與耗電代價較大；關閉時 EXO 走系統網路</string>
     <string name="switch_to_year">切換至年</string>
     <string name="switch_to_year_month">切換至年月</string>
     <string name="subscribe">訂閱</string>

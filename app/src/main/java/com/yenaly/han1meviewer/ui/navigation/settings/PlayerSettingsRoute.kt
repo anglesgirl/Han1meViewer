@@ -18,6 +18,7 @@ import com.yenaly.han1meviewer.ui.view.video.HMediaKernel
 
 private const val PLAYER_SWITCH_PLAYER_KERNEL = "switch_player_kernel"
 private const val PLAYER_SHOW_BOTTOM_PROGRESS = "show_bottom_progress"
+private const val PLAYER_USE_CRONET = "use_cronet"
 private const val PLAYER_SPEED = "player_speed"
 private const val PLAYER_SLIDE_SENSITIVITY = "slide_sensitivity"
 private const val PLAYER_LONG_PRESS_SPEED_TIMES = "long_press_speed_times"
@@ -59,6 +60,10 @@ fun PlayerSettingsRouteScreen(
             saveBoolean(PLAYER_SHOW_BOTTOM_PROGRESS, it)
             refreshKey++
         },
+        onUseCronetChange = {
+            saveBoolean(PLAYER_USE_CRONET, it)
+            refreshKey++
+        },
         onPlayerSpeedChange = {
             saveString(PLAYER_SPEED, it)
             refreshKey++
@@ -95,6 +100,8 @@ private fun buildPlayerSettingsUiState(context: Context): PlayerSettingsUiState 
             context.getString(R.string.mpv_settings_disabled_summary)
         },
         showBottomProgress = Preferences.showBottomProgress,
+        useCronet = Preferences.useCronet,
+        useCronetEnabled = kernel == HMediaKernel.Type.ExoPlayer.name,
         playerSpeed = currentSpeed.toString(),
         playerSpeedLabel = speedDisplay,
         longPressSpeedTimes = currentLongPressSpeed.toString(),

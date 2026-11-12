@@ -133,6 +133,16 @@ object Preferences {
             true
         )
 
+    /**
+     * EXO 是否使用 Cronet。預設關閉：Cronet 內嵌原生庫，包體與耗電代價大，
+     * 只在封鎖嚴重地區手動開啟嘗試；不影響節點 IP 路徑（OkHttp echTransport）與 MPV。
+     */
+    val useCronet: Boolean
+        get() = preferenceSp.getBoolean(
+            SettingsPreferenceKeys.USE_CRONET,
+            false
+        )
+
     val playerSpeed: Float
         get() = preferenceSp.getString(
             SettingsPreferenceKeys.PLAYER_SPEED,

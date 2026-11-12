@@ -445,6 +445,8 @@ hanime1.me以外のドメインは、特定の時間帯にhanime1.meにリダイ
     <string name="apply_deep_links_summary">適用後、関連ページを開くと素早く本アプリに移動</string>
     <string name="apply_deep_links_tips">MIUIはこの画面を隠しているので、ここから開いてリンクを追加</string>
     <string name="switch_player_kernel">プレイヤーカーネル切替</string>
+    <string name="use_cronet">Cronet で再生（EXO）</string>
+    <string name="use_cronet_summary">ブロックが厳しい地域でのみ有効にしてください。APK サイズとバッテリー消費が増加します。オフの場合、EXO はシステムのネットワークを使います</string>
     <string name="switch_to_year">年に切替</string>
     <string name="switch_to_year_month">年月に切替</string>
     <string name="subscribe">フォロー</string>

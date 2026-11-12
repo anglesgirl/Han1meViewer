@@ -36,6 +36,7 @@ object SettingsPreferenceKeys {
     const val HOME_CATEGORY_HIDDEN = "home_category_hidden"
     const val SHOW_BOTTOM_PROGRESS = "show_bottom_progress"
     const val SWITCH_PLAYER_KERNEL = "switch_player_kernel"
+    const val USE_CRONET = "use_cronet"
     const val PLAYER_SPEED = "player_speed"
     const val SLIDE_SENSITIVITY = "slide_sensitivity"
     const val LONG_PRESS_SPEED_TIMES = "long_press_speed_times"

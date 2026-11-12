@@ -219,17 +219,22 @@ class ExoMediaKernel(jzvd: Jzvd) : JZMediaInterface(jzvd), Player.Listener, HMed
                     currHost.equals(HANIME_BACKUP_MEDIA_CDN_HOST, ignoreCase = true))
             val httpDataSourceFactory = if (useNodeIps) {
                 OkHttpDataSource.Factory(OkHttpClient.Builder().echTransport().build())
-            } else try {
-                val cronetEngine = CronetEngine.Builder(context)
-                    .enableHttp2(true)
-                    .enableQuic(true)
-                    .build()
-                CronetDataSource.Factory(
-                    cronetEngine,
-                    java.util.concurrent.Executors.newSingleThreadExecutor()
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Cronet unavailable, using platform HTTP", e)
+            } else if (Preferences.useCronet) {
+                // Cronet 預設關閉：內嵌原生庫代價大，只在封鎖嚴重地區手動開啟嘗試。
+                try {
+                    val cronetEngine = CronetEngine.Builder(context)
+                        .enableHttp2(true)
+                        .enableQuic(true)
+                        .build()
+                    CronetDataSource.Factory(
+                        cronetEngine,
+                        java.util.concurrent.Executors.newSingleThreadExecutor()
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Cronet unavailable, using platform HTTP", e)
+                    DefaultHttpDataSource.Factory()
+                }
+            } else {
                 DefaultHttpDataSource.Factory()
             }.setDefaultRequestProperties(jzvd.jzDataSource.headerMap)
             val dataSourceFactory = DefaultDataSource.Factory(

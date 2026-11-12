@@ -448,6 +448,8 @@
     <string name="apply_deep_links_summary">应用后，打开相关网页后能快速跳转至本 App</string>
     <string name="apply_deep_links_tips">MIUI 隐藏了这个界面，所以你需要从这里打开然后添加链接</string>
     <string name="switch_player_kernel">切换播放器内核</string>
+    <string name="use_cronet">使用 Cronet 播放（EXO）</string>
+    <string name="use_cronet_summary">仅在封锁严重地区开启尝试，包体与耗电代价较大；关闭时 EXO 走系统网络</string>
     <string name="switch_to_year">切换至年</string>
     <string name="switch_to_year_month">切换至年月</string>
     <string name="subscribe">关注</string>
