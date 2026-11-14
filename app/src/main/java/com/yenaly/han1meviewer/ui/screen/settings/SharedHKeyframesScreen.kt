@@ -22,6 +22,7 @@ import com.yenaly.han1meviewer.logic.entity.HKeyframeHeader
 import com.yenaly.han1meviewer.logic.entity.HKeyframeType
 import com.yenaly.han1meviewer.ui.component.content.EmptyContent
 import com.yenaly.han1meviewer.ui.component.lazy.LazyColumn
+import com.yenaly.han1meviewer.ui.player.PlayerUtils
 import com.yenaly.han1meviewer.ui.preview.ComponentPreview
 
 @Composable
@@ -89,7 +90,7 @@ private fun SharedEntityCard(
             entity.keyframes.forEach { keyframe ->
                 HorizontalDivider()
                 Text(
-                    text = cn.jzvd.JZUtils.stringForTime(keyframe.position),
+                    text = PlayerUtils.stringForTime(keyframe.position),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )

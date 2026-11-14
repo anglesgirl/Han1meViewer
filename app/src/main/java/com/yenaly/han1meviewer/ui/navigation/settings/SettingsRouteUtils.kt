@@ -16,7 +16,7 @@ import com.yenaly.han1meviewer.HanimeConstants.HANIME_HOSTNAME
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
-import com.yenaly.han1meviewer.ui.view.video.HJzvdStd
+import com.yenaly.han1meviewer.ui.player.PlayerDefaults
 import com.yenaly.han1meviewer.util.formatBytesPerSecond
 import com.yenaly.han1meviewer.util.formatFileSizeV2
 import kotlinx.datetime.Instant
@@ -91,7 +91,7 @@ internal fun toPrettyCountdownRemindString(
 ): String {
     return buildString {
         append(context.getString(R.string.will_remind_before_d_seconds, value))
-        if (value == HJzvdStd.DEF_COUNTDOWN_SEC) append(" (${context.getString(R.string.default_)})")
+        if (value == PlayerDefaults.DEF_COUNTDOWN_SEC) append(" (${context.getString(R.string.default_)})")
     }
 }
 
@@ -134,4 +134,3 @@ internal fun openPipPermissionSettings(context: Context) {
     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
     context.startActivity(intent)
 }
-

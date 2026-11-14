@@ -26,9 +26,6 @@ object NetworkSettingsRoute
 object DownloadSettingsRoute
 
 @Serializable
-object MpvPlayerSettingsRoute
-
-@Serializable
 object HKeyframesRoute
 
 @Serializable
@@ -80,14 +77,6 @@ enum class SettingsDestinationSpec(
         routeClass = DownloadSettingsRoute::class,
         category = SettingsCategory.Download,
     ),
-    Mpv(
-        routeKey = "mpv",
-        titleRes = R.string.mpv_advanced_settings,
-        iconRes = R.drawable.baseline_render_24,
-        screenClassName = "MpvPlayerSettingsScreen",
-        routeClass = MpvPlayerSettingsRoute::class,
-        category = SettingsCategory.Playback,
-    ),
     HKeyframes(
         routeKey = "h_keyframes",
         titleRes = R.string.h_keyframe_manage,
@@ -127,7 +116,6 @@ enum class SettingsDestinationSpec(
             Player -> PlayerSettingsRoute
             Network -> NetworkSettingsRoute
             Download -> DownloadSettingsRoute
-            Mpv -> MpvPlayerSettingsRoute
             HKeyframes -> HKeyframesRoute
             SharedHKeyframes -> SharedHKeyframesRoute
             HKeyframeSettings -> HKeyframeSettingsRoute

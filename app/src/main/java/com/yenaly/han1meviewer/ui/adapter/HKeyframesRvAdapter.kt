@@ -4,7 +4,6 @@ import android.content.Context
 import android.view.ViewGroup
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.recyclerview.widget.DiffUtil
-import cn.jzvd.JZUtils
 import com.chad.library.adapter4.BaseQuickAdapter
 import com.chad.library.adapter4.viewholder.QuickViewHolder
 import com.google.android.material.button.MaterialButton
@@ -14,6 +13,7 @@ import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.component.GlobalDialogs
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import com.yenaly.han1meviewer.ui.component.TextInputField
+import com.yenaly.han1meviewer.ui.player.PlayerUtils
 import com.yenaly.han1meviewer.util.findActivityOrNull
 
 /**
@@ -61,7 +61,7 @@ class HKeyframeRvAdapter(
         item: HKeyframeEntity.Keyframe?,
     ) {
         item ?: return
-        holder.setText(R.id.tv_keyframe, JZUtils.stringForTime(item.position))
+        holder.setText(R.id.tv_keyframe, PlayerUtils.stringForTime(item.position))
         holder.setText(R.id.tv_index, "#${holder.bindingAdapterPosition + 1}")
 
         holder.setGone(R.id.btn_delete, !isLocal)
@@ -128,7 +128,7 @@ class HKeyframeRvAdapter(
                     GlobalDialogs.show(
                         GlobalDialogs.ConfirmRequest(
                             title = context.getString(R.string.sure_to_delete),
-                            message = JZUtils.stringForTime(item.position),
+                            message = PlayerUtils.stringForTime(item.position),
                             confirmText = context.getString(R.string.confirm),
                             dismissText = context.getString(R.string.cancel),
                             onConfirm = {

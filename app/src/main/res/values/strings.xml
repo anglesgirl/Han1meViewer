@@ -975,6 +975,14 @@
     <string name="meow">喵~</string>
     <string name="hiss">哈——</string>
     <string name="growl">嗚——</string>
+    <string name="gesture_brightness">亮度</string>
+    <string name="gesture_volume">音量</string>
+    <string name="gesture_progress">進度</string>
+    <string name="player_video_load_failed">影片載入失敗</string>
+    <string name="player_click_retry">點擊重試</string>
+    <string name="player_replay">重播</string>
+    <string name="not_wifi_tips">當前使用行動網路，繼續播放將消耗流量</string>
+    <string name="not_wifi_confirm">繼續播放</string>
     <string name="doh_endpoint_locked">DoH 網域已鎖定，Bootstrap 可修改</string>
     <string name="doh_bootstrap_edit_hint">可輸入多個 IP，以逗號分隔；留空恢復預設 172.64.229.69</string>
     <string name="doh_bootstrap_invalid">請輸入有效的 IPv4 或 IPv6 位址</string>

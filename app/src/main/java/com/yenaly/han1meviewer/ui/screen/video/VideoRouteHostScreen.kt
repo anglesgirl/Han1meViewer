@@ -11,13 +11,14 @@ import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.util.Log
 import android.util.Rational
-import android.view.ContextThemeWrapper
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -26,16 +27,21 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.app.ShareCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -44,9 +50,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.window.core.layout.WindowSizeClass
-import cn.jzvd.JZMediaInterface
-import cn.jzvd.Jzvd
-import coil.load
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.CollapsingToolbarLayout
 import com.google.firebase.Firebase
@@ -70,14 +73,17 @@ import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.bridge.VideoPageHost
 import com.yenaly.han1meviewer.ui.component.ConfirmDialog
+import com.yenaly.han1meviewer.ui.component.GlobalDialogs
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import com.yenaly.han1meviewer.PermissionRequester
 import com.yenaly.han1meviewer.ui.navigation.navigateSafely
 import com.yenaly.han1meviewer.ui.navigation.main.VideoRoute
-import com.yenaly.han1meviewer.ui.view.video.ExoMediaKernel
-import com.yenaly.han1meviewer.ui.view.video.HJzvdStd
-import com.yenaly.han1meviewer.ui.view.video.HMediaKernel
-import com.yenaly.han1meviewer.ui.view.video.HanimeDataSource
+import com.yenaly.han1meviewer.ui.component.TextInputField
+import com.yenaly.han1meviewer.ui.player.HanimePlayerController
+import com.yenaly.han1meviewer.ui.player.PlayerState
+import com.yenaly.han1meviewer.ui.player.kernel.KernelType
+import com.yenaly.han1meviewer.ui.player.surface.rememberMovablePlayerSurface
+import com.yenaly.han1meviewer.ui.player.video.HanimeVideoPlayer
 import com.yenaly.han1meviewer.ui.view.video.VideoPlayerAppBarBehavior
 import com.yenaly.han1meviewer.ui.viewmodel.CommentViewModel
 import com.yenaly.han1meviewer.ui.viewmodel.VideoViewModel
@@ -102,7 +108,21 @@ fun VideoRouteHostScreen(
     val scope = rememberCoroutineScope()
     val viewModel: VideoViewModel = viewModel()
     val commentViewModel: CommentViewModel = viewModel()
-    val kernel = remember { HMediaKernel.Type.fromString(Preferences.switchPlayerKernel) }
+    val player = remember(route.videoCode, route.localUri) {
+        HanimePlayerController(activity, KernelType.ExoPlayer)
+    }
+    val shell = remember(route.videoCode, route.localUri) { VideoRouteShell(activity) }
+    var isFullscreen by remember(route.videoCode, route.localUri) { mutableStateOf(false) }
+    val fullscreenHandler = remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
+    val previousRequestedOrientation = remember(route.videoCode, route.localUri) {
+        mutableStateOf(activity.requestedOrientation)
+    }
+    val previousSystemBarsVisible = remember(route.videoCode, route.localUri) {
+        mutableStateOf(true)
+    }
+    val windowInsetsController = remember(activity) {
+        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+    }
     val genres = remember(Preferences.baseUrl) {
         loadAssetAs<List<SearchOption>>(
             if (Preferences.baseUrl == com.yenaly.han1meviewer.HanimeConstants.HANIME_URL[3]) {
@@ -112,12 +132,6 @@ fun VideoRouteHostScreen(
             }
         ).orEmpty()
     }
-    val player = remember(route.videoCode, route.localUri) {
-        createVideoPlayerView(activity)
-    }
-    val shell = remember(route.videoCode, route.localUri) {
-        VideoRouteShell(activity, player)
-    }
     val hostUiState by viewModel.videoHostUiStateFlow.collectAsStateWithLifecycle()
     val relatedItems =
         viewModel.hanimeVideoFlow.collectAsStateWithLifecycle().value?.relatedHanimes.orEmpty()
@@ -126,7 +140,6 @@ fun VideoRouteHostScreen(
     }
 
     commentViewModel.code = route.videoCode
-    player.videoCode = route.videoCode
     viewModel.fromDownload = route.videoCode == "-1" || route.localUri != null
 
     var checkedQuality by remember(
@@ -139,6 +152,7 @@ fun VideoRouteHostScreen(
     var videoTitle by remember(route.videoCode, route.localUri) { mutableStateOf<String?>(null) }
     var isSideRelatedCollapsed by remember { mutableStateOf(false) }
     var showAddHKeyframeDialog by remember { mutableStateOf<Pair<Long, String>?>(null) }
+    var keyframeEntity by remember(route.videoCode) { mutableStateOf<HKeyframeEntity?>(null) }
     var unsubscribeArtist by remember { mutableStateOf<HanimeVideo.Artist?>(null) }
     var showDownloadPermissionDialog by remember { mutableStateOf(false) }
     val useLargeVideoLayout = currentWindowAdaptiveInfoV2()
@@ -170,7 +184,9 @@ fun VideoRouteHostScreen(
     val jzBackCallback = remember(activity) {
         object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
-                if (!Jzvd.backPress()) {
+                if (isFullscreen) {
+                    fullscreenHandler.value?.invoke(false)
+                } else {
                     isEnabled = false
                     activity.onBackPressedDispatcher.onBackPressed()
                 }
@@ -182,9 +198,42 @@ fun VideoRouteHostScreen(
         shell.setPlayerHeight(height)
     }
 
+    fun setFullscreen(fullscreen: Boolean) {
+        if (isFullscreen == fullscreen) return
+        if (fullscreen) {
+            previousRequestedOrientation.value = activity.requestedOrientation
+            previousSystemBarsVisible.value = ViewCompat
+                .getRootWindowInsets(activity.window.decorView)
+                ?.isVisible(WindowInsetsCompat.Type.systemBars()) ?: true
+            if (!shell.enterFullscreen(activity.window.decorView as ViewGroup)) return
+            isFullscreen = true
+            activity.requestedOrientation = if (player.isPortraitVideo) {
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+            windowInsetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            shell.exitFullscreen()
+            isFullscreen = false
+            activity.requestedOrientation = previousRequestedOrientation.value
+            windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            if (previousSystemBarsVisible.value) {
+                windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+            } else {
+                windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        jzBackCallback.isEnabled = fullscreen
+    }
+
+    SideEffect { fullscreenHandler.value = ::setFullscreen }
+
     fun updatePipAction() {
         if (!activity.isInPictureInPictureMode) return
-        val isPlaying = (Jzvd.CURRENT_JZVD?.mediaInterface as? ExoMediaKernel)?.isPlaying == true
+        val isPlaying = player.isPlaying
         val icon = if (isPlaying) {
             Icon.createWithResource(activity, R.drawable.ic_pip_pause_24)
         } else {
@@ -206,18 +255,11 @@ fun VideoRouteHostScreen(
     }
 
     fun changeScreenNormal() {
-        if (player.screen == Jzvd.SCREEN_FULLSCREEN) {
-            player.gotoNormalScreen()
-        }
+        if (isFullscreen) setFullscreen(false)
     }
 
-    fun changeScreenFullLandscape(orientation: OrientationManager.ScreenOrientation) {
-        if (player.screen != Jzvd.SCREEN_FULLSCREEN &&
-            System.currentTimeMillis() - Jzvd.lastAutoFullscreenTime > 2000
-        ) {
-            player.autoFullscreen(orientation)
-            Jzvd.lastAutoFullscreenTime = System.currentTimeMillis()
-        }
+    fun changeScreenFullLandscape() {
+        if (!isFullscreen && !player.isPortraitVideo) setFullscreen(true)
     }
 
     val pageHost = remember(activity, player, shell, viewModel) {
@@ -227,7 +269,7 @@ fun VideoRouteHostScreen(
             }
 
             override fun shouldEnterPip(): Boolean {
-                return player.state == Jzvd.STATE_PLAYING || player.state == Jzvd.STATE_PAUSE
+                return player.isActiveForPip
             }
 
             override fun enterPipMode() {
@@ -246,7 +288,7 @@ fun VideoRouteHostScreen(
                     intent,
                 )
                 val sourceRect = Rect()
-                player.getGlobalVisibleRect(sourceRect)
+                shell.playerHostView.getGlobalVisibleRect(sourceRect)
                 val params = PictureInPictureParams.Builder()
                     .setSourceRectHint(sourceRect)
                     .setAspectRatio(Rational(16, 9))
@@ -268,19 +310,13 @@ fun VideoRouteHostScreen(
                 }
                 setPlayerHeight(viewModel.videoHostUiStateFlow.value.playerHeightDp)
                 shell.setTabsVisible(!isInPip)
-                player.setControlsVisible(!isInPip)
                 if (isInPip) {
                     updatePipAction()
                 }
             }
 
             override fun togglePlayPause() {
-                val mediaInterface = player.mediaInterface
-                if (mediaInterface.isPlaying) {
-                    mediaInterface.pause()
-                } else {
-                    mediaInterface.start()
-                }
+                player.togglePlayPause()
                 updatePipAction()
             }
         }
@@ -296,6 +332,107 @@ fun VideoRouteHostScreen(
         route.localUri
     ) {
         activity.registerCurrentVideoHost(pageHost)
+        shell.setPlayerHostContent {
+            val playerHostUiState by viewModel.videoHostUiStateFlow.collectAsStateWithLifecycle()
+            val videoState by viewModel.hanimeVideoStateFlow.collectAsStateWithLifecycle()
+            val playerSurface = rememberMovablePlayerSurface(player)
+            if (playerHostUiState.isInPipMode) {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    playerSurface(Modifier.fillMaxSize())
+                }
+            } else {
+                HanimeVideoPlayer(
+                    controller = player,
+                    playerSurface = playerSurface,
+                    isFullscreen = isFullscreen,
+                    keyframeEntity = keyframeEntity,
+                    modifier = Modifier.fillMaxSize(),
+                    videoInfoLoading = videoState is VideoLoadingState.Loading,
+                    onBack = {
+                        if (isFullscreen) setFullscreen(false)
+                        else activity.onBackPressedDispatcher.onBackPressed()
+                    },
+                    onGoHome = {
+                        if (activity.resources.getBoolean(R.bool.isTablet)) {
+                            activity.navController.popBackStackSafe()
+                        }
+                        activity.startActivity(Intent(activity, MainActivity::class.java))
+                    },
+                    onToggleFullscreen = { setFullscreen(!isFullscreen) },
+                    onNoVideoUrl = {
+                        GlobalToasts.show(
+                            activity.getString(R.string.fail_to_get_video_link),
+                            level = GlobalToasts.ToastLevel.ERROR,
+                        )
+                        if (!viewModel.fromDownload) {
+                            activity.browse(getHanimeVideoLink(route.videoCode))
+                        }
+                    },
+                    onAddHKeyframeAt = { positionMs ->
+                        if (!player.isPlaying) {
+                            showAddHKeyframeDialog = positionMs to (videoTitle ?: "Untitled")
+                        } else {
+                            GlobalToasts.show(
+                                activity.getString(R.string.pause_then_long_press),
+                                level = GlobalToasts.ToastLevel.WARNING,
+                            )
+                        }
+                    },
+                    onEditKeyframe = { keyframe ->
+                        GlobalDialogs.show(
+                            GlobalDialogs.InputRequest(
+                                title = activity.getString(R.string.modify_h_keyframe),
+                                fields = listOf(
+                                    TextInputField(
+                                        label = activity.getString(R.string.position_ms),
+                                        initialValue = keyframe.position.toString(),
+                                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                                    ),
+                                    TextInputField(
+                                        label = activity.getString(R.string.prompt),
+                                        initialValue = keyframe.prompt.orEmpty(),
+                                    ),
+                                ),
+                                confirmText = activity.getString(R.string.confirm),
+                                dismissText = activity.getString(R.string.cancel),
+                                onConfirm = { values ->
+                                    val position = values.getOrElse(0) { keyframe.position.toString() }
+                                        .toLongOrNull() ?: keyframe.position
+                                    val prompt = values.getOrElse(1) { keyframe.prompt.orEmpty() }
+                                    activity.viewModel.modifyHKeyframe(
+                                        route.videoCode,
+                                        keyframe,
+                                        HKeyframeEntity.Keyframe(position = position, prompt = prompt),
+                                    )
+                                    GlobalToasts.show(
+                                        activity.getString(R.string.modify_success),
+                                        level = GlobalToasts.ToastLevel.SUCCESS,
+                                    )
+                                },
+                            )
+                        )
+                    },
+                    onDeleteKeyframe = { keyframe ->
+                        GlobalDialogs.show(
+                            GlobalDialogs.ConfirmRequest(
+                                title = activity.getString(R.string.sure_to_delete),
+                                message = com.yenaly.han1meviewer.ui.player.PlayerUtils
+                                    .stringForTime(keyframe.position),
+                                confirmText = activity.getString(R.string.confirm),
+                                dismissText = activity.getString(R.string.cancel),
+                                onConfirm = {
+                                    activity.viewModel.removeHKeyframe(route.videoCode, keyframe)
+                                    GlobalToasts.show(
+                                        activity.getString(R.string.delete_success),
+                                        level = GlobalToasts.ToastLevel.SUCCESS,
+                                    )
+                                },
+                            )
+                        )
+                    },
+                )
+            }
+        }
         shell.setTabsHostContent {
             val videoState by viewModel.hanimeVideoStateFlow.collectAsStateWithLifecycle()
             VideoRouteContent(
@@ -398,41 +535,28 @@ fun VideoRouteHostScreen(
         }
         onDispose {
             activity.registerCurrentVideoHost(null)
-            player.onVideoStateChanged = null
-            player.fullscreenListener = null
-            player.onGoHomeClickListener = null
-            player.onKeyframeClickListener = null
-            player.onKeyframeLongClickListener = null
+            if (isFullscreen) setFullscreen(false)
             shell.clear()
-            Jzvd.releaseAllVideos()
+            player.release()
         }
     }
 
     DisposableEffect(lifecycleOwner, activity, player, shell, route.videoCode) {
         val orientationManager = OrientationManager(activity) { orientation ->
-            if (!useLargeVideoLayout &&
-                Jzvd.CURRENT_JZVD != null &&
-                (player.state == Jzvd.STATE_PLAYING || player.state == Jzvd.STATE_PAUSE) &&
-                player.screen != Jzvd.SCREEN_TINY &&
-                Jzvd.FULLSCREEN_ORIENTATION != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            ) {
-                if (orientation.isLandscape && player.screen == Jzvd.SCREEN_NORMAL) {
-                    changeScreenFullLandscape(orientation)
-                } else if (orientation == OrientationManager.ScreenOrientation.PORTRAIT &&
-                    player.screen == Jzvd.SCREEN_FULLSCREEN
-                ) {
+            if (!useLargeVideoLayout && player.isActiveForPip && !player.isPortraitVideo) {
+                if (orientation.isLandscape && !isFullscreen) {
+                    changeScreenFullLandscape()
+                } else if (orientation == OrientationManager.ScreenOrientation.PORTRAIT && isFullscreen) {
                     changeScreenNormal()
                 }
             }
         }
         fun markWatchedIfReachedThreshold() {
             if (viewModel.fromDownload) return
-            val duration = player.duration
-            val position = player.currentPositionWhenPlaying
+            val duration = player.durationMs
+            val position = player.currentPositionMs
             if (duration > 0 && position * 100 >= duration * Preferences.watchedProgressThreshold) {
-                scope.launch {
-                    DatabaseRepo.WatchHistory.markWatched(route.videoCode)
-                }
+                scope.launch { DatabaseRepo.WatchHistory.markWatched(route.videoCode) }
             }
         }
 
@@ -443,102 +567,70 @@ fun VideoRouteHostScreen(
             val currentIndex = videos.indexOfFirst { it.videoCode == route.videoCode }
             if (currentIndex < 0) return
             val next = videos.getOrNull(currentIndex + 1) ?: return
-            if (player.screen == Jzvd.SCREEN_FULLSCREEN) {
-                changeScreenNormal()
-            }
+            if (isFullscreen) changeScreenNormal()
             val navController = activity.navController
             val currentId = navController.currentBackStackEntry?.destination?.id
             navController.navigateSafely(VideoRoute(next.videoCode, autoPlay = true)) {
-                if (currentId != null) {
-                    popUpTo(currentId) { inclusive = true }
-                }
+                if (currentId != null) popUpTo(currentId) { inclusive = true }
             }
         }
 
         val lifecycleObserver = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
-                    val progress = player.currentPositionWhenPlaying
-                    scope.launch {
-                        DatabaseRepo.WatchHistory.updateProgress(route.videoCode, progress)
-                    }
+                    val progress = player.currentPositionMs
+                    scope.launch { DatabaseRepo.WatchHistory.updateProgress(route.videoCode, progress) }
                     markWatchedIfReachedThreshold()
                 }
 
                 Lifecycle.Event.ON_STOP -> {
                     if (!activity.isInPictureInPictureMode) {
                         changeScreenNormal()
+                        player.pause()
                     }
-                    Jzvd.goOnPlayOnPause()
                 }
                 else -> Unit
+            }
+        }
+        val playbackStateJob = scope.launch {
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.CREATED) {
+                player.uiState.collect { state ->
+                    when (state.state) {
+                        PlayerState.PREPARING, PlayerState.BUFFERING, PlayerState.PLAYING -> {
+                            viewModel.setScrollDisabled(true)
+                            shell.withBehavior { it.disableScroll = true }
+                            shell.setExpanded(expanded = true, animate = true)
+                        }
+
+                        PlayerState.PAUSED, PlayerState.COMPLETED, PlayerState.ERROR, PlayerState.IDLE -> {
+                            viewModel.setScrollDisabled(false)
+                            shell.withBehavior { it.disableScroll = false }
+                        }
+                    }
+                    if (state.state == PlayerState.COMPLETED) {
+                        markWatchedIfReachedThreshold()
+                        autoPlayNextIfEnabled()
+                    }
+                }
             }
         }
 
         lifecycleOwner.lifecycle.addObserver(orientationManager)
         lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
         activity.onBackPressedDispatcher.addCallback(lifecycleOwner, jzBackCallback)
-        player.orientationManager = orientationManager
-        player.onGoHomeClickListener = {
-            if (activity.resources.getBoolean(R.bool.isTablet)) {
-                activity.navController.popBackStackSafe()
-            }
-            activity.startActivity(Intent(activity, MainActivity::class.java))
-        }
-        player.onKeyframeClickListener = { view ->
-            player.clickHKeyframe(view)
-        }
-        player.onKeyframeLongClickListener = {
-            val mediaInterface: JZMediaInterface? = player.mediaInterface
-            if (mediaInterface != null && !mediaInterface.isPlaying) {
-                val currentPosition = player.currentPositionWhenPlaying
-                showAddHKeyframeDialog = Pair(currentPosition, videoTitle ?: "Untitled")
-            } else {
-                GlobalToasts.show(activity.getString(R.string.pause_then_long_press), level = GlobalToasts.ToastLevel.WARNING)
-            }
-        }
-        player.onVideoStateChanged = { state ->
-            when (state) {
-                Jzvd.STATE_PLAYING, Jzvd.STATE_PREPARING -> {
-                    viewModel.setScrollDisabled(true)
-                    shell.withBehavior { behavior ->
-                        behavior.disableScroll = true
-                    }
-                    shell.setExpanded(expanded = true, animate = true)
-                }
-
-                Jzvd.STATE_PAUSE, Jzvd.STATE_AUTO_COMPLETE -> {
-                    viewModel.setScrollDisabled(false)
-                    shell.withBehavior { behavior ->
-                        behavior.disableScroll = false
-                    }
-                }
-            }
-            if (state == Jzvd.STATE_AUTO_COMPLETE) {
-                markWatchedIfReachedThreshold()
-                autoPlayNextIfEnabled()
-            }
-        }
-        player.fullscreenListener = object : HJzvdStd.FullscreenListener {
-            override fun onFullscreenChanged(isFullscreen: Boolean) {
-                jzBackCallback.isEnabled = isFullscreen
-                Log.i("JZVD screen state", isFullscreen.toString())
-            }
-        }
         shell.setOnOffsetChanged { totalScrollRange, verticalOffset ->
             viewModel.setAppBarBottomInsetPx(totalScrollRange + verticalOffset)
             viewModel.setAppBarExpanded(route.videoCode, verticalOffset == 0)
         }
         shell.setExpanded(expanded = viewModel.isAppBarExpanded(route.videoCode), animate = false)
-        val initialHeight = if (useLargeVideoLayout) {
-            350.dp
-        } else {
-            250.dp
-        }
+        val initialHeight = if (useLargeVideoLayout) 350.dp else 250.dp
         viewModel.setPlayerHeightDp(initialHeight)
         setPlayerHeight(initialHeight)
 
         onDispose {
+            playbackStateJob.cancel()
+            viewModel.setScrollDisabled(false)
+            shell.withBehavior { it.disableScroll = false }
             lifecycleOwner.lifecycle.removeObserver(orientationManager)
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
         }
@@ -569,7 +661,7 @@ fun VideoRouteHostScreen(
         viewModel.getHanimeVideo(route.videoCode, route.localUri)
     }
 
-    LaunchedEffect(route.videoCode, route.localUri, player, kernel, viewModel.fromDownload) {
+    LaunchedEffect(route.videoCode, route.localUri, player, viewModel.fromDownload) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.CREATED) {
             viewModel.hanimeVideoStateFlow.collect { state ->
                 when (state) {
@@ -584,21 +676,6 @@ fun VideoRouteHostScreen(
 
                     is VideoLoadingState.Success -> {
                         videoTitle = state.info.title
-                        if (state.info.videoUrls.isEmpty()) {
-                            player.startButton.setOnClickListener {
-                                GlobalToasts.show(activity.getString(R.string.fail_to_get_video_link), level = GlobalToasts.ToastLevel.ERROR)
-                                activity.browse(getHanimeVideoLink(route.videoCode))
-                            }
-                        } else {
-                            player.setUp(
-                                HanimeDataSource(state.info.title, state.info.videoUrls),
-                                Jzvd.SCREEN_NORMAL,
-                                kernel,
-                            )
-                        }
-                        player.posterImageView.load(state.info.coverUrl) {
-                            crossfade(true)
-                        }
                         if (!viewModel.fromDownload) {
                             viewModel.insertWatchHistoryWithCover(
                                 WatchHistoryEntity(
@@ -611,7 +688,12 @@ fun VideoRouteHostScreen(
                             )
                         }
                         val history = DatabaseRepo.WatchHistory.findBy(route.videoCode)
-                        player.savedProgress = history?.progress ?: 0L
+                        player.setMedia(
+                            title = state.info.title,
+                            videoUrls = state.info.videoUrls,
+                            savedProgressMs = history?.progress ?: 0L,
+                            posterUrl = state.info.coverUrl,
+                        )
                         if (route.autoPlay) {
                             player.startVideo()
                         }
@@ -629,7 +711,7 @@ fun VideoRouteHostScreen(
     LaunchedEffect(route.videoCode, player) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.CREATED) {
             viewModel.observeKeyframe(route.videoCode).collect {
-                player.hKeyframe = it
+                keyframeEntity = it
                 viewModel.hKeyframes = it
             }
         }
@@ -729,22 +811,8 @@ fun VideoRouteHostScreen(
     }
 }
 
-private fun createVideoPlayerView(activity: MainActivity): HJzvdStd {
-    return HJzvdStd(ContextThemeWrapper(activity, activity.theme)).apply {
-        layoutParams = CollapsingToolbarLayout.LayoutParams(
-            MATCH_PARENT,
-            250.dp,
-        ).apply {
-            collapseMode = CollapsingToolbarLayout.LayoutParams.COLLAPSE_MODE_PARALLAX
-            parallaxMultiplier = 0.7f
-        }
-    }
-}
-
-private class VideoRouteShell(
-    context: Context,
-    private val playerView: HJzvdStd,
-) {
+private class VideoRouteShell(private val activity: MainActivity) {
+    private val context: Context = activity
     private val rootView = CoordinatorLayout(context).apply {
         fitsSystemWindows = true
         layoutParams = ViewGroup.LayoutParams(
@@ -793,9 +861,20 @@ private class VideoRouteShell(
         layoutParams = videoPlayerHostParams
     }
 
+    private val playerComposeView = ComposeView(context).apply {
+        layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, 250.dp)
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+    }
+
     private val videoTabsHost = ComposeView(context).apply {
         layoutParams = videoTabsHostParams
     }
+
+    private var requestedPlayerHeight = 250.dp
+    private var fullscreenParent: ViewGroup? = null
+    private var fullscreenParentIndex = -1
+    private var fullscreenLayoutParams: ViewGroup.LayoutParams? = null
+    private var isFullscreen = false
 
     /**
      * 平板横屏分栏布局中 tabs 是否已被拆出 CoordinatorLayout。
@@ -805,7 +884,7 @@ private class VideoRouteShell(
     private var tabsDetachedFromCoordinator = false
 
     init {
-        videoPlayerHost.addView(playerView, ViewGroup.LayoutParams(MATCH_PARENT, 250.dp))
+        videoPlayerHost.addView(playerComposeView)
         collapsingToolbarLayout.addView(videoPlayerHost)
         appBarLayout.addView(collapsingToolbarLayout)
         rootView.addView(videoTabsHost)
@@ -814,6 +893,47 @@ private class VideoRouteShell(
 
     val mainHostView: View
         get() = rootView
+
+    val playerHostView: FrameLayout
+        get() = videoPlayerHost
+
+    fun setPlayerHostContent(content: @Composable () -> Unit) {
+        playerComposeView.setContent(content)
+    }
+
+    fun enterFullscreen(decorRoot: ViewGroup): Boolean {
+        if (isFullscreen) return true
+        val parent = videoPlayerHost.parent as? ViewGroup ?: return false
+        fullscreenParent = parent
+        fullscreenParentIndex = parent.indexOfChild(videoPlayerHost)
+        fullscreenLayoutParams = videoPlayerHost.layoutParams
+        parent.removeView(videoPlayerHost)
+        playerComposeView.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        videoPlayerHost.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        decorRoot.addView(videoPlayerHost, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        isFullscreen = true
+        return true
+    }
+
+    fun exitFullscreen() {
+        if (!isFullscreen) return
+        (videoPlayerHost.parent as? ViewGroup)?.removeView(videoPlayerHost)
+        val parent = fullscreenParent
+        val params = fullscreenLayoutParams ?: videoPlayerHostParams
+        if (parent != null) {
+            val index = fullscreenParentIndex.coerceIn(0, parent.childCount)
+            parent.addView(videoPlayerHost, index, params)
+        } else {
+            videoPlayerHost.layoutParams = videoPlayerHostParams
+            collapsingToolbarLayout.addView(videoPlayerHost)
+        }
+        playerComposeView.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, requestedPlayerHeight)
+        videoPlayerHost.requestLayout()
+        fullscreenParent = null
+        fullscreenLayoutParams = null
+        fullscreenParentIndex = -1
+        isFullscreen = false
+    }
 
     /** 把 tabs 宿主拆出 CoordinatorLayout，交给 Compose 分栏布局挂载到右栏。 */
     fun takeTabsHost(): ComposeView {
@@ -880,13 +1000,17 @@ private class VideoRouteShell(
     }
 
     fun setPlayerHeight(height: Int) {
-        val lp = playerView.layoutParams
+        requestedPlayerHeight = height
+        if (isFullscreen) return
+        val lp = playerComposeView.layoutParams
         lp.height = height
-        playerView.layoutParams = lp
-        playerView.requestLayout()
+        playerComposeView.layoutParams = lp
+        playerComposeView.requestLayout()
     }
 
     fun clear() {
+        exitFullscreen()
         videoTabsHost.disposeComposition()
+        playerComposeView.disposeComposition()
     }
 }

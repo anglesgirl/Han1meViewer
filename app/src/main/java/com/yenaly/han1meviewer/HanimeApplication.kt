@@ -27,7 +27,6 @@ import com.yenaly.han1meviewer.base.AppLocale
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.memory.MemoryCache
-import `is`.xyz.mpv.MPVLib
 import java.net.ProxySelector
 
 /**
@@ -111,12 +110,6 @@ class HanimeApplication : BaseApplication(), SingletonImageLoader.Factory {
         HProxySelector.rebuildNetwork()
         initFirebase()
         initNotificationChannel()
-        MPVLib.create(applicationContext)
-        MPVLib.init()
-
-        if (AnimeShaders.copyShaderAssets(applicationContext) <= 0) {
-            Log.w(TAG, "Shader 复制失败")
-        }
         if (AnimeShaders.copyCertAssets(applicationContext) <= 0) {
             Log.w(TAG, "cert 复制失败")
         }

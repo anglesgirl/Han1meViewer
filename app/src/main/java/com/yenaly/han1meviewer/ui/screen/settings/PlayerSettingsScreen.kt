@@ -21,13 +21,8 @@ import com.yenaly.han1meviewer.ui.component.lazy.LazyColumn
 import com.yenaly.han1meviewer.ui.preview.ComponentPreview
 
 data class PlayerSettingsUiState(
-    val kernel: String,
-    val kernelDisplay: String,
-    val mpvSettingsEnabled: Boolean,
-    val mpvSettingsSummary: String,
     val showBottomProgress: Boolean,
     val useCronet: Boolean,
-    val useCronetEnabled: Boolean,
     val playerSpeed: String,
     val playerSpeedLabel: String,
     val longPressSpeedTimes: String,
@@ -37,7 +32,6 @@ data class PlayerSettingsUiState(
 )
 
 private enum class PlayerChoiceDialog {
-    Kernel,
     Speed,
     LongPressSpeed,
 }
@@ -45,30 +39,15 @@ private enum class PlayerChoiceDialog {
 @Composable
 fun PlayerSettingsScreen(
     state: PlayerSettingsUiState,
-    kernelOptions: List<Pair<String, String>>,
     speedOptions: List<Pair<String, String>>,
     longPressSpeedOptions: List<Pair<String, String>>,
-    onKernelChange: (String) -> Unit,
     onShowBottomProgressChange: (Boolean) -> Unit,
     onUseCronetChange: (Boolean) -> Unit,
     onPlayerSpeedChange: (String) -> Unit,
     onLongPressSpeedChange: (String) -> Unit,
     onSlideSensitivityChange: (Int) -> Unit,
-    onOpenMpvSettings: () -> Unit,
 ) {
     var activeDialog by rememberSaveable { mutableStateOf<PlayerChoiceDialog?>(null) }
-
-    ChoiceDialog(
-        visible = activeDialog == PlayerChoiceDialog.Kernel,
-        title = stringResource(R.string.switch_player_kernel),
-        options = kernelOptions,
-        selectedValue = state.kernel,
-        onDismiss = { activeDialog = null },
-        onSelect = {
-            activeDialog = null
-            onKernelChange(it)
-        },
-    )
 
     ChoiceDialog(
         visible = activeDialog == PlayerChoiceDialog.Speed,
@@ -100,26 +79,6 @@ fun PlayerSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         item {
-            SettingNavigationItem(
-                title = stringResource(R.string.switch_player_kernel),
-                valueText = state.kernelDisplay,
-                iconRes = R.drawable.baseline_atomic_24,
-                onClick = { activeDialog = PlayerChoiceDialog.Kernel },
-            )
-        }
-
-        item {
-            SettingNavigationItem(
-                title = stringResource(R.string.mpv_advanced_settings),
-                summary = state.mpvSettingsSummary,
-                iconRes = R.drawable.baseline_player_24,
-                onClick = onOpenMpvSettings,
-                enabled = state.mpvSettingsEnabled,
-                valueText = null,
-            )
-        }
-
-        item {
             SettingSwitchItem(
                 title = stringResource(R.string.show_bottom_progress),
                 checked = state.showBottomProgress,
@@ -134,7 +93,6 @@ fun PlayerSettingsScreen(
                 summary = stringResource(R.string.use_cronet_summary),
                 checked = state.useCronet,
                 iconRes = R.drawable.baseline_atomic_24,
-                enabled = state.useCronetEnabled,
                 onCheckedChange = onUseCronetChange,
             )
         }
@@ -176,13 +134,8 @@ private fun PlayerSettingsScreenPreview() {
     ComponentPreview {
         PlayerSettingsScreen(
             state = PlayerSettingsUiState(
-                kernel = "ExoPlayer",
-                kernelDisplay = "ExoPlayer",
-                mpvSettingsEnabled = false,
-                mpvSettingsSummary = stringResource(R.string.mpv_settings_disabled_summary),
                 showBottomProgress = true,
                 useCronet = false,
-                useCronetEnabled = true,
                 playerSpeed = "1.0",
                 playerSpeedLabel = "1.0x",
                 longPressSpeedTimes = "2.5",
@@ -190,23 +143,16 @@ private fun PlayerSettingsScreenPreview() {
                 slideSensitivity = 5,
                 slideSensitivitySummary = stringResource(
                     R.string.current_slide_sensitivity,
-                    stringResource(R.string.moderate)
+                    stringResource(R.string.moderate),
                 ),
-            ),
-            kernelOptions = listOf(
-                "MediaPlayer" to "MediaPlayer",
-                "ExoPlayer" to "ExoPlayer",
-                "MpvPlayer" to "MpvPlayer"
             ),
             speedOptions = listOf("1.0x" to "1.0", "1.25x" to "1.25", "1.5x" to "1.5"),
             longPressSpeedOptions = listOf("2.0倍" to "2", "2.5倍" to "2.5", "3.0倍" to "3"),
-            onKernelChange = {},
             onShowBottomProgressChange = {},
             onUseCronetChange = {},
             onPlayerSpeedChange = {},
             onLongPressSpeedChange = {},
             onSlideSensitivityChange = {},
-            onOpenMpvSettings = {},
         )
     }
 }
