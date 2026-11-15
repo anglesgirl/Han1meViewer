@@ -1,9 +1,11 @@
 package com.yenaly.han1meviewer.util
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
@@ -101,11 +103,22 @@ suspend fun <I, O> Context.awaitActivityResult(
 
 /**
  * 请求指定权限，已授权时直接返回 true。
+ *
+ * 注意：部分 MIUI 设备上权限请求 Intent（REQUEST_PERMISSIONS）会被路由到
+ * com.lbe.security.miui，若该组件被禁用/缺失会抛 ActivityNotFoundException
+ * 直接崩溃（2026-11-15 小米 M2102J2SC、Android 13、下载时请求
+ * POST_NOTIFICATIONS 实测）。此处捕获后按“拒绝”处理，走后续引导去
+ * 设置的兜底，不崩溃；下载本身不受影响（无通知也能下）。
  */
 suspend fun Context.requestPermission(key: String): Boolean {
     if (ContextCompat.checkSelfPermission(
             this, key
         ) == PackageManager.PERMISSION_GRANTED
     ) return true
-    return awaitActivityResult(ActivityResultContracts.RequestPermission(), key)
+    return try {
+        awaitActivityResult(ActivityResultContracts.RequestPermission(), key)
+    } catch (e: ActivityNotFoundException) {
+        Log.w("requestPermission", "No activity to handle permission request for $key", e)
+        false
+    }
 }
