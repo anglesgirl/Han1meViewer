@@ -51,8 +51,38 @@ jobs:
           HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN }}
           HA1_VERSION_SOURCE: 'ci'
 
+      - name: Submit clean-ech APK to Oracle smoke test
+        id: oracle_smoke
+        if: github.ref == 'refs/heads/clean-ech'
+        env:
+          APK_TEST_API_TOKEN: ${{ secrets.APK_TEST_API_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.APK_TEST_CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.APK_TEST_CF_ACCESS_CLIENT_SECRET }}
+        run: ./scripts/oracle-apk-smoke.sh
+
+      - name: Upload Oracle smoke-test evidence
+        if: always() && github.ref == 'refs/heads/clean-ech'
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-smoke-${{ github.sha }}
+          path: ${{ runner.temp }}/apk-test-evidence
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Fail the build if Oracle smoke test did not pass
+        if: always() && github.ref == 'refs/heads/clean-ech'
+        env:
+          ORACLE_TEST_RESULT: ${{ steps.oracle_smoke.outputs.result }}
+        run: |
+          if [[ "$ORACLE_TEST_RESULT" != 'passed' ]]; then
+            echo "::error::Oracle smoke test result: ${ORACLE_TEST_RESULT:-missing}"
+            exit 1
+          fi
+
       - name: Upload APK Zip
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-release-${{ github.sha }}
           path: app/build/outputs/apk/release/Han1meViewer-v*.apk
+          if-no-files-found: ignore
