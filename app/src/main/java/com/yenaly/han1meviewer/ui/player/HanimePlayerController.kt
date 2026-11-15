@@ -8,6 +8,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Log
 import android.view.Surface
+import androidx.media3.common.PlaybackException
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.ResolutionLinkMap
 import com.yenaly.han1meviewer.ui.player.HanimePlayerController.Companion.RESUME_THRESHOLD_MS
@@ -217,7 +218,7 @@ class HanimePlayerController(
         val quality = qualityLinks.getOrNull(_uiState.value.currentQualityIndex) ?: return
         requestAudioFocus()
         Log.i(TAG, "startPlayback: ${quality.first} -> ${quality.second}")
-        _uiState.update { it.copy(state = PlayerState.PREPARING) }
+        _uiState.update { it.copy(state = PlayerState.PREPARING, errorDetails = null) }
         reprepareKernel(positionMs = 0L)
     }
 
@@ -227,7 +228,7 @@ class HanimePlayerController(
     fun retry() {
         if (!_uiState.value.hasMedia) return
         requestAudioFocus()
-        _uiState.update { it.copy(state = PlayerState.PREPARING) }
+        _uiState.update { it.copy(state = PlayerState.PREPARING, errorDetails = null) }
         reprepareKernel(positionMs = 0L)
     }
 
@@ -238,7 +239,9 @@ class HanimePlayerController(
         if (!_uiState.value.hasMedia) return
         if (index == _uiState.value.currentQualityIndex) return
         val position = kernel.currentPositionMs
-        _uiState.update { it.copy(currentQualityIndex = index, state = PlayerState.PREPARING) }
+        _uiState.update {
+            it.copy(currentQualityIndex = index, state = PlayerState.PREPARING, errorDetails = null)
+        }
         Log.i(TAG, "switchQuality: ${_uiState.value.qualities.getOrNull(index)} @$position")
         reprepareKernel(positionMs = position)
     }
@@ -441,8 +444,9 @@ class HanimePlayerController(
     override fun onError(error: Throwable?) {
         stopTicker()
         abandonAudioFocus()
-        Log.e(TAG, "onError: $error")
-        _uiState.update { it.copy(state = PlayerState.ERROR) }
+        val details = formatPlaybackError(error)
+        Log.e(TAG, "onError: $details")
+        _uiState.update { it.copy(state = PlayerState.ERROR, errorDetails = details) }
     }
 
     /**
@@ -537,3 +541,40 @@ private val BUFFERING_STATES = setOf(
     PlayerState.PLAYING,
     PlayerState.PAUSED,
 )
+
+/** Build a useful, bounded diagnostic summary without exposing signed media URLs. */
+private fun formatPlaybackError(error: Throwable?): String {
+    if (error == null) return "No exception details were reported"
+
+    val chain = mutableListOf<Throwable>()
+    val seen = hashSetOf<Throwable>()
+    var current: Throwable? = error
+    while (current != null && seen.add(current) && chain.size < 5) {
+        chain += current
+        current = current.cause
+    }
+
+    val details = mutableListOf<String>()
+    chain.filterIsInstance<PlaybackException>().firstOrNull()?.let {
+        details += "Media3 ${it.errorCodeName} (${it.errorCode})"
+    }
+    chain.forEach { cause ->
+        val type = cause.javaClass.simpleName.ifBlank { cause.javaClass.name.substringAfterLast('.') }
+        val message = cause.localizedMessage
+            ?.let(::redactDiagnosticUrls)
+            ?.take(240)
+            ?.trim()
+        val line = if (message.isNullOrEmpty()) type else "$type: $message"
+        if (line !in details) details += line
+    }
+    return details.joinToString("\n").take(700)
+}
+
+private val DIAGNOSTIC_URL_REGEX = Regex("""https?://[^\s<>\"']+""", RegexOption.IGNORE_CASE)
+
+private fun redactDiagnosticUrls(message: String): String =
+    DIAGNOSTIC_URL_REGEX.replace(message) { match ->
+        val rawUrl = match.value
+        val authority = rawUrl.substringAfter("://").takeWhile { it !in "/?#),]}" }
+        "${rawUrl.substringBefore("://")}://$authority/[path and query redacted]"
+    }

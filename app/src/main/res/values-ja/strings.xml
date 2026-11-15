@@ -940,6 +940,7 @@ hanime1.me以外のドメインは、特定の時間帯にhanime1.meにリダイ
     <string name="gesture_volume">音量</string>
     <string name="gesture_progress">シーク</string>
     <string name="player_video_load_failed">動画の読み込みに失敗しました</string>
+    <string name="player_error_details">エラー詳細：%1$s</string>
     <string name="player_click_retry">タップして再試行</string>
     <string name="player_replay">再生し直す</string>
     <string name="not_wifi_tips">モバイルネットワークに接続しています。再生にはデータ通信が発生します</string>

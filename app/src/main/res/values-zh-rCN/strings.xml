@@ -946,6 +946,7 @@
     <string name="gesture_volume">音量</string>
     <string name="gesture_progress">进度</string>
     <string name="player_video_load_failed">视频加载失败</string>
+    <string name="player_error_details">错误详情：%1$s</string>
     <string name="player_click_retry">点击重试</string>
     <string name="player_replay">重新播放</string>
     <string name="not_wifi_tips">当前使用移动网络，继续播放将消耗流量</string>

@@ -942,6 +942,7 @@ Recommendations are as follows:\n
     <string name="gesture_volume">Volume</string>
     <string name="gesture_progress">Seek</string>
     <string name="player_video_load_failed">Failed to load video</string>
+    <string name="player_error_details">Error details: %1$s</string>
     <string name="player_click_retry">Tap to retry</string>
     <string name="player_replay">Replay</string>
     <string name="not_wifi_tips">You are on a mobile network. Streaming may use cellular data.</string>

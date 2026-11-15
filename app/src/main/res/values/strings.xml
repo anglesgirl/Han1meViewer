@@ -979,6 +979,7 @@
     <string name="gesture_volume">音量</string>
     <string name="gesture_progress">進度</string>
     <string name="player_video_load_failed">影片載入失敗</string>
+    <string name="player_error_details">錯誤詳情：%1$s</string>
     <string name="player_click_retry">點擊重試</string>
     <string name="player_replay">重播</string>
     <string name="not_wifi_tips">當前使用行動網路，繼續播放將消耗流量</string>

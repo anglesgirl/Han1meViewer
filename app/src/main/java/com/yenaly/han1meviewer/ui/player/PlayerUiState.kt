@@ -75,6 +75,9 @@ data class PlayerUiState(
 
     /** 是否已设置可用媒体（false 时中键点击提示无法获取链接）。 */
     val hasMedia: Boolean = false,
+
+    /** 最近一次播放错误的诊断摘要；URL 的路径和查询参数会在控制器中脱敏。 */
+    val errorDetails: String? = null,
 )
 
 /**

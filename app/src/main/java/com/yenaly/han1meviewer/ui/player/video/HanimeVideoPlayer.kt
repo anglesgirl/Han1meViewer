@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
@@ -55,6 +56,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -433,6 +436,7 @@ fun HanimeVideoPlayer(
         // 6. 中部控件（loading / 播放暂停）
         PlayerCenterArea(
             state = if (videoInfoLoading) PlayerState.PREPARING else uiState.state,
+            errorDetails = uiState.errorDetails,
             controlsVisible = controlsVisible,
             onPlayClick = {
                 when {
@@ -651,6 +655,7 @@ fun HanimeVideoPlayer(
 @Composable
 private fun PlayerCenterArea(
     state: PlayerState,
+    errorDetails: String?,
     controlsVisible: Boolean,
     onPlayClick: () -> Unit,
     onPauseClick: () -> Unit,
@@ -666,7 +671,7 @@ private fun PlayerCenterArea(
 
             // 出错重试
             PlayerState.ERROR -> {
-                RetryCard(onRetry = onRetry)
+                RetryCard(errorDetails = errorDetails, onRetry = onRetry)
             }
 
             // 暂停/完成/未开始：大播放键
@@ -720,7 +725,7 @@ private fun PlayerCenterArea(
  * 加载失败重试卡片。
  */
 @Composable
-private fun RetryCard(onRetry: () -> Unit) {
+private fun RetryCard(errorDetails: String?, onRetry: () -> Unit) {
     Card(shape = RoundedCornerShape(28.dp)) {
         Column(
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
@@ -730,6 +735,19 @@ private fun RetryCard(onRetry: () -> Unit) {
                 text = stringResource(R.string.player_video_load_failed),
                 style = MaterialTheme.typography.titleMedium,
             )
+            if (!errorDetails.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                SelectionContainer {
+                    Text(
+                        text = stringResource(R.string.player_error_details, errorDetails),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Start,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
             FilledTonalButton(onClick = onRetry) {
                 Icon(
