@@ -232,9 +232,10 @@ object ConscryptEch {
      * 包装 Conscrypt 的 SSLSocketFactory：返回 socket 前按 host 注入 ECHConfigList。
      * OkHttp 走的是 `createSocket(Socket, String, int, boolean)` 重载。
      *
-     * ECH is configured only from this socket's selected hostname HTTPS record. Core or
-     * previously ECH_REJECTED hosts fail closed without a valid config; other hosts use
-     * normal certificate-validated TLS when their own record has no usable ECHConfig.
+     * EchDoh selects the ECH source for this socket hostname: core Hanime hosts use the
+     * official Cloudflare live source; other hosts use their own HTTPS record. The socket's
+     * TLS hostname/SNI and certificate verification remain tied to the original request host.
+     * Core or previously ECH_REJECTED hosts fail closed without a valid config.
      */
     private class EchSocketFactory(private val delegate: SSLSocketFactory) : SSLSocketFactory() {
 
@@ -251,7 +252,7 @@ object ConscryptEch {
             if (cfg == null) {
                 clearConfiguredEchHost(host)
                 if (required) {
-                    throw IOException("ECH is required for host=$normalized, but its HTTPS record has no valid ECHConfigList")
+                    throw IOException("ECH is required for host=$normalized, but its selected ECH source has no valid ECHConfigList")
                 }
                 EchTrace.event("no target-host ECHConfig for host=$normalized; using verified HTTPS TLS")
                 return s
@@ -260,7 +261,7 @@ object ConscryptEch {
             markConfiguredEchHost(host)
             try {
                 Conscrypt.setEchConfigList(s, cfg)
-                EchTrace.event("validated target-host ECHConfig injected for host=$normalized (${cfg.size}B)")
+                EchTrace.event("validated ECHConfig injected for host=$normalized (${cfg.size}B)")
             } catch (t: Throwable) {
                 clearConfiguredEchHost(host)
                 if (required) throw IOException("setEchConfigList failed for required host=$normalized: ${t.message}", t)
@@ -303,7 +304,7 @@ class EchRetryInterceptor : Interceptor {
             if (!isEchRejected(t)) throw t
 
             ConscryptEch.markEchRequired(host)
-            EchTrace.event("ECH_REJECTED for host=$host; refresh its HTTPS record and retry ECH once")
+            EchTrace.event("ECH_REJECTED for host=$host; refresh its configured ECH source and retry ECH once")
             EchDoh.invalidateEch(host)
             return chain.proceed(request)
         }

@@ -5,7 +5,7 @@
 覆盖：
 
 - 生产 DoH 预设网关 URL 与 `172.64.229.69` bootstrap 配置；对真实 OkHttp DNS/connect 路径做离线 pin 断言，HTTPS 记录查询只发往固定 Gateway endpoint。
-- 每个 hostname 只接受其自身 type-65 Answer；缓存按 hostname 隔离并尊重记录 TTL，验证 owner/type、ECHConfigList framing、缺失记录、TTL=0 与按 host invalidation。
+- 核心 Hanime host 通过固定 Gateway/bootstrap 读取 `cloudflare-ech.com` 官方共享 ECH 活值，缓存遵守 HTTPS 记录 TTL；ECH_REJECTED 后失效该来源并可重新拉取。非核心 host 仍只接受其自身可达的 type-65 Answer，缓存按来源隔离；覆盖 CNAME owner/type、ECHConfigList framing、缺失记录、TTL=0 与按 host invalidation。
 - 核心站点域维持静态受保护策略；普通媒体 CDN 可以查询自身 ECH，但没有有效配置时不被误标成必需 ECH。
 - 核心与非核心域名均走配置 resolver；解析失败时 `EchDns` 抛 `UnknownHostException`，不调用提供的 system-DNS fallback。
 - 两个媒体 CDN 域名的自定义 IP 绕过 resolver。
@@ -19,4 +19,4 @@
 
 若依赖 jar 位于非默认位置，可设 `ECH_DOH_REFERENCE_DIR`（其下应有 `lib/okhttp.jar`、`lib/okio.jar`、`lib/doh.jar`、`lib/json.jar`），Kotlin Gradle compiler 可用 `KOTLIN_GRADLE_LIB` 指定。脚本依赖缺失时会尝试下载固定版本依赖；所有测试 HTTP 响应都在本地生成。
 
-期望末行：`PASS: 50 assertions; ...`。这是隔离 JVM 回归，不是 Android instrumentation 或真实网络连通性测试。
+期望末行：`PASS: 53 assertions; ...`。这是隔离 JVM 回归，不是 Android instrumentation 或真实网络连通性测试。

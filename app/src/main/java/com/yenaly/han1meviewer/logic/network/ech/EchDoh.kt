@@ -26,9 +26,10 @@ import java.util.concurrent.TimeUnit
  * 为什么还要自己发一次查询：`DnsOverHttps` 只做 A/AAAA，而 ECH 配置在 **HTTPS(65)** 记录里，
  * 所以这里用同一个 bootstrap 客户端发 JSON 查询（`application/dns-json`）并解析 `ech=`。
  *
- * 只使用所请求 hostname 自身的 HTTPS(65) 记录。核心 Hanime host 与被服务器 ECH_REJECTED
- * 证实需要 ECH 的 host 在配置不可用时 fail-closed；其他 host 无有效配置时使用普通、仍验证
- * 证书和 hostname 的 HTTPS TLS，不切到 HTTP，也不关闭证书校验。
+ * 核心 Hanime host 使用 Cloudflare 官方共享 ECH 活源 `cloudflare-ech.com`：CNAME 别名里
+ * 手动发布的 ECH 值可能比 Cloudflare 密钥轮换更旧，重新读取别名仍可能拿到同一把失效密钥。
+ * 其他 hostname 仍只使用自身可达的 HTTPS(65) 记录。查询统一走用户已配置的 DoH Gateway
+ * 与 bootstrap IP，不旁路解析器。核心 host 在配置不可用时 fail-closed；不切 HTTP 或关闭证书校验。
  */
 object EchDoh {
 
@@ -36,6 +37,7 @@ object EchDoh {
 
     private const val MAX_TTL_MS = 3_600_000L
     private const val MAX_CNAME_DEPTH = 16
+    private const val LIVE_SOURCE_HOST = "cloudflare-ech.com"
     private val DNS_LABEL = Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
     private val bootstrapClient: OkHttpClient by lazy {
@@ -113,31 +115,32 @@ object EchDoh {
     private val echCache = ConcurrentHashMap<String, EchEntry>()
 
     /**
-     * 只取 [host] 自身 HTTPS(65) Answer 中的 ECHConfigList；不跨 hostname 借用配置。
-     * 返回的 wire 已含 RFC 9460 的 2 字节列表长度前缀，可直接交给 Conscrypt。
+     * 核心 Hanime host 共用官方 ECH live source；其他 host 使用自身 HTTPS(65)/可达 CNAME 记录。
+     * 缓存以 DNS Answer 的 TTL 为上限，wire 已含 RFC 9460 的 2 字节列表长度前缀，可直接交给 Conscrypt。
      */
     fun echConfigList(host: String): ByteArray? {
         val name = normalizeDnsName(host)
         if (!EchHosts.shouldTryEch(name)) return null
+        val sourceName = if (EchHosts.isCoreDomain(name)) LIVE_SOURCE_HOST else name
         val now = System.currentTimeMillis()
-        echCache[name]?.let {
+        echCache[sourceName]?.let {
             if (it.expireAt > now) return it.wire
-            echCache.remove(name, it)
+            echCache.remove(sourceName, it)
         }
 
         val hit = try {
-            fetchConfig(echDohUrl(), name)
+            fetchConfig(echDohUrl(), sourceName)
         } catch (t: Throwable) {
-            Log.w(TAG, "ECH HTTPS-record query failed for host=$name: ${t.javaClass.simpleName}")
+            Log.w(TAG, "ECH HTTPS-record query failed for host=$name source=$sourceName: ${t.javaClass.simpleName}")
             null
         }
         if (hit == null) {
-            EchTrace.event("no valid ECHConfig in HTTPS record for host=$name")
+            EchTrace.event("no valid ECHConfig in HTTPS record for host=$name source=$sourceName")
             return null
         }
         val (wire, ttlMs) = hit
-        if (ttlMs > 0L) echCache[name] = EchEntry(wire, now + ttlMs)
-        EchTrace.event("ECHConfig loaded for host=$name (${wire.size}B, ttl=${ttlMs}ms)")
+        if (ttlMs > 0L) echCache[sourceName] = EchEntry(wire, now + ttlMs)
+        EchTrace.event("ECHConfig loaded for host=$name source=$sourceName (${wire.size}B, ttl=${ttlMs}ms)")
         return wire
     }
 
@@ -221,13 +224,13 @@ object EchDoh {
         return configCount > 0 && offset == wire.size
     }
 
-    /**
-     * ECH 被服务器拒绝（密钥轮换 / 配置失效）后清缓存，下次重新从 DoH 取。
-     */
+    /** ECH_REJECTED 后丢弃对应 source cache；核心 Hanime 会从官方 live source 重新取值。 */
     fun invalidateEch(host: String) {
         val name = normalizeDnsName(host)
-        echCache.remove(name)
+        val sourceName = if (EchHosts.isCoreDomain(name)) LIVE_SOURCE_HOST else name
+        echCache.remove(sourceName)
         ConscryptEch.clearConfiguredEchHost(name)
+        EchTrace.event("invalidated ECH cache for host=$name source=$sourceName")
     }
 
     private fun normalizeDnsName(host: String): String = host.trim().trimEnd('.').lowercase(java.util.Locale.ROOT)

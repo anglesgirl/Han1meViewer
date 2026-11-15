@@ -40,6 +40,7 @@ private val queryNames = mutableListOf<String>()
 private val unexpectedRequests = mutableListOf<String>()
 private val wireA = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x01, 0x11)
 private val wireB = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x01, 0x22)
+private val wireOfficial = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x01, 0x33)
 private val malformedWire = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x00, 0x01)
 
 private data class DnsAnswer(val owner: String, val type: Int, val ttl: Int, val data: String)
@@ -77,6 +78,7 @@ private fun responseFor(name: String?): String {
             DnsAnswer("hanime1.me", 5, 60, "x.xn--pn1aul.eu.org."),
             DnsAnswer("x.xn--pn1aul.eu.org", 65, 90, echData(wireA)),
         )
+        "cloudflare-ech.com" -> answer(name, 65, 300, wireOfficial)
         "different.example" -> answer(name.orEmpty(), 65, 120, wireB)
         "foreign.example" -> answer("other.example", 65, 90, wireA)
         "wrong-type.example" -> answer(name.orEmpty(), 1, 90, wireA)
@@ -194,29 +196,33 @@ private fun gatewayHostScopedConfigTest() {
     gatewayRequests.set(0)
     queryNames.clear()
     val wire = EchDoh.echConfigList("HANIME1.ME.")
-    expect(wire != null && wire.contentEquals(wireA), "CNAME target HTTPS answer did not yield the queried host's ECH config")
+    expect(wire != null && wire.contentEquals(wireOfficial), "core Hanime host did not use the official Cloudflare ECH source")
     expect(gatewayRequests.get() == 1, "expected one query to the user gateway, got ${gatewayRequests.get()}")
-    expect(queryNames == listOf("hanime1.me:HTTPS"), "query did not use the normalized target host: $queryNames")
+    expect(queryNames == listOf("cloudflare-ech.com:HTTPS"), "core Hanime lookup did not query the official source: $queryNames")
     expect(unexpectedRequests.isEmpty(), "ECH query escaped gateway-only route: $unexpectedRequests")
+
+    val subdomain = EchDoh.echConfigList("api.hanime1.me")
+    expect(subdomain != null && subdomain.contentEquals(wireOfficial), "core Hanime subdomain did not share the official ECH value")
+    expect(gatewayRequests.get() == 1, "core Hanime subdomain did not share the official source cache")
 
     val other = EchDoh.echConfigList("different.example")
     expect(other != null && other.contentEquals(wireB), "second host reused another hostname's ECH config")
     expect(gatewayRequests.get() == 2, "each uncached host must query its own HTTPS record")
 
     val cache = field(EchDoh, "echCache").get(EchDoh) as Map<*, *>
-    expect(cache.keys.containsAll(listOf("hanime1.me", "different.example")), "ECH cache was not keyed by normalized hostname: ${cache.keys}")
-    val entry = cache["hanime1.me"] ?: error("target host ECH entry absent from cache")
+    expect(cache.keys.containsAll(listOf("cloudflare-ech.com", "different.example")), "ECH cache keys did not reflect the official/core and host-specific sources: ${cache.keys}")
+    val entry = cache["cloudflare-ech.com"] ?: error("official ECH entry absent from cache")
     val expiresAt = field(entry, "expireAt").getLong(entry)
     val remaining = expiresAt - System.currentTimeMillis()
-    expect(remaining in 55_000L..60_000L, "ECH cache did not use the minimum CNAME/HTTPS TTL: ${remaining}ms")
+    expect(remaining in 295_000L..300_000L, "official ECH cache did not respect the HTTPS record TTL: ${remaining}ms")
     val fromCache = EchDoh.echConfigList("hanime1.me")
-    expect(fromCache != null && fromCache.contentEquals(wire!!), "same-host cached ECH value changed")
+    expect(fromCache != null && fromCache.contentEquals(wireOfficial), "core Hanime cached official ECH value changed")
     expect(gatewayRequests.get() == 2, "same-host cache lookup unexpectedly queried DoH")
 
     EchDoh.invalidateEch("HANIME1.ME.")
     val afterInvalidation = EchDoh.echConfigList("hanime1.me")
-    expect(afterInvalidation != null && afterInvalidation.contentEquals(wire), "ECH lookup failed after target-host invalidation")
-    expect(gatewayRequests.get() == 3, "target-host invalidation did not trigger a fresh query")
+    expect(afterInvalidation != null && afterInvalidation.contentEquals(wireOfficial), "official ECH lookup failed after ECH_REJECTED invalidation")
+    expect(gatewayRequests.get() == 3 && queryNames.last() == "cloudflare-ech.com:HTTPS", "core invalidation did not refresh the official source")
     expect(EchDoh.echConfigList("different.example")?.contentEquals(wireB) == true, "invalidating one host evicted another host's config")
     expect(gatewayRequests.get() == 3, "unrelated host cache was not preserved")
 }
@@ -341,5 +347,5 @@ fun main() {
     configuredResolverAndFailClosedTest()
     customCdnIpBypassTest()
     hdnsUsesConfiguredGatewayTest()
-    println("PASS: ${assertions.get()} assertions; host-scoped HTTPS ECH records/cache, required-host classification, DoH bootstrap/fail-closed routing, CDN IP bypass, and HDns configured-gateway path")
+    println("PASS: ${assertions.get()} assertions; official core Hanime ECH source, host-scoped non-core records/cache, required-host classification, DoH bootstrap/fail-closed routing, CDN IP bypass, and HDns configured-gateway path")
 }

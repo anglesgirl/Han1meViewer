@@ -138,7 +138,8 @@ object HyWebViewHelper {
             }
         }
 
-        // 按实际 target-host HTTPS record 尝试 ECH；ECH_REJECTED 会在 ConscryptEch 中升级为 required。
+        // 按 EchDoh 为目标 host 选择的 source 尝试 ECH；核心 Hanime 使用官方共享活值，TLS SNI 仍为原 host。
+        // ECH_REJECTED 会在 ConscryptEch 中升级为 required，并刷新相应 source 后重试。
         var lastError: Exception? = null
         var echRequired = ConscryptEch.isEchRequired(host)
         repeat(2) { attempt ->
