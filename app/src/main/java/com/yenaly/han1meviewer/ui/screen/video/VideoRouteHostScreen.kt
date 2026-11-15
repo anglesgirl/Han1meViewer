@@ -907,32 +907,49 @@ private class VideoRouteShell(private val activity: MainActivity) {
         fullscreenParent = parent
         fullscreenParentIndex = parent.indexOfChild(videoPlayerHost)
         fullscreenLayoutParams = videoPlayerHost.layoutParams
-        parent.removeView(videoPlayerHost)
-        playerComposeView.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
-        videoPlayerHost.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
-        decorRoot.addView(videoPlayerHost, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         isFullscreen = true
+        // 2026-11-16 Android 16 实测：DecorView 的 onMeasure 遍历 children 途中
+        // 若 removeView/addView 改了数组，会读到 null 子 View 直接 NPE 闪退
+        // （堆栈只有 framework 帧、无 App 帧）。把搬运推迟到当前 layout
+        // 遍历结束后再执行；isFullscreen 立即翻转，重复进出时 posted 任务
+        // 靠它鉴别是否过期。
+        decorRoot.post {
+            if (!isFullscreen) return@post
+            val currentParent = videoPlayerHost.parent as? ViewGroup ?: return@post
+            if (currentParent === decorRoot) return@post
+            currentParent.removeView(videoPlayerHost)
+            playerComposeView.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+            videoPlayerHost.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+            decorRoot.addView(videoPlayerHost, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
         return true
     }
 
     fun exitFullscreen() {
         if (!isFullscreen) return
-        (videoPlayerHost.parent as? ViewGroup)?.removeView(videoPlayerHost)
+        isFullscreen = false
         val parent = fullscreenParent
         val params = fullscreenLayoutParams ?: videoPlayerHostParams
-        if (parent != null) {
-            val index = fullscreenParentIndex.coerceIn(0, parent.childCount)
-            parent.addView(videoPlayerHost, index, params)
-        } else {
-            videoPlayerHost.layoutParams = videoPlayerHostParams
-            collapsingToolbarLayout.addView(videoPlayerHost)
+        val index = fullscreenParentIndex
+        val hostParent = videoPlayerHost.parent as? ViewGroup ?: return
+        // 同上：搬运推迟到 layout 遍历结束后；先把待恢复的 parent/params/index
+        // 快照到局部变量，避免 posted 任务执行前又被一次 enterFullscreen 覆盖。
+        hostParent.post {
+            if (isFullscreen) return@post
+            (videoPlayerHost.parent as? ViewGroup)?.removeView(videoPlayerHost)
+            if (parent != null) {
+                val safeIndex = index.coerceIn(0, parent.childCount)
+                parent.addView(videoPlayerHost, safeIndex, params)
+            } else {
+                videoPlayerHost.layoutParams = videoPlayerHostParams
+                collapsingToolbarLayout.addView(videoPlayerHost)
+            }
+            playerComposeView.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, requestedPlayerHeight)
+            videoPlayerHost.requestLayout()
+            fullscreenParent = null
+            fullscreenLayoutParams = null
+            fullscreenParentIndex = -1
         }
-        playerComposeView.layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, requestedPlayerHeight)
-        videoPlayerHost.requestLayout()
-        fullscreenParent = null
-        fullscreenLayoutParams = null
-        fullscreenParentIndex = -1
-        isFullscreen = false
     }
 
     /** 把 tabs 宿主拆出 CoordinatorLayout，交给 Compose 分栏布局挂载到右栏。 */
