@@ -2,6 +2,7 @@ package com.yenaly.han1meviewer.logic.network.ech
 
 import android.util.Base64
 import android.util.Log
+import org.json.JSONObject
 import com.yenaly.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
 import com.yenaly.han1meviewer.HANIME_MEDIA_CDN_HOST
 import com.yenaly.han1meviewer.Preferences
@@ -25,25 +26,15 @@ import java.util.concurrent.TimeUnit
  * 为什么还要自己发一次查询：`DnsOverHttps` 只做 A/AAAA，而 ECH 配置在 **HTTPS(65)** 记录里，
  * 所以这里用同一个 bootstrap 客户端发 JSON 查询（`application/dns-json`）并解析 `ech=`。
  *
- * 失败一律 **fail-closed**：拿不到 ECH 配置时上层宁可不连，绝不回落明文 SNI。
+ * 只使用所请求 hostname 自身的 HTTPS(65) 记录。核心 Hanime host 与被服务器 ECH_REJECTED
+ * 证实需要 ECH 的 host 在配置不可用时 fail-closed；其他 host 无有效配置时使用普通、仍验证
+ * 证书和 hostname 的 HTTPS TLS，不切到 HTTP，也不关闭证书校验。
  */
 object EchDoh {
 
     private const val TAG = "HY-ECH-DOH"
 
-    /** 失败冷却：避免每个请求都去打一次注定失败的 DoH */
-    private const val FAIL_COOLDOWN_MS = 30_000L
-    private const val MIN_TTL_MS = 60_000L
     private const val MAX_TTL_MS = 3_600_000L
-
-    /**
-     * 配置的唯一「活源」：CF 官方的 ECH 域名。
-     *
-     * 手写/注入到别处的 `ech=` 记录一旦过期，**再拉还是那份旧的**（记录没变、里面的密钥轮换掉了），
-     * 拿它去握手只会被服务器拒绝（Conscrypt 抛 EchRejected）。所以受保护域名一律先取这份实时配置：
-     * 跨 zone 注入实测可行，内层 SNI 仍是目标域名，SNI 不外泄。
-     */
-    private const val LIVE_SOURCE_HOST = "cloudflare-ech.com"
 
     private val bootstrapClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -63,12 +54,8 @@ object EchDoh {
      * 用户在设置页换预设/自定义 URL 后，这里按 URL 变化重建 —— 否则还打旧网关。
      */
     /**
-     * ECH 活值的取数地址：**与「普通 DNS 解析开关」解耦**。
-     *
-     * 关掉 DoH 只应停掉普通域名解析（那种场景下地址由内置 Hosts / 系统 DNS 提供），
-     * 但 ECH 配置仍必须能取到 —— 否则受保护域 fail-closed，整个 App 直接没网
-     * （用户实测：启用 Host + 关 DoH → 全 App 无网络）。
-     * 这里始终可用：用户自定义 DoH（若有）→ 内置网关（其引导 IP 写死，不需要 DNS）。
+     * Target-host HTTPS/SVCB lookup endpoint, kept independent from the ordinary DNS toggle.
+     * Uses the app's existing DoH URL and bootstrap configuration without changing either.
      */
     private fun echDohUrl(): String {
         val custom = Preferences.dohCustomUrl.trim()
@@ -96,7 +83,7 @@ object EchDoh {
                     .includeIPv6(true)
                     .build()
             }.getOrElse {
-                Log.w(TAG, "DoH 解析器构建失败（url=$url）：${it.message}")
+                Log.w(TAG, "DoH resolver build failed (${it.javaClass.simpleName})")
                 return null
             }
             cachedResolverUrl = url
@@ -113,6 +100,7 @@ object EchDoh {
             dnsCache.clear()
         }
         echCache.clear()
+        ConscryptEch.clearConfiguredEchHosts()
         ConscryptEch.clearEchUnavailable()
     }
 
@@ -122,294 +110,101 @@ object EchDoh {
 
     private val echCache = ConcurrentHashMap<String, EchEntry>()
 
-    /** 被服务器拒过的域名：改用「它自己的记录」优先，别一直拿同一份撞。 */
-    private val ownFirst = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
-
     /**
-     * 取 ECH 活值的候选：**国内三家的纯 IP 端点**（实测三家均返回与 CF 官方逐字节相同的活值）。
-     * 纯 IP = 不查 DNS、不被污染；证书直接对 IP 生效。
-     * **不发 Host 头**：阿里带 Host 会直接失败（实测 http=000）。
-     * **只发 wire**：三家都不支持 JSON（阿里/360 回 400、腾讯 UrlParameterError）。
-     * 策略：随机挑一家试，失败换下一家（不同时打、不重复打同一家）。
-     */
-    private val ECH_DOH_IPS = listOf(
-        "223.5.5.5", "223.6.6.6",           // 阿里
-        "1.12.12.12", "120.53.53.53",       // 腾讯
-        "101.198.193.29", "101.198.192.33", // 360
-    )
-
-    private const val ECH_ONE_TIMEOUT_MS = 2500L
-    /** ECH 缓存下限：记录 TTL 只有 ~198s，但公钥实测稳定数天；被轮换时握手被拒会走 invalidateEch 自愈。 */
-    private const val ECH_CACHE_MIN_MS = 60 * 60 * 1000L
-    private const val ECH_CACHE_MAX_MS = 5 * 60 * 60 * 1000L
-
-    /** 网关兜底的超时：比纯 IP 那三家宽松些（走域名 + 可能的国际线路）。 */
-    private const val ECH_GATEWAY_TIMEOUT_MS = 4000L
-
-    /**
-     * 取 ECH 活值：先国内三家纯 IP，全部失败再走**自家网关**兜底。
-     *
-     * 为什么需要兜底：三家的公共解析 IP 在某些移动网会被"动手脚"（实证：同一网络里
-     * Chrome 走自家网关能正常打开页面，App 却不行 —— 被干扰的正好是那几个公共解析地址）。
-     * 这时三家全失败，只剩自家网关这条路。
-     */
-    private fun fetchLiveEch(): Pair<ByteArray, Long>? {
-        // 只走用户 DoH 网关，不用国内 DNS
-        val result = fetchLiveEchViaGateway()
-        if (result != null) {
-            EchTrace.event("live ech via gateway: ${result.first.size} bytes, ttl=${result.second}ms")
-            return result
-        }
-        EchTrace.event("live ech: 网关获取失败")
-        return null
-    }
-
-    /**
-     * 兜底源：自有 CF 网关 DoH。
-     *
-     * **必须「域名 URL + 钉住 CF 边缘 IP」**，不能像三家那样纯 IP 直连 ——
-     * CF Gateway 靠 SNI 分流到对应账户，直连 IP 会被拒（这正是它与三家纯 IP 端点最大的区别，
-     * 「不发 Host 头」那套在这里不适用）。钉的 IP 取 [DohConfig.bootstrapIps]（NodePool 的
-     * `172.64.229.x` 段），既不查 DNS 也就绕开了污染。
-     */
-    private fun fetchLiveEchViaGateway(): Pair<ByteArray, Long>? {
-        val url = echDohUrl()
-        val pins = DohConfig.bootstrapIps()
-            .mapNotNull { runCatching { InetAddress.getByName(it) }.getOrNull() }
-        if (pins.isEmpty()) {
-            Log.w(TAG, "gateway fallback skipped: 没有可用的引导 IP")
-            return null
-        }
-        val pinnedDns = object : Dns {
-            override fun lookup(hostname: String): List<InetAddress> = pins
-        }
-        val client = bootstrapClient.newBuilder()
-            .dns(pinnedDns)
-            .connectTimeout(ECH_GATEWAY_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .readTimeout(ECH_GATEWAY_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .callTimeout(ECH_GATEWAY_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .build()
-        return runCatching {
-            val b64 = android.util.Base64.encodeToString(
-                buildQuery(LIVE_SOURCE_HOST), android.util.Base64.NO_WRAP or android.util.Base64.URL_SAFE,
-            ).trimEnd('=')
-            val req = Request.Builder()
-                .url("$url?dns=$b64")
-                .header("accept", "application/dns-message")
-                .build()
-            val wire = client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    Log.i(TAG, "live ech via gateway: http=${resp.code}")
-                    null
-                } else {
-                    resp.body?.bytes()
-                }
-            } ?: return null
-            parseSvcbEch(wire)
-        }.getOrElse {
-            Log.i(TAG, "live ech via gateway failed: ${it.message}")
-            null
-        }
-    }
-
-    /** 建 DNS 查询（type 65 = HTTPS）。 */
-    private fun buildQuery(name: String): ByteArray {
-        val out = java.io.ByteArrayOutputStream()
-        out.write(byteArrayOf(0x12, 0x34, 0x01, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
-        name.split('.').forEach { lb -> out.write(lb.length); out.write(lb.toByteArray()) }
-        out.write(0)
-        out.write(byteArrayOf(0x00, 65, 0x00, 0x01))
-        return out.toByteArray()
-    }
-
-    /** 纯 IP + wire 的 DoH 查询（绝不加 Host 头）。 */
-    private fun queryEchWire(ip: String, name: String): Pair<ByteArray, Long>? {
-        val b64 = android.util.Base64.encodeToString(
-            buildQuery(name), android.util.Base64.NO_WRAP or android.util.Base64.URL_SAFE,
-        ).trimEnd('=')
-        val req = Request.Builder()
-            .url("https://$ip/dns-query?dns=$b64")
-            .header("accept", "application/dns-message")
-            .build()
-        val client = bootstrapClient.newBuilder()
-            .connectTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-            .readTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-            .callTimeout(ECH_ONE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-            .build()
-        val wire = client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) return null
-            resp.body?.bytes() ?: return null
-        }
-        return parseSvcbEch(wire)
-    }
-
-    /** 解析应答里的 type=65 记录，走 SvcParams 取 key=5（ech）；返回值**含 2 字节长度前缀**。 */
-    private fun parseSvcbEch(msg: ByteArray): Pair<ByteArray, Long>? {
-        if (msg.size < 12) return null
-        var i = 12
-        while (i < msg.size && msg[i].toInt() != 0) i += (msg[i].toInt() and 0xFF) + 1
-        i += 5
-        val ancount = ((msg[6].toInt() and 0xFF) shl 8) or (msg[7].toInt() and 0xFF)
-        for (n in 0 until ancount) {
-            if (i + 12 > msg.size) return null
-            if ((msg[i].toInt() and 0xC0) == 0xC0) i += 2
-            else { while (i < msg.size && msg[i].toInt() != 0) i += (msg[i].toInt() and 0xFF) + 1; i += 1 }
-            val type = ((msg[i].toInt() and 0xFF) shl 8) or (msg[i + 1].toInt() and 0xFF)
-            val ttl = (((msg[i + 4].toInt() and 0xFF).toLong() shl 24) or
-                ((msg[i + 5].toInt() and 0xFF).toLong() shl 16) or
-                ((msg[i + 6].toInt() and 0xFF).toLong() shl 8) or
-                (msg[i + 7].toInt() and 0xFF).toLong())
-            val rdlen = ((msg[i + 8].toInt() and 0xFF) shl 8) or (msg[i + 9].toInt() and 0xFF)
-            val rdata = i + 10
-            if (type == 65 && rdlen > 4 && rdata + rdlen <= msg.size) {
-                var j = rdata + 2
-                while (j < rdata + rdlen && msg[j].toInt() != 0) j += (msg[j].toInt() and 0xFF) + 1
-                j += 1
-                while (j + 4 <= rdata + rdlen) {
-                    val key = ((msg[j].toInt() and 0xFF) shl 8) or (msg[j + 1].toInt() and 0xFF)
-                    val len = ((msg[j + 2].toInt() and 0xFF) shl 8) or (msg[j + 3].toInt() and 0xFF)
-                    if (key == 5 && len > 0) {
-                        val ech = msg.copyOfRange(j + 4, j + 4 + len)
-                        val ttlMs = (ttl * 1000).coerceIn(ECH_CACHE_MIN_MS, ECH_CACHE_MAX_MS - 1) + 1
-                        return ech to ttlMs
-                    }
-                    j += 4 + len
-                }
-            }
-            i = rdata + rdlen
-        }
-        return null
-    }
-
-    /** 域名 → 是否解析到 CF 边缘段。缓存判定结果，避免每次建连都重复解析。 */
-    private val cfHostCache = ConcurrentHashMap<String, Boolean>()
-
-    /** IP → 是否属于 Cloudflare。按地址缓存，避免每个新连接都查一次 ASN。 */
-    private val asnCache = ConcurrentHashMap<String, Boolean>()
-
-    private const val CLOUDFLARE_ASN = 13335
-
-    /**
-     * 该 IP 是否属于 Cloudflare（**AS13335**）—— 决定要不要给它注入 ECH。
-     *
-     * 为什么用 ASN 而不是官方 IP 段表：段表要手工维护、而且**会漏** ——
-     * 新增段、以及 CF「中国网络」的国内段都不在 `ips-v4` 里，漏判会让本该受保护的
-     * 域名退回明文。ASN 归属由 IRRd 权威数据决定，一次查询覆盖它的全部段。
-     * 实测：CF 站点（含 cloudflare-ech.com、bgm.tv、hanime1.me、javchu.com）全是 13335，
-     * 而 CDN77 是 60068、站方自建 VPS 是 30058、Google 是 15169。
-     *
-     * 查询走 Team Cymru 的 DNS 反查（纯 DNS，与我们自己的 DoH 同一条路，
-     * 手机上不需要任何额外依赖）：
-     *
-     *     <反转 IP>.origin.asn.cymru.com   TXT
-     *     → "13335 | 104.26.0.0/20 | US | arin | 2014-03-28"
-     *
-     * IPv6 不参与判定（Cymru 的 v6 反查是另一套 nibble 形式），由调用方只看 IPv4。
-     */
-    private fun isCloudflareIp(ip: InetAddress): Boolean {
-        if (ip.address.size != 4) return false
-        val addr = ip.hostAddress ?: return false
-        asnCache[addr]?.let { return it }
-        val rev = addr.split(".").reversed().joinToString(".") + ".origin.asn.cymru.com"
-        val body = try {
-            query(echDohUrl(), rev, "TXT")
-        } catch (t: Throwable) {
-            null
-        }
-        val asn = body?.let { Regex(""""(\d{2,6})\s*\|""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
-        // 查不到（网络或服务异常）时按「是 CF」处理：宁可白试一次，也不能误伤受保护域名
-        if (asn == null) return true
-        val cf = asn == CLOUDFLARE_ASN
-        asnCache[addr] = cf
-        return cf
-    }
-
-    /**
-     * 该域名是否解析到 Cloudflare 边缘段 —— **决定要不要注入 ECH**。
-     *
-     * ⚠️ 解析失败时**返回 true（不拦）**：宁可白注入一次，也不能因为一次解析失败
-     * 就让本该受保护的域名退回明文 —— 核心域名是 fail-closed 的，误判等于断网。
-     */
-    private fun isCloudflareHost(host: String): Boolean {
-        cfHostCache[host]?.let { return it }
-        val addrs = try {
-            resolve(host)
-        } catch (t: Throwable) {
-            emptyList()
-        }
-        if (addrs.isEmpty()) return true
-        // 只看 IPv4 的归属：Cymru 反查是 IPv4 形式，域名只要有一个 IPv4 判为 CF 就算 CF。
-        // 只有 IPv6 的域名（罕见）不拦 —— 宁可白试一次，不能误伤。
-        val v4 = addrs.filter { it.address.size == 4 }
-        val cf = if (v4.isEmpty()) true else v4.any { isCloudflareIp(it) }
-        cfHostCache[host] = cf
-        if (cf) {
-            EchTrace.event("CF 域名（AS13335），注入 ECH: $host")
-        } else {
-            EchTrace.event(
-                "非 CF 域名，跳过 ECH（提前判定）: $host -> " +
-                    addrs.joinToString(", ") { it.hostAddress ?: "?" }
-            )
-        }
-        return cf
-    }
-
-    /**
-     * 取 ECHConfigList（RFC 9460 wire 格式，**已含 2 字节长度前缀**，可直接喂 Conscrypt）。
-     *
-     * 规格（用户定义）：
-     * - 只从 cloudflare-ech.com 经 DoH 取，缓存 4 小时
-     * - 所有域名都用这一份配置尝试 ECH
-     * - 失败由调用方标记不支持（内存，app 重启清空）
-     *
-     * @return null 表示 DoH 拿不到 —— 调用方据此处理
+     * 只取 [host] 自身 HTTPS(65) Answer 中的 ECHConfigList；不跨 hostname 借用配置。
+     * 返回的 wire 已含 RFC 9460 的 2 字节列表长度前缀，可直接交给 Conscrypt。
      */
     fun echConfigList(host: String): ByteArray? {
+        val name = normalizeDnsName(host)
+        if (!EchHosts.shouldTryEch(name)) return null
         val now = System.currentTimeMillis()
-        // 只缓存一份：cloudflare-ech.com 的配置，4 小时过期
-        echCache[LIVE_SOURCE_HOST]?.let { if (it.expireAt > now) return it.wire }
+        echCache[name]?.let {
+            if (it.expireAt > now) return it.wire
+            echCache.remove(name, it)
+        }
 
-        val url = echDohUrl()
         val hit = try {
-            // 活值优先：国内三家纯 IP（随机一家、失败换下一家）；全失败才回退自有网关的 JSON 链路
-            fetchLiveEch() ?: fetchConfig(url, LIVE_SOURCE_HOST, now)
+            fetchConfig(echDohUrl(), name)
         } catch (t: Throwable) {
-            Log.w(TAG, "ech query failed: ${t.message}")
+            Log.w(TAG, "ECH HTTPS-record query failed for host=$name: ${t.javaClass.simpleName}")
             null
         }
         if (hit == null) {
-            EchTrace.event("no ech config from $LIVE_SOURCE_HOST")
+            EchTrace.event("no valid ECHConfig in HTTPS record for host=$name")
             return null
         }
-        val (wire, _) = hit
-        // 固定 4 小时缓存（用户规格），不用 DNS TTL
-        echCache[LIVE_SOURCE_HOST] = EchEntry(wire, now + 4 * 60 * 60 * 1000L)
-        EchTrace.event("ech config: ${wire.size} bytes（源=$LIVE_SOURCE_HOST，缓存4h）")
+        val (wire, ttlMs) = hit
+        if (ttlMs > 0L) echCache[name] = EchEntry(wire, now + ttlMs)
+        EchTrace.event("ECHConfig loaded for host=$name (${wire.size}B, ttl=${ttlMs}ms)")
         return wire
     }
 
-    /** 查某个域名的 HTTPS(65) 记录并解出配置：wire（含 2 字节长度前缀）+ 缓存时长。 */
-    private fun fetchConfig(url: String, name: String, now: Long): Pair<ByteArray, Long>? {
+    /** Parse only matching HTTPS(65) answer records; TTL is never extended beyond the RR TTL. */
+    private fun fetchConfig(url: String, name: String): Pair<ByteArray, Long>? {
         val body = query(url, name, "HTTPS") ?: return null
-        val b64 = Regex("ech=([A-Za-z0-9+/=]+)").find(body)?.groupValues?.get(1)
-        if (b64 == null) {
-            Log.i(TAG, "no ech config in record of $name")
-            return null
+        val answers = runCatching { JSONObject(body).optJSONArray("Answer") }.getOrNull()
+            ?: return null
+        for (index in 0 until answers.length()) {
+            val answer = answers.optJSONObject(index) ?: continue
+            if (answer.optInt("type", -1) != 65) continue
+            if (normalizeDnsName(answer.optString("name", "")) != name) continue
+
+            val b64 = extractEchParam(answer.optString("data", "")) ?: continue
+            val flags = if ('-' in b64 || '_' in b64) Base64.URL_SAFE else Base64.DEFAULT
+            val wire = runCatching { Base64.decode(b64, flags) }.getOrNull()
+            if (wire == null || !isValidEchConfigList(wire)) {
+                Log.w(TAG, "invalid ECHConfigList in HTTPS record for host=$name")
+                continue
+            }
+
+            val ttlSeconds = answer.optLong("TTL", 0L)
+            val ttlMs = if (ttlSeconds > 0L) {
+                minOf(ttlSeconds, MAX_TTL_MS / 1000L) * 1000L
+            } else {
+                0L
+            }
+            return wire to ttlMs
         }
-        val ttl = Regex("\"TTL\"\\s*:\\s*(\\d+)").findAll(body)
-            .mapNotNull { it.groupValues[1].toLongOrNull() }
-            .minOrNull() ?: 300L
-        // ⚠️ 解码结果就是完整 wire（含长度前缀），不要再自己加一层
-        val wire = Base64.decode(b64, Base64.DEFAULT)
-        return wire to (ttl * 1000).coerceIn(MIN_TTL_MS, MAX_TTL_MS)
+        return null
+    }
+
+    private fun extractEchParam(data: String): String? {
+        val match = Regex(
+            """(?:^|\s)ech=(?:"([A-Za-z0-9+/_=-]+)"|([A-Za-z0-9+/_=-]+))(?=\s|$)""",
+            RegexOption.IGNORE_CASE,
+        ).find(data) ?: return null
+        return (match.groupValues[1].ifEmpty { match.groupValues[2] }).takeIf { it.isNotEmpty() }
+    }
+
+    /** Check the outer ECHConfigList vector and every version/length-delimited ECHConfig. */
+    private fun isValidEchConfigList(wire: ByteArray): Boolean {
+        if (wire.size < 7) return false
+        val listLength = ((wire[0].toInt() and 0xff) shl 8) or (wire[1].toInt() and 0xff)
+        if (listLength != wire.size - 2) return false
+
+        var offset = 2
+        var configCount = 0
+        while (offset < wire.size) {
+            if (wire.size - offset < 4) return false
+            val configLength = ((wire[offset + 2].toInt() and 0xff) shl 8) or
+                (wire[offset + 3].toInt() and 0xff)
+            if (configLength == 0 || configLength > wire.size - offset - 4) return false
+            offset += 4 + configLength
+            configCount++
+        }
+        return configCount > 0 && offset == wire.size
     }
 
     /**
      * ECH 被服务器拒绝（密钥轮换 / 配置失效）后清缓存，下次重新从 DoH 取。
      */
     fun invalidateEch(host: String) {
-        echCache.remove(LIVE_SOURCE_HOST)
+        val name = normalizeDnsName(host)
+        echCache.remove(name)
+        ConscryptEch.clearConfiguredEchHost(name)
     }
+
+    private fun normalizeDnsName(host: String): String = host.trim().trimEnd('.').lowercase(java.util.Locale.ROOT)
 
     // ---------------- DNS ----------------
 
@@ -474,8 +269,12 @@ object EchDoh {
         } else {
             bootstrapClient
         }
+        val requestUrl = dohUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("name", host)
+            .addQueryParameter("type", type)
+            .build()
         val req = Request.Builder()
-            .url("$dohUrl?name=$host&type=$type")
+            .url(requestUrl)
             .header("Accept", "application/dns-json")
             .build()
         client.newCall(req).execute().use { resp ->

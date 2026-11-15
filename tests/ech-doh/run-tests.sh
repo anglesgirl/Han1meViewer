@@ -27,7 +27,7 @@ fetch_or_use() {
     printf '%s' "$DEPS/$filename"
   else
     echo "Downloading test dependency $filename" >&2
-    curl --fail --location --silent --show-error "$url" -o "$DEPS/$filename.tmp"
+    curl --fail --location --silent --show-error --connect-timeout 20 --max-time 120 "$url" -o "$DEPS/$filename.tmp"
     mv -f "$DEPS/$filename.tmp" "$DEPS/$filename"
     printf '%s' "$DEPS/$filename"
   fi
@@ -35,10 +35,11 @@ fetch_or_use() {
 OKHTTP="$(fetch_or_use okhttp.jar https://repo1.maven.org/maven2/com/squareup/okhttp3/okhttp-jvm/5.4.0/okhttp-jvm-5.4.0.jar)"
 OKIO="$(fetch_or_use okio.jar https://repo1.maven.org/maven2/com/squareup/okio/okio-jvm/3.16.0/okio-jvm-3.16.0.jar)"
 DOH="$(fetch_or_use doh.jar https://repo1.maven.org/maven2/com/squareup/okhttp3/okhttp-dnsoverhttps/5.4.0/okhttp-dnsoverhttps-5.4.0.jar)"
+JSON="$(fetch_or_use json.jar https://repo.maven.apache.org/maven2/org/json/json/20240303/json-20240303.jar)"
 STDLIB="$(find "$GRADLE_LIB" -maxdepth 1 -name 'kotlin-stdlib-*.jar' ! -name '*sources*' | sort -V | tail -n 1)"
 ANNOTATIONS="$(find "$GRADLE_LIB" -maxdepth 1 -name 'annotations-*.jar' ! -name '*sources*' | sort -V | tail -n 1)"
 [[ -s "$STDLIB" && -s "$ANNOTATIONS" ]] || { echo "Could not locate Kotlin stdlib/annotations in $GRADLE_LIB" >&2; exit 2; }
-CP="$STDLIB:$ANNOTATIONS:$OKHTTP:$OKIO:$DOH"
+CP="$STDLIB:$ANNOTATIONS:$OKHTTP:$OKIO:$DOH:$JSON"
 
 rm -rf "$OUT" && mkdir -p "$OUT"
 java -cp "$GRADLE_LIB/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \

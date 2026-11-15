@@ -7,6 +7,7 @@ import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HDns
 import com.yenaly.han1meviewer.logic.network.ech.EchDns
 import com.yenaly.han1meviewer.logic.network.ech.EchDoh
+import com.yenaly.han1meviewer.logic.network.ech.EchHosts
 import okhttp3.Dns
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -32,24 +33,42 @@ private fun expect(value: Boolean, message: String) {
     check(value) { message }
 }
 
-private object Wire {
-    fun qname(q: ByteArray): String {
-        var p = 12
-        val labels = mutableListOf<String>()
-        while (p < q.size && q[p].toInt() != 0) {
-            val size = q[p++].toInt() and 0xff
-            labels += String(q, p, size, Charsets.US_ASCII)
-            p += size
-        }
-        return labels.joinToString(".")
-    }
-}
-
 private val gatewayUrl = "https://82sew1c85i.cloudflare-gateway.com/dns-query"
 private val expectedBootstrapIp = "172.64.229.69"
-private val eCHWireFixture = File(testDir, "fixtures/223.5.5.5-cloudflare-ech.com.bin")
 private val gatewayRequests = AtomicInteger()
+private val queryNames = mutableListOf<String>()
 private val unexpectedRequests = mutableListOf<String>()
+private val wireA = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x01, 0x11)
+private val wireB = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x01, 0x22)
+private val malformedWire = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x00, 0x01)
+
+private fun dnsAnswerJson(owner: String, type: Int, ttl: Int, data: String): String {
+    val answer = org.json.JSONObject()
+        .put("name", owner)
+        .put("type", type)
+        .put("TTL", ttl)
+        .put("data", data)
+    return org.json.JSONObject()
+        .put("Status", 0)
+        .put("Answer", org.json.JSONArray().put(answer))
+        .toString()
+}
+
+private fun responseFor(name: String?): String {
+    val answer: (String, Int, Int, ByteArray) -> String = { owner, type, ttl, wire ->
+        val b64 = java.util.Base64.getEncoder().encodeToString(wire)
+        dnsAnswerJson(owner, type, ttl, "1 . alpn=\"h2\" ech=\"$b64\"")
+    }
+    return when (name) {
+        "hanime1.me" -> answer(name.orEmpty(), 65, 90, wireA)
+        "different.example" -> answer(name.orEmpty(), 65, 120, wireB)
+        "foreign.example" -> answer("other.example", 65, 90, wireA)
+        "wrong-type.example" -> answer(name.orEmpty(), 1, 90, wireA)
+        "malformed.example" -> answer(name.orEmpty(), 65, 90, malformedWire)
+        "zero-ttl.example" -> answer(name.orEmpty(), 65, 0, wireA)
+        else -> org.json.JSONObject().put("Status", 0).put("Answer", org.json.JSONArray()).toString()
+    }
+}
 
 private fun mockBootstrapClient(): OkHttpClient = OkHttpClient.Builder()
     .dns(object : Dns {
@@ -58,24 +77,26 @@ private fun mockBootstrapClient(): OkHttpClient = OkHttpClient.Builder()
     })
     .addInterceptor(Interceptor { chain ->
         val req = chain.request()
-        val host = req.url.host
-        val dns = req.url.queryParameter("dns")?.let { java.util.Base64.getUrlDecoder().decode(it) }
-        val qname = dns?.let(Wire::qname)
-        if (req.url.scheme == "https" && host == "82sew1c85i.cloudflare-gateway.com" &&
-            req.url.encodedPath == "/dns-query" && qname == "cloudflare-ech.com" &&
-            req.header("accept") == "application/dns-message"
+        val name = req.url.queryParameter("name")
+        val type = req.url.queryParameter("type")
+        if (req.url.scheme == "https" && req.url.host == "82sew1c85i.cloudflare-gateway.com" &&
+            req.url.encodedPath == "/dns-query" && name != null && type == "HTTPS" &&
+            req.header("accept") == "application/dns-json"
         ) {
             gatewayRequests.incrementAndGet()
+            queryNames += "$name:$type"
         } else {
-            unexpectedRequests += "${req.url} qname=$qname accept=${req.header("accept")}"
+            unexpectedRequests += "${req.url} name=$name type=$type accept=${req.header("accept")}"
         }
-        val body = eCHWireFixture.readBytes()
+        val body = responseFor(name)
         Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
-            .header("content-type", "application/dns-message")
-            .body(ResponseBody.create("application/dns-message".toMediaType(), body)).build()
+            .header("content-type", "application/dns-json")
+            .body(ResponseBody.create("application/dns-json".toMediaType(), body)).build()
     }).build()
 
-private fun pinProbeClient(connectAddresses: MutableList<String>, requestHosts: MutableList<String>): OkHttpClient {
+private fun pinProbeClient(
+    connectAddresses: MutableList<String>, requestHosts: MutableList<String>, requestQueries: MutableList<String>,
+): OkHttpClient {
     val sockets = object : SocketFactory() {
         private fun probeSocket() = object : Socket() {
             override fun connect(endpoint: SocketAddress, timeout: Int) {
@@ -94,7 +115,9 @@ private fun pinProbeClient(connectAddresses: MutableList<String>, requestHosts: 
         .proxy(Proxy.NO_PROXY)
         .socketFactory(sockets)
         .addInterceptor(Interceptor { chain ->
-            requestHosts += chain.request().url.host
+            val url = chain.request().url
+            requestHosts += url.host
+            requestQueries += "${url.queryParameter("name")}:${url.queryParameter("type")}"
             chain.proceed(chain.request())
         })
         .build()
@@ -118,7 +141,7 @@ private fun configurePreferences() {
     Preferences.mediaCdnNodeIps = emptyList()
 }
 
-private fun gatewayWireCacheAndConfigTest() {
+private fun gatewayHostScopedConfigTest() {
     configurePreferences()
     expect(DohConfig.selectedPreset().url == gatewayUrl, "production DohConfig preset URL changed unexpectedly")
     expect(DohConfig.bootstrapIps() == listOf(expectedBootstrapIp), "production DoH bootstrap should be exactly $expectedBootstrapIp; got ${DohConfig.bootstrapIps()}")
@@ -128,10 +151,9 @@ private fun gatewayWireCacheAndConfigTest() {
     expect(DohConfig.resolveUrl() == gatewayUrl && DohConfig.probeUrl() == gatewayUrl, "editing bootstrap must not change the DoH endpoint")
     Preferences.dohBootstrapIps = ""
     expect(DohConfig.bootstrapIps() == listOf(expectedBootstrapIp), "clearing bootstrap must restore the built-in default")
-    check(eCHWireFixture.isFile) { "missing local wire fixture: $eCHWireFixture" }
-
     EchDoh.invalidateAll()
     gatewayRequests.set(0)
+    queryNames.clear()
     unexpectedRequests.clear()
 
     // Let the real OkHttp DNS path run, but replace connect() with a local throwing probe.
@@ -139,32 +161,71 @@ private fun gatewayWireCacheAndConfigTest() {
     // while never opening a socket to the Internet.
     val connectAddresses = mutableListOf<String>()
     val requestHosts = mutableListOf<String>()
-    setLazy(EchDoh, "bootstrapClient", pinProbeClient(connectAddresses, requestHosts))
+    val requestQueries = mutableListOf<String>()
+    setLazy(EchDoh, "bootstrapClient", pinProbeClient(connectAddresses, requestHosts, requestQueries))
     expect(EchDoh.echConfigList("pin-probe.example") == null, "offline pin probe should stop before receiving a response")
     expect(requestHosts.isNotEmpty() && requestHosts.all { it == "82sew1c85i.cloudflare-gateway.com" }, "pin probe did not request only the configured gateway domain: $requestHosts")
+    expect(requestQueries == listOf("pin-probe.example:HTTPS"), "pin probe did not query the requested host's HTTPS record: $requestQueries")
     expect(connectAddresses.isNotEmpty() && connectAddresses.all { it == expectedBootstrapIp }, "gateway DNS bootstrap did not pin every socket attempt to $expectedBootstrapIp: $connectAddresses")
 
     EchDoh.invalidateAll()
     setLazy(EchDoh, "bootstrapClient", mockBootstrapClient())
 
-    val wire = EchDoh.echConfigList("hanime1.me")
-    expect(wire != null && wire.isNotEmpty(), "captured DNS wire response did not yield an ECH config")
+    gatewayRequests.set(0)
+    queryNames.clear()
+    val wire = EchDoh.echConfigList("HANIME1.ME.")
+    expect(wire != null && wire.contentEquals(wireA), "target HTTPS answer did not yield its own ECH config")
     expect(gatewayRequests.get() == 1, "expected one query to the user gateway, got ${gatewayRequests.get()}")
+    expect(queryNames == listOf("hanime1.me:HTTPS"), "query did not use the normalized target host: $queryNames")
     expect(unexpectedRequests.isEmpty(), "ECH query escaped gateway-only route: $unexpectedRequests")
 
+    val other = EchDoh.echConfigList("different.example")
+    expect(other != null && other.contentEquals(wireB), "second host reused another hostname's ECH config")
+    expect(gatewayRequests.get() == 2, "each uncached host must query its own HTTPS record")
+
     val cache = field(EchDoh, "echCache").get(EchDoh) as Map<*, *>
-    val entry = cache["cloudflare-ech.com"] ?: error("ECH entry absent from cache")
+    expect(cache.keys.containsAll(listOf("hanime1.me", "different.example")), "ECH cache was not keyed by normalized hostname: ${cache.keys}")
+    val entry = cache["hanime1.me"] ?: error("target host ECH entry absent from cache")
     val expiresAt = field(entry, "expireAt").getLong(entry)
     val remaining = expiresAt - System.currentTimeMillis()
-    expect(remaining in 14_390_000L..14_400_000L, "ECH cache TTL was not four hours: ${remaining}ms")
-    val fromCache = EchDoh.echConfigList("different.example")
-    expect(fromCache != null && fromCache.contentEquals(wire!!), "cached ECH wire value changed across requested hostnames")
-    expect(gatewayRequests.get() == 1, "second ECH lookup should be served from the 4-hour cache")
+    expect(remaining in 85_000L..90_000L, "ECH cache did not honor the selected RR's 90-second TTL: ${remaining}ms")
+    val fromCache = EchDoh.echConfigList("hanime1.me")
+    expect(fromCache != null && fromCache.contentEquals(wire!!), "same-host cached ECH value changed")
+    expect(gatewayRequests.get() == 2, "same-host cache lookup unexpectedly queried DoH")
 
-    EchDoh.invalidateEch("hanime1.me")
+    EchDoh.invalidateEch("HANIME1.ME.")
     val afterInvalidation = EchDoh.echConfigList("hanime1.me")
-    expect(afterInvalidation != null && afterInvalidation.contentEquals(wire), "ECH lookup failed after explicit invalidation")
-    expect(gatewayRequests.get() == 2, "explicit invalidateEch did not trigger a fresh gateway request")
+    expect(afterInvalidation != null && afterInvalidation.contentEquals(wire), "ECH lookup failed after target-host invalidation")
+    expect(gatewayRequests.get() == 3, "target-host invalidation did not trigger a fresh query")
+    expect(EchDoh.echConfigList("different.example")?.contentEquals(wireB) == true, "invalidating one host evicted another host's config")
+    expect(gatewayRequests.get() == 3, "unrelated host cache was not preserved")
+}
+
+private fun targetConfigValidationTest() {
+    configurePreferences()
+    EchDoh.invalidateAll()
+    setLazy(EchDoh, "bootstrapClient", mockBootstrapClient())
+    gatewayRequests.set(0)
+    queryNames.clear()
+
+    expect(EchHosts.isCoreDomain("hanime1.me"), "Hanime core host lost its required-domain classification")
+    expect(EchHosts.isProtected("hanime1.me"), "core host should remain statically protected")
+    expect(!EchHosts.isProtected(HANIME_MEDIA_CDN_HOST), "media CDN without ECH policy must not be REQUIRED")
+    expect(EchHosts.shouldTryEch(HANIME_MEDIA_CDN_HOST), "media hostname should remain eligible for its own ECH lookup")
+
+    expect(EchDoh.echConfigList(HANIME_MEDIA_CDN_HOST) == null, "media host without its own ECH record borrowed another hostname's config")
+    val afterFirstMissing = gatewayRequests.get()
+    expect(EchDoh.echConfigList(HANIME_MEDIA_CDN_HOST) == null, "host without ECH record unexpectedly gained a config")
+    expect(gatewayRequests.get() == afterFirstMissing + 1, "no-config answer was cached beyond its DNS TTL")
+    expect(EchDoh.echConfigList("foreign.example") == null, "ECH answer with a different owner name was accepted")
+    expect(EchDoh.echConfigList("wrong-type.example") == null, "non-HTTPS DNS answer was accepted as ECH")
+    expect(EchDoh.echConfigList("malformed.example") == null, "malformed ECHConfigList framing was accepted")
+
+    val zeroTtl = EchDoh.echConfigList("zero-ttl.example")
+    expect(zeroTtl != null && zeroTtl.contentEquals(wireA), "valid zero-TTL ECH record was not usable for the current lookup")
+    val beforeZeroTtlRepeat = gatewayRequests.get()
+    expect(EchDoh.echConfigList("zero-ttl.example")?.contentEquals(wireA) == true, "zero-TTL record failed on repeat lookup")
+    expect(gatewayRequests.get() == beforeZeroTtlRepeat + 1, "zero-TTL ECH record was cached")
 }
 
 private fun configuredResolverAndFailClosedTest() {
@@ -254,9 +315,10 @@ private fun hdnsUsesConfiguredGatewayTest() {
 }
 
 fun main() {
-    gatewayWireCacheAndConfigTest()
+    gatewayHostScopedConfigTest()
+    targetConfigValidationTest()
     configuredResolverAndFailClosedTest()
     customCdnIpBypassTest()
     hdnsUsesConfiguredGatewayTest()
-    println("PASS: ${assertions.get()} assertions; gateway-only ECH wire/cache, all-domain resolver/fail-closed, CDN IP bypass, and HDns configured-gateway path")
+    println("PASS: ${assertions.get()} assertions; host-scoped HTTPS ECH records/cache, required-host classification, DoH bootstrap/fail-closed routing, CDN IP bypass, and HDns configured-gateway path")
 }

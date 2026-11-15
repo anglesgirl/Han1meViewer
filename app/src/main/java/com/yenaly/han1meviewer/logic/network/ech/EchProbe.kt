@@ -221,7 +221,7 @@ object EchProbe {
     ): EchHandshakeResult {
         val t0 = System.currentTimeMillis()
         return try {
-            val factory = ConscryptEch.testSocketFactoryWithEch(echWire)
+            val factory = ConscryptEch.testSocketFactoryWithEch(sniHost, echWire)
                 ?: return EchHandshakeResult(false, "ECH 工厂不可用", 0)
             (factory.createSocket(ip, 443) as SSLSocket).use { sock ->
                 sock.soTimeout = 15_000

@@ -209,7 +209,8 @@ class ExoPlayerKernel(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            Log.e(TAG, "onPlayerError: $error")
+            val causeType = error.cause?.javaClass?.simpleName ?: error.javaClass.simpleName
+            Log.e(TAG, "onPlayerError: code=${error.errorCode}, cause=$causeType")
             mainHandler.post { listener?.onError(error) }
         }
 
@@ -254,7 +255,8 @@ class ExoPlayerKernel(
         pendingSurface = surfaceToKeep
         listener = listenerToKeep
         released = false
-        Log.i(TAG, "prepare: ${request.url}")
+        val requestHost = runCatching { Uri.parse(request.url).host }.getOrNull() ?: "unknown"
+        Log.i(TAG, "prepare: media host=$requestHost")
         val thread = HandlerThread("ExoPlayerKernel").also { it.start() }
         val handler = Handler(thread.looper)
         mediaHandlerThread = thread
@@ -315,7 +317,7 @@ class ExoPlayerKernel(
             DefaultHttpDataSource.Factory()
         }.setDefaultRequestProperties(request.headers)
         val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
-        Log.i(TAG, "URL Link = $url")
+        Log.i(TAG, "media source host=${host ?: "unknown"}")
         val mediaSource = if (url.contains(".m3u8")) {
             HlsMediaSource.Factory(dataSourceFactory)
                 .createMediaSource(MediaItem.fromUri(url))

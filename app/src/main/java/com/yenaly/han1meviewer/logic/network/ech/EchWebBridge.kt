@@ -76,14 +76,22 @@ class EchWebBridge(
                 ?: "https://hanime1.me/"
             base.trimEnd('/') + "/" + url.trimStart('/')
         }
-        Log.i(TAG, "postLogin $absoluteUrl bodyLen=${body.length} " +
+        val requestHost = runCatching { java.net.URI(absoluteUrl).host }.getOrNull() ?: "unknown"
+        Log.i(TAG, "postLogin host=$requestHost bodyLen=${body.length} " +
             "hasToken=${body.contains("_token")}")
         Thread {
             try {
                 doPostLogin(absoluteUrl, body)
             } catch (e: Exception) {
-                Log.e(TAG, "postLogin failed: ${e.message}")
-                webView.post { runCatching { webView.loadUrl(absoluteUrl) } }
+                val required = requestHost != "unknown" && ConscryptEch.isEchRequired(requestHost)
+                Log.e(TAG, "postLogin failed for host=$requestHost (${e.javaClass.simpleName})")
+                webView.post {
+                    if (required) {
+                        Toast.makeText(webView.context, "ECH 连接失败，已阻止普通 TLS 回退。", Toast.LENGTH_LONG).show()
+                    } else {
+                        runCatching { webView.loadUrl(absoluteUrl) }
+                    }
+                }
             }
         }.start()
     }
@@ -117,19 +125,18 @@ class EchWebBridge(
         val reqBody = body.toRequestBody("application/x-www-form-urlencoded".toMediaTypeOrNull())
         val request = builder.post(reqBody).build()
 
-        // 先尝试 ECH，失败则回退到直连（仍走 DoH，不走系统 DNS）
-        // 核心域名不回退明文（fail-closed，明文必被 RST）
+        // 先尝试 ECH；仅未被判定为 ECH-required 的 host 才能用普通、仍校验证书的 TLS 重试。
         val resp = try {
-            Log.d(TAG, "postLogin trying ECH: $absoluteUrl")
+            Log.d(TAG, "postLogin trying ECH: host=${host ?: "unknown"}")
             EchHttp.loginClient.newCall(request).execute()
         } catch (e: Exception) {
-            val isCore = host?.let { EchHosts.isCoreDomain(it) } ?: false
-            if (isCore) {
-                Log.w(TAG, "postLogin ECH failed for core domain, fail-closed: ${e.message}")
+            val mustUseEch = host?.let { ConscryptEch.isEchRequired(it) } ?: false
+            if (mustUseEch) {
+                Log.w(TAG, "postLogin ECH failed for required host=${host ?: "unknown"}; fail-closed (${e.javaClass.simpleName})")
                 throw e
             }
-            Log.w(TAG, "postLogin ECH failed, fallback to direct: ${e.message}")
-            // 回退：普通 OkHttpClient（无 ECH，但走 DoH）
+            Log.w(TAG, "postLogin ECH failed for host=${host ?: "unknown"}; retrying verified TLS (${e.javaClass.simpleName})")
+            // 回退：普通 OkHttpClient（无 ECH，但走 DoH 且保留系统证书/hostname 校验）
             val fallbackClient = okhttp3.OkHttpClient.Builder()
                 .dns(EchDns())
                 .cookieJar(okhttp3.CookieJar.NO_COOKIES)
@@ -137,7 +144,7 @@ class EchWebBridge(
                 .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
                 .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                 .build()
-            // 记录不支持（内存，app 重启清空）
+            // 仅记录本次请求使用了普通 TLS fallback；不抑制后续按 hostname 的 ECH lookup。
             if (host != null) {
                 ConscryptEch.markEchUnavailable(host)
             }
@@ -149,7 +156,7 @@ class EchWebBridge(
         var hasLoginCookie = false
         resp.use {
             code = it.code
-            Log.i(TAG, "postLogin <- ${it.code} $absoluteUrl")
+            Log.i(TAG, "postLogin <- ${it.code} host=${host ?: "unknown"}")
             it.headers("Set-Cookie").forEach { raw ->
                 var fixed = raw
                 fixed = fixed.replace(Regex("(?i);\\s*Domain=[^;]+"), "")
@@ -166,7 +173,9 @@ class EchWebBridge(
 
         // 双保险：从 CookieManager 复核
         val finalCookie = runCatching { cm.getCookie(absoluteUrl) }.getOrNull().orEmpty()
-        Log.i(TAG, "postLogin done: location=$location cookieLen=${finalCookie.length}")
+        val locationHost = location?.let { runCatching { android.net.Uri.parse(it).host }.getOrNull() }
+        val safeLocationHost = locationHost ?: host ?: "unknown"
+        Log.i(TAG, "postLogin done: locationHost=$safeLocationHost cookieLen=${finalCookie.length}")
 
         webView.post {
             try {
@@ -187,12 +196,12 @@ class EchWebBridge(
                     finalCookie.isNotEmpty()
                 if (loginOk && callback != null) {
                     // 成功：直接回调，不 loadUrl，省掉等 ECH 加载跳转页的几秒
-                    Log.i(TAG, "login success -> callback (skip loadUrl): location=$location")
+                    Log.i(TAG, "login success -> callback (skip loadUrl): locationHost=$safeLocationHost")
                     callback.onLoginSuccess(finalCookie)
                 } else {
                     // 失败或无回调：保留诊断 Toast + 加载目标页
                     // 不打印 body 内容（可能含密码），只打印是否携带 _token
-                    val msg = "POST $code → ${location ?: "(无跳转)"} " +
+                    val msg = "POST $code → $safeLocationHost " +
                         "cookie:${finalCookie.length} loginCk:$hasLoginCookie " +
                         "token:${body.contains("_token")}"
                     Toast.makeText(webView.context, msg, Toast.LENGTH_LONG).show()
@@ -200,7 +209,7 @@ class EchWebBridge(
                     webView.loadUrl(target)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "postLogin loadUrl failed: ${e.message}")
+                Log.e(TAG, "postLogin loadUrl failed (${e.javaClass.simpleName})")
             }
         }
     }

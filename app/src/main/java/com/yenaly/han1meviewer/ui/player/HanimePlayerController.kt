@@ -217,7 +217,8 @@ class HanimePlayerController(
     private fun startPlayback() {
         val quality = qualityLinks.getOrNull(_uiState.value.currentQualityIndex) ?: return
         requestAudioFocus()
-        Log.i(TAG, "startPlayback: ${quality.first} -> ${quality.second}")
+        val mediaHost = runCatching { android.net.Uri.parse(quality.second).host }.getOrNull() ?: "unknown"
+        Log.i(TAG, "startPlayback: ${quality.first} host=$mediaHost")
         _uiState.update { it.copy(state = PlayerState.PREPARING, errorDetails = null) }
         reprepareKernel(positionMs = 0L)
     }

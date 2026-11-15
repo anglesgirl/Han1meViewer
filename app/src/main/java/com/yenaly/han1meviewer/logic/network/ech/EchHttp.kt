@@ -37,8 +37,8 @@ fun OkHttpClient.Builder.echTransport(
     // ⓪ 按域名封锁的 CDN → 改写到同一 CDN 的备用域名（零成本绕封锁，见 CdnHostRewriter）。
     //    必须排在 ECH 之前：后续链路要用的是改写后的 URL。
     .addInterceptor(CdnHostRewriter())
-    // ① TCP+ECH；ECH 被服务器拒绝时：普通域名标记后转明文重试，
-    //     核心域名清 ECH 缓存用新配置重试（不降级，明文必被 RST）
+    // ① TCP+ECH；仅使用改写后目标 hostname 自身的有效 HTTPS ECHConfig。
+    //     ECH_REJECTED 时清该 host 配置、fresh 查询并 ECH 重试一次，不转普通 TLS。
     .addInterceptor(EchRetryInterceptor())
 
 /** 共享的 ECH OkHttp 客户端 */

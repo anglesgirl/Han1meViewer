@@ -7,5 +7,8 @@ object EchTrace {
 
 object ConscryptEch {
     @JvmField var clearCalls: Int = 0
+    @JvmField val clearedHosts: MutableList<String> = mutableListOf()
     @JvmStatic fun clearEchUnavailable() { clearCalls++ }
+    @JvmStatic fun clearConfiguredEchHosts() { clearedHosts.clear() }
+    @JvmStatic fun clearConfiguredEchHost(host: String) { clearedHosts += host }
 }

@@ -21,12 +21,48 @@ import java.util.concurrent.TimeUnit
  * 3. POST 交给 JS 桥（EchWebBridge）：shouldInterceptRequest 拿不到 POST body
  * 4. Cookie 全部由 WebView 的 CookieManager 管理，域名是真实的，无需改写
  *
- * ECH 策略：所有 HTTPS 域名都尝试 ECH（ConscryptEch 内部标记不支持的跳过），
- * 失败则经 directClient 直连（仍走 DoH）。永不交回 WebView 用系统 DNS。
+ * ECH 策略：仅使用目标 hostname 自身的 ECHConfig；ECH-required host 失败时不做普通 TLS
+ * 回退。其他 host 可在 ECH 不可用时使用经 DoH 的普通 TLS，但永不交回 WebView 系统 DNS。
  */
 object HyWebViewHelper {
 
     private const val TAG = "HyWebViewHelper"
+
+    private fun hostOf(url: String): String =
+        runCatching { java.net.URI(url).host }.getOrNull() ?: "unknown"
+
+    private fun safeErrorSummary(error: Throwable?): String {
+        val raw = generateSequence(error) { it.cause }
+            .mapNotNull { it.message?.takeIf { message -> message.isNotBlank() } }
+            .firstOrNull() ?: error?.javaClass?.simpleName ?: "unknown"
+        val redacted = raw
+            .replace(Regex("""https?://[^\s"'<>]+"""), "<URL redacted>")
+            .replace(Regex("""[?&][^\s"'<>]+"""), "?<query redacted>")
+            .take(180)
+        return redacted.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    }
+
+    private fun echRequiredFailureResponse(error: Throwable?): WebResourceResponse {
+        val details = safeErrorSummary(error)
+        val page = "<!DOCTYPE html><html><body><h3>连接失败</h3>" +
+            "<p>该主机要求 ECH；ECH 请求失败（$details）。请稍后重试。</p></body></html>"
+        return WebResourceResponse(
+            "text/html", "utf-8", 502, "Bad Gateway",
+            mapOf("Cache-Control" to "no-store"),
+            ByteArrayInputStream(page.toByteArray()),
+        )
+    }
+
+    private fun networkFailureResponse(error: Throwable?): WebResourceResponse {
+        val details = safeErrorSummary(error)
+        val page = "<!DOCTYPE html><html><body><h3>连接失败</h3>" +
+            "<p>请求失败（$details）。请稍后重试。</p></body></html>"
+        return WebResourceResponse(
+            "text/html", "utf-8", 502, "Bad Gateway",
+            mapOf("Cache-Control" to "no-store"),
+            ByteArrayInputStream(page.toByteArray()),
+        )
+    }
 
     /** 经 Conscrypt ECH 的客户端：不跟随重定向（手动处理），不管 Cookie（CookieManager 管） */
     private val echClient: OkHttpClient by lazy {
@@ -44,7 +80,7 @@ object HyWebViewHelper {
             .build()
     }
 
-    /** 直连客户端：走 DoH 拿 IP，但不做 ECH（用于 ECH 失败时的回退） */
+    /** 普通 TLS 客户端：走 DoH 解析并保留证书校验，仅用于非 ECH-required host。 */
     private val directClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .dns(EchDns())
@@ -70,8 +106,8 @@ object HyWebViewHelper {
     /**
      * shouldInterceptRequest 唯一入口。
      * 只拦截 GET（POST 返回 null 交给 JS 桥）。
-     * 所有 HTTPS 请求都经 OkHttp+DoH 处理（永不交回 WebView 用系统 DNS）：
-     * 先尝试 ECH，失败则直连（仍走 DoH 拿 IP）。
+     * HTTPS 请求经 OkHttp+DoH 处理；ECH-required host 失败时 fail-closed，其他 host
+     * 仅在 ECH 不可用时使用证书校验仍开启的普通 TLS。网络失败始终返回错误页，不回退系统 DNS。
      */
     fun intercept(request: WebResourceRequest): WebResourceResponse? {
         val url = request.url?.toString() ?: return null
@@ -80,26 +116,31 @@ object HyWebViewHelper {
 
         // POST 交给 JS 桥：shouldInterceptRequest 拿不到 POST body
         if (method == "POST") {
-            Log.d(TAG, "POST passthrough to JS bridge: $url")
+            Log.d(TAG, "POST passthrough to JS bridge: host=$host")
             return null
         }
 
         // 只处理 HTTPS（HTTP 无需 ECH，也不走 DoH，直接放行）
         if (!url.startsWith("https://", ignoreCase = true)) return null
 
-        // 非 GET 方法（HEAD/PUT/DELETE 等）：走 directClient（DoH，不做 ECH）
+        // 非 GET 方法（HEAD/PUT/DELETE 等）：仅非 required host 走 verified directClient（DoH）。
         if (method != "GET") {
-            Log.d(TAG, "non-GET $method via directClient (DoH): $url")
+            if (ConscryptEch.isEchRequired(host)) {
+                Log.w(TAG, "non-GET blocked from direct TLS for ECH-required host=$host")
+                return echRequiredFailureResponse(null)
+            }
+            Log.d(TAG, "non-GET $method via directClient (DoH): host=$host")
             return try {
                 doGetDirect(url, request)?.let { toWebResourceResponse(url, it) }
             } catch (e: Exception) {
-                Log.e(TAG, "direct $method failed: $url: ${e.message}")
-                null
+                Log.e(TAG, "direct $method failed for host=$host (${e.javaClass.simpleName})")
+                networkFailureResponse(e)
             }
         }
 
-        // 尝试 ECH（ConscryptEch 内部有内存标记：失败过的域名不再尝试，app 重启清空）
+        // 按实际 target-host HTTPS record 尝试 ECH；ECH_REJECTED 会在 ConscryptEch 中升级为 required。
         var lastError: Exception? = null
+        var echRequired = ConscryptEch.isEchRequired(host)
         repeat(2) { attempt ->
             var fetchUrl = url
             var redirects = 0
@@ -115,10 +156,11 @@ object HyWebViewHelper {
                         val next = resolveUrl(fetchUrl, loc)
                         val nextHost = runCatching { java.net.URI(next).host }.getOrNull()
                         if (nextHost == null || !isSameOrSubdomain(nextHost, host)) {
-                            Log.d(TAG, "cross-site redirect, fallback to direct: $next")
+                            Log.d(TAG, "cross-site redirect, stop ECH fetch: host=${hostOf(next)}")
                             resp.close()
                             break
                         }
+                        echRequired = echRequired || ConscryptEch.isEchRequired(nextHost)
                         resp.close()
                         fetchUrl = next
                         redirects++
@@ -128,28 +170,29 @@ object HyWebViewHelper {
                 }
             } catch (e: Exception) {
                 lastError = e
-                Log.w(TAG, "ECH GET attempt ${attempt + 1}/2 failed: $url: ${e.message}")
-                EchTrace.event("ECH失败 $host: ${e.javaClass.simpleName}: ${e.message?.take(100)}")
+                val failedHost = hostOf(fetchUrl)
+                echRequired = echRequired || ConscryptEch.isEchRequired(failedHost)
+                Log.w(TAG, "ECH GET attempt ${attempt + 1}/2 failed: host=$failedHost (${e.javaClass.simpleName})")
+                EchTrace.event("ECH failure host=$failedHost: ${e.javaClass.simpleName}")
                 if (attempt == 0) {
                     try { Thread.sleep(700) } catch (_: Exception) {}
                 }
             }
         }
-        Log.w(TAG, "ECH failed, will try direct via DoH: $url: ${lastError?.message}")
+        if (echRequired || ConscryptEch.isEchRequired(host)) {
+            Log.e(TAG, "ECH required for host=$host; refusing direct-TLS fallback (${lastError?.javaClass?.simpleName ?: "unknown"})")
+            return echRequiredFailureResponse(lastError)
+        }
+        Log.w(TAG, "ECH failed, will try verified direct TLS via DoH: host=$host (${lastError?.javaClass?.simpleName ?: "unknown"})")
 
-        // ECH 失败或已知不支持：直连（仍走 DoH 拿 IP，不走系统 DNS）
+        // 非 required host 的 ECH 失败：普通 TLS 仍经 DoH 解析并保留默认证书校验。
         return try {
-            doGetDirect(url, request)?.let { toWebResourceResponse(url, it) }
+            doGetDirect(url, request)?.let { toWebResourceResponse(url, it) } ?: networkFailureResponse(lastError)
         } catch (e: Exception) {
-            Log.e(TAG, "Direct GET failed: $url: ${e.message}")
-            EchTrace.event("直连失败 $host: ${e.javaClass.simpleName}: ${e.message?.take(100)}")
+            Log.e(TAG, "Direct GET failed for host=$host (${e.javaClass.simpleName})")
+            EchTrace.event("verified TLS failed host=$host: ${e.javaClass.simpleName}")
             // 直连也失败：返回错误页（不交回 WebView，避免系统 DNS 污染）
-            val page = "<!DOCTYPE html><html><body><h3>连接失败</h3><p>${e.message}</p></body></html>"
-            WebResourceResponse(
-                "text/html", "utf-8", 502, "Bad Gateway",
-                mapOf("Cache-Control" to "no-store"),
-                ByteArrayInputStream(page.toByteArray()),
-            )
+            networkFailureResponse(e)
         }
     }
 
@@ -177,7 +220,7 @@ object HyWebViewHelper {
         val cookie = runCatching { CookieManager.getInstance().getCookie(url) }.getOrNull()
         if (!cookie.isNullOrEmpty()) {
             builder.header("Cookie", cookie)
-            Log.d(TAG, "cookie send: ${cookie.length} chars to $url")
+            Log.d(TAG, "cookie send: ${cookie.length} chars to host=${hostOf(url)}")
         }
 
         val client = if (useEch) echClient else directClient
@@ -233,7 +276,7 @@ object HyWebViewHelper {
         // 3xx 兜底：跳数用完或无 Location，包装成 200 避免 WebView 抛异常
         val code = if (resp.code in 300..399) 200 else resp.code
         val contentLength = resp.body?.contentLength() ?: -1
-        Log.d(TAG, "ECH GET ok: $code ${contentLength}b $url")
+        Log.d(TAG, "ECH GET ok: $code ${contentLength}b host=${hostOf(url)}")
         // 流式：body.byteStream() 直接给 WebView，不经过内存缓冲
         // 包装一层，流关闭时顺带关闭 OkHttp Response 释放连接
         val bodyStream = resp.body?.byteStream()?.let { raw ->
