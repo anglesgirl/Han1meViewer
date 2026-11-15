@@ -23,6 +23,9 @@ import retrofit2.Retrofit
 import java.io.File
 import java.util.concurrent.TimeUnit
 
+internal fun isGitHubApiUrl(host: String, isHttps: Boolean): Boolean =
+    isHttps && host.equals("api.github.com", ignoreCase = true)
+
 /**
  * @project Hanime1
  * @author Yenaly Liew
@@ -134,9 +137,11 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor { chain ->
-                val builder = chain.request().newBuilder()
-                if (token.isNotEmpty()) {
-                    builder.addHeader("Authorization", "Bearer $token")
+                val request = chain.request()
+                val builder = request.newBuilder()
+                // Release APK 下载会改写到 gh.anglesya.win；令牌仅发给 GitHub 官方 API。
+                if (token.isNotEmpty() && isGitHubApiUrl(request.url.host, request.url.isHttps)) {
+                    builder.header("Authorization", "Bearer $token")
                 }
                 return@addInterceptor chain.proceed(builder.build())
             }
