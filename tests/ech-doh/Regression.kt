@@ -42,30 +42,50 @@ private val wireA = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x01, 0x1
 private val wireB = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x01, 0x22)
 private val malformedWire = byteArrayOf(0x00, 0x05, 0xfe.toByte(), 0x0d, 0x00, 0x00, 0x01)
 
-private fun dnsAnswerJson(owner: String, type: Int, ttl: Int, data: String): String {
-    val answer = org.json.JSONObject()
-        .put("name", owner)
-        .put("type", type)
-        .put("TTL", ttl)
-        .put("data", data)
+private data class DnsAnswer(val owner: String, val type: Int, val ttl: Int, val data: String)
+
+private fun dnsAnswerJson(owner: String, type: Int, ttl: Int, data: String): String =
+    dnsAnswersJson(DnsAnswer(owner, type, ttl, data))
+
+private fun dnsAnswersJson(vararg answers: DnsAnswer): String {
+    val answerArray = org.json.JSONArray()
+    answers.forEach { record ->
+        answerArray.put(
+            org.json.JSONObject()
+                .put("name", record.owner)
+                .put("type", record.type)
+                .put("TTL", record.ttl)
+                .put("data", record.data),
+        )
+    }
     return org.json.JSONObject()
         .put("Status", 0)
-        .put("Answer", org.json.JSONArray().put(answer))
+        .put("Answer", answerArray)
         .toString()
 }
 
 private fun responseFor(name: String?): String {
-    val answer: (String, Int, Int, ByteArray) -> String = { owner, type, ttl, wire ->
+    val echData: (ByteArray) -> String = { wire ->
         val b64 = java.util.Base64.getEncoder().encodeToString(wire)
-        dnsAnswerJson(owner, type, ttl, "1 . alpn=\"h2\" ech=\"$b64\"")
+        "1 . alpn=\"h2\" ech=\"$b64\""
+    }
+    val answer: (String, Int, Int, ByteArray) -> String = { owner, type, ttl, wire ->
+        dnsAnswerJson(owner, type, ttl, echData(wire))
     }
     return when (name) {
-        "hanime1.me" -> answer(name.orEmpty(), 65, 90, wireA)
+        "hanime1.me" -> dnsAnswersJson(
+            DnsAnswer("hanime1.me", 5, 60, "x.xn--pn1aul.eu.org."),
+            DnsAnswer("x.xn--pn1aul.eu.org", 65, 90, echData(wireA)),
+        )
         "different.example" -> answer(name.orEmpty(), 65, 120, wireB)
         "foreign.example" -> answer("other.example", 65, 90, wireA)
         "wrong-type.example" -> answer(name.orEmpty(), 1, 90, wireA)
         "malformed.example" -> answer(name.orEmpty(), 65, 90, malformedWire)
         "zero-ttl.example" -> answer(name.orEmpty(), 65, 0, wireA)
+        "loop.example" -> dnsAnswersJson(
+            DnsAnswer("loop.example", 5, 60, "loop-alias.example."),
+            DnsAnswer("loop-alias.example", 5, 60, "loop.example."),
+        )
         else -> org.json.JSONObject().put("Status", 0).put("Answer", org.json.JSONArray()).toString()
     }
 }
@@ -174,7 +194,7 @@ private fun gatewayHostScopedConfigTest() {
     gatewayRequests.set(0)
     queryNames.clear()
     val wire = EchDoh.echConfigList("HANIME1.ME.")
-    expect(wire != null && wire.contentEquals(wireA), "target HTTPS answer did not yield its own ECH config")
+    expect(wire != null && wire.contentEquals(wireA), "CNAME target HTTPS answer did not yield the queried host's ECH config")
     expect(gatewayRequests.get() == 1, "expected one query to the user gateway, got ${gatewayRequests.get()}")
     expect(queryNames == listOf("hanime1.me:HTTPS"), "query did not use the normalized target host: $queryNames")
     expect(unexpectedRequests.isEmpty(), "ECH query escaped gateway-only route: $unexpectedRequests")
@@ -188,7 +208,7 @@ private fun gatewayHostScopedConfigTest() {
     val entry = cache["hanime1.me"] ?: error("target host ECH entry absent from cache")
     val expiresAt = field(entry, "expireAt").getLong(entry)
     val remaining = expiresAt - System.currentTimeMillis()
-    expect(remaining in 85_000L..90_000L, "ECH cache did not honor the selected RR's 90-second TTL: ${remaining}ms")
+    expect(remaining in 55_000L..60_000L, "ECH cache did not use the minimum CNAME/HTTPS TTL: ${remaining}ms")
     val fromCache = EchDoh.echConfigList("hanime1.me")
     expect(fromCache != null && fromCache.contentEquals(wire!!), "same-host cached ECH value changed")
     expect(gatewayRequests.get() == 2, "same-host cache lookup unexpectedly queried DoH")
@@ -218,6 +238,7 @@ private fun targetConfigValidationTest() {
     expect(EchDoh.echConfigList(HANIME_MEDIA_CDN_HOST) == null, "host without ECH record unexpectedly gained a config")
     expect(gatewayRequests.get() == afterFirstMissing + 1, "no-config answer was cached beyond its DNS TTL")
     expect(EchDoh.echConfigList("foreign.example") == null, "ECH answer with a different owner name was accepted")
+    expect(EchDoh.echConfigList("loop.example") == null, "CNAME loop was followed while looking up ECH")
     expect(EchDoh.echConfigList("wrong-type.example") == null, "non-HTTPS DNS answer was accepted as ECH")
     expect(EchDoh.echConfigList("malformed.example") == null, "malformed ECHConfigList framing was accepted")
 

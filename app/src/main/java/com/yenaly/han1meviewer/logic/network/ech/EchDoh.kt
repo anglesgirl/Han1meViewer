@@ -35,6 +35,8 @@ object EchDoh {
     private const val TAG = "HY-ECH-DOH"
 
     private const val MAX_TTL_MS = 3_600_000L
+    private const val MAX_CNAME_DEPTH = 16
+    private val DNS_LABEL = Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
     private val bootstrapClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -139,34 +141,58 @@ object EchDoh {
         return wire
     }
 
-    /** Parse only matching HTTPS(65) answer records; TTL is never extended beyond the RR TTL. */
+    /** Follow only CNAMEs reachable from the queried owner, then parse its HTTPS(65) record. */
     private fun fetchConfig(url: String, name: String): Pair<ByteArray, Long>? {
         val body = query(url, name, "HTTPS") ?: return null
         val answers = runCatching { JSONObject(body).optJSONArray("Answer") }.getOrNull()
             ?: return null
-        for (index in 0 until answers.length()) {
-            val answer = answers.optJSONObject(index) ?: continue
-            if (answer.optInt("type", -1) != 65) continue
-            if (normalizeDnsName(answer.optString("name", "")) != name) continue
+        var owner = name
+        var cnameTtlSeconds = Long.MAX_VALUE
+        val visited = HashSet<String>()
+        repeat(MAX_CNAME_DEPTH + 1) {
+            if (!visited.add(owner)) return null
+            for (index in 0 until answers.length()) {
+                val answer = answers.optJSONObject(index) ?: continue
+                if (answer.optInt("type", -1) != 65) continue
+                if (normalizeDnsName(answer.optString("name", "")) != owner) continue
 
-            val b64 = extractEchParam(answer.optString("data", "")) ?: continue
-            val flags = if ('-' in b64 || '_' in b64) Base64.URL_SAFE else Base64.DEFAULT
-            val wire = runCatching { Base64.decode(b64, flags) }.getOrNull()
-            if (wire == null || !isValidEchConfigList(wire)) {
-                Log.w(TAG, "invalid ECHConfigList in HTTPS record for host=$name")
-                continue
+                val b64 = extractEchParam(answer.optString("data", "")) ?: continue
+                val flags = if ('-' in b64 || '_' in b64) Base64.URL_SAFE else Base64.DEFAULT
+                val wire = runCatching { Base64.decode(b64, flags) }.getOrNull()
+                if (wire == null || !isValidEchConfigList(wire)) {
+                    Log.w(TAG, "invalid ECHConfigList in HTTPS record for host=$owner")
+                    continue
+                }
+
+                val recordTtlSeconds = answer.optLong("TTL", 0L).coerceAtLeast(0L)
+                val ttlSeconds = minOf(cnameTtlSeconds, recordTtlSeconds)
+                val ttlMs = if (ttlSeconds > 0L) {
+                    minOf(ttlSeconds, MAX_TTL_MS / 1000L) * 1000L
+                } else {
+                    0L
+                }
+                return wire to ttlMs
             }
 
-            val ttlSeconds = answer.optLong("TTL", 0L)
-            val ttlMs = if (ttlSeconds > 0L) {
-                minOf(ttlSeconds, MAX_TTL_MS / 1000L) * 1000L
-            } else {
-                0L
+            val cnameRecords = (0 until answers.length()).mapNotNull { index ->
+                val answer = answers.optJSONObject(index) ?: return@mapNotNull null
+                if (answer.optInt("type", -1) != 5 ||
+                    normalizeDnsName(answer.optString("name", "")) != owner
+                ) return@mapNotNull null
+                val target = normalizeDnsName(answer.optString("data", ""))
+                if (!isValidDnsName(target)) return@mapNotNull null
+                target to answer.optLong("TTL", 0L).coerceAtLeast(0L)
             }
-            return wire to ttlMs
+            val targets = cnameRecords.map { it.first }.distinct()
+            if (targets.size != 1) return null
+            owner = targets.single()
+            cnameTtlSeconds = minOf(cnameTtlSeconds, cnameRecords.minOf { it.second })
         }
         return null
     }
+
+    private fun isValidDnsName(name: String): Boolean =
+        name.length in 1..253 && name.split('.').all { it.matches(DNS_LABEL) }
 
     private fun extractEchParam(data: String): String? {
         val match = Regex(
