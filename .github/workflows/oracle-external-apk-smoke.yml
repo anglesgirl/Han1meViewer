@@ -3,11 +3,23 @@ name: Oracle external APK smoke
 on:
   workflow_dispatch:
     inputs:
-      confirm_pinned_artifact:
-        description: Run the pinned Hyper Browser APK through the Oracle offline smoke test
+      confirm_source_artifact:
+        description: Run a verified Hyper Browser Actions artifact through the Oracle offline smoke test
         required: true
         type: boolean
         default: false
+      source_run_id:
+        description: Successful Android CI run ID on anglesgirl/hyper-browser ao3-reader
+        required: true
+        type: string
+      expected_commit_sha:
+        description: Exact 40-character Hyper Browser commit SHA checked out by that run
+        required: true
+        type: string
+      expected_apk_sha256:
+        description: Exact 64-character SHA-256 of the arm64 debug APK from that run
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -22,37 +34,68 @@ jobs:
       - name: Checkout test client
         uses: actions/checkout@v4
 
-      - name: Download and verify the pinned Hyper Browser artifact
+      - name: Download and verify the selected Hyper Browser artifact
         id: apk
         env:
           GH_TOKEN: ${{ github.token }}
-          CONFIRM: ${{ inputs.confirm_pinned_artifact }}
-          SOURCE_RUN_ID: '43893177032'
-          SOURCE_ARTIFACT_ID: '14238327369'
+          CONFIRM: ${{ inputs.confirm_source_artifact }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_commit_sha }}
+          EXPECTED_SHA256: ${{ inputs.expected_apk_sha256 }}
           SOURCE_ARTIFACT_NAME: AO3Reader-debug-apk
-          EXPECTED_SHA256: 6b621d16882e63253c994880410756f258460a483e4354144d8ee3d13f9458f1
         run: |
           set -euo pipefail
           if [[ "$CONFIRM" != 'true' ]]; then
-            echo '::error::Set confirm_pinned_artifact to true to run this test.'
+            echo '::error::Set confirm_source_artifact to true to run this test.'
+            exit 1
+          fi
+          if [[ ! "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo '::error::source_run_id must be a numeric GitHub Actions run ID.'
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::expected_commit_sha must be a 40-character lowercase commit SHA.'
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo '::error::expected_apk_sha256 must be a 64-character lowercase SHA-256.'
             exit 1
           fi
 
-          metadata="$RUNNER_TEMP/hyper-browser-artifact.json"
+          run_metadata="$RUNNER_TEMP/hyper-browser-run.json"
+          artifact_metadata="$RUNNER_TEMP/hyper-browser-artifacts.json"
           curl --fail --silent --show-error --max-time 30 \
-            "https://api.github.com/repos/anglesgirl/hyper-browser/actions/artifacts/$SOURCE_ARTIFACT_ID" \
-            -o "$metadata"
-          python3 - "$metadata" "$SOURCE_ARTIFACT_ID" "$SOURCE_RUN_ID" "$SOURCE_ARTIFACT_NAME" <<'PY'
+            "https://api.github.com/repos/anglesgirl/hyper-browser/actions/runs/$SOURCE_RUN_ID" \
+            -o "$run_metadata"
+          curl --fail --silent --show-error --max-time 30 \
+            "https://api.github.com/repos/anglesgirl/hyper-browser/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" \
+            -o "$artifact_metadata"
+
+          artifact_id=$(python3 - "$run_metadata" "$artifact_metadata" "$SOURCE_RUN_ID" "$EXPECTED_SOURCE_SHA" "$SOURCE_ARTIFACT_NAME" <<'PY'
           import json, sys
-          path, artifact_id, run_id, name = sys.argv[1:]
-          item = json.load(open(path, encoding="utf-8"))
-          run = item.get("workflow_run") or {}
-          if (str(item.get("id")) != artifact_id or item.get("name") != name
-              or item.get("expired") is not False or str(run.get("id")) != run_id
-              or str(run.get("repository_id")) != "1301677741"):
-              raise SystemExit("Source artifact metadata did not match the pinned public artifact.")
-          print("Verified the public source artifact metadata.")
+          run_path, artifacts_path, run_id, expected_sha, artifact_name = sys.argv[1:]
+          run = json.load(open(run_path, encoding="utf-8"))
+          if (str(run.get("id")) != run_id
+              or run.get("repository", {}).get("full_name") != "anglesgirl/hyper-browser"
+              or run.get("head_repository", {}).get("full_name") != "anglesgirl/hyper-browser"
+              or run.get("head_branch") != "ao3-reader"
+              or run.get("head_sha") != expected_sha
+              or run.get("event") != "push"
+              or run.get("name") != "Android CI"
+              or run.get("status") != "completed"
+              or run.get("conclusion") != "success"):
+              raise SystemExit("Source run was not a successful Android CI push for the expected ao3-reader commit.")
+          artifacts = json.load(open(artifacts_path, encoding="utf-8")).get("artifacts", [])
+          matches = [item for item in artifacts
+              if item.get("name") == artifact_name
+              and item.get("expired") is False
+              and (item.get("workflow_run") or {}).get("id") == int(run_id)
+              and item.get("size_in_bytes", 0) > 0]
+          if len(matches) != 1:
+              raise SystemExit("Expected exactly one unexpired debug APK artifact from the selected source run.")
+          print(matches[0]["id"])
           PY
+          )
 
           download_dir="$RUNNER_TEMP/hyper-browser-artifact"
           mkdir -p "$download_dir"
@@ -65,17 +108,18 @@ jobs:
           fi
           actual_sha256=$(sha256sum "${apks[0]}" | awk '{print $1}')
           if [[ "$actual_sha256" != "$EXPECTED_SHA256" ]]; then
-            echo '::error::The downloaded APK SHA-256 did not match the pinned artifact.'
+            echo '::error::The downloaded APK SHA-256 did not match the supplied exact-artifact digest.'
             exit 1
           fi
           unzip -tq "${apks[0]}" >/dev/null
           printf 'apk_file=%s\n' "${apks[0]}" >> "$GITHUB_OUTPUT"
           {
-            echo '### Pinned external APK'
-            echo '- Source: `anglesgirl/hyper-browser`, Actions run `43893177032`'
-            echo '- Artifact ID: `14238327369` (`AO3Reader-debug-apk`)'
-            echo "- SHA-256: `$actual_sha256`"
-            echo '- The APK is downloaded only to the runner; this workflow does not build or publish an APK.'
+            echo '### Verified external APK'
+            echo "- Source: \\`anglesgirl/hyper-browser\\`, Android CI run \\`$SOURCE_RUN_ID\\`"
+            echo "- Commit: \\`$EXPECTED_SOURCE_SHA\\`"
+            echo "- Artifact: ID \\`$artifact_id\\` (\\`$SOURCE_ARTIFACT_NAME\\`)"
+            echo "- SHA-256: \\`$actual_sha256\\`"
+            echo '- APK was downloaded to the runner as-is; this workflow does not build an APK or publish a release.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Submit exact APK to Oracle offline smoke test
