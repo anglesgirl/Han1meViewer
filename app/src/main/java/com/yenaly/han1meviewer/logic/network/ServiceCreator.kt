@@ -19,12 +19,32 @@ import okhttp3.CookieJar
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
 import retrofit2.Retrofit
 import java.io.File
 import java.util.concurrent.TimeUnit
 
 internal fun isGitHubApiUrl(host: String, isHttps: Boolean): Boolean =
     isHttps && host.equals("api.github.com", ignoreCase = true)
+
+internal fun Request.withGitHubApiToken(token: String): Request {
+    if (token.isBlank() || !isGitHubApiUrl(url.host, url.isHttps)) return this
+    return newBuilder().header("Authorization", "Bearer $token").build()
+}
+
+internal fun retryGitHubApiAnonymously(response: Response): Request? {
+    val request = response.request
+    val authorization = request.header("Authorization")
+    if (response.code != 401 ||
+        !isGitHubApiUrl(request.url.host, request.url.isHttps) ||
+        authorization.isNullOrBlank() ||
+        !authorization.startsWith("Bearer ", ignoreCase = true)
+    ) {
+        return null
+    }
+    return request.newBuilder().removeHeader("Authorization").build()
+}
 
 /**
  * @project Hanime1
@@ -138,12 +158,15 @@ object ServiceCreator {
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor { chain ->
                 val request = chain.request()
-                val builder = request.newBuilder()
                 // Release APK 下载会改写到 gh.anglesya.win；令牌仅发给 GitHub 官方 API。
-                if (token.isNotEmpty() && isGitHubApiUrl(request.url.host, request.url.isHttps)) {
-                    builder.header("Authorization", "Bearer $token")
+                return@addInterceptor chain.proceed(request.withGitHubApiToken(token))
+            }
+            .authenticator { _, response ->
+                val retryRequest = retryGitHubApiAnonymously(response)
+                if (retryRequest != null) {
+                    Log.w("ServiceCreator", "GitHub API rejected the configured token; retrying anonymously")
                 }
-                return@addInterceptor chain.proceed(builder.build())
+                retryRequest
             }
             .build()
     }
