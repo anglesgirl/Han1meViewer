@@ -41,6 +41,7 @@ import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HDns
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.logic.network.HanimeNetwork
+import com.yenaly.han1meviewer.logic.network.ech.EchHttp
 import com.yenaly.han1meviewer.logic.network.ServiceCreator
 import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.logout
@@ -322,6 +323,9 @@ fun NetworkSettingsRouteScreen() {
                 pendingDohConflictTarget = DohConflictTarget.EnableDoH
                 return@NetworkSettingsScreen
             }
+            val previousResolver = DohConfig.resolverIdentity()
+            val nextResolver = DohConfig.resolverIdentity(preset, url, bootstrapIps, timeoutSeconds)
+            val resolverChanged = previousResolver != nextResolver
             Preferences.preferenceSp.edit(commit = true) {
                 putBoolean(NETWORK_USE_DOH, enabled)
                 putString(NETWORK_DOH_PRESET, preset)
@@ -331,6 +335,7 @@ fun NetworkSettingsRouteScreen() {
             }
             currentHost = Preferences.baseUrl
             refreshKey++
+            if (resolverChanged) EchHttp.onDohSettingsChanged()
             HanimeNetwork.rebuildNetwork()
         },
         onOpenDelayTest = {

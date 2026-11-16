@@ -7,6 +7,7 @@ import com.yenaly.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
 import com.yenaly.han1meviewer.HANIME_MEDIA_CDN_HOST
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.network.DohConfig
+import com.yenaly.han1meviewer.logic.network.DohResolverIdentity
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -40,43 +41,65 @@ object EchDoh {
     private const val LIVE_SOURCE_HOST = "cloudflare-ech.com"
     private val DNS_LABEL = Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
-    private val bootstrapClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(DohConfig.timeoutSeconds().toLong(), TimeUnit.SECONDS)
-            .readTimeout(DohConfig.timeoutSeconds().toLong(), TimeUnit.SECONDS)
-            .build()
-    }
-
-    /** 官方 DoH 解析器：A/AAAA + TTL 缓存；DoH 网关自身用 bootstrap IP 钉住，绕开污染 */
+    @Volatile
+    private var observedResolverIdentity: DohResolverIdentity? = null
     @Volatile
     private var cachedResolver: Dns? = null
     @Volatile
-    private var cachedResolverUrl: String? = null
+    private var cachedResolverIdentity: DohResolverIdentity? = null
+    @Volatile
+    private var cachedBootstrapClient: OkHttpClient? = null
+    @Volatile
+    private var cachedBootstrapTimeoutSeconds: Int? = null
 
-    /**
-     * 取（可能随用户设置变化的）DoH 解析器。
-     * 用户在设置页换预设/自定义 URL 后，这里按 URL 变化重建 —— 否则还打旧网关。
-     */
-    /**
-     * Target-host HTTPS/SVCB lookup endpoint, kept independent from the ordinary DNS toggle.
-     * Uses the app's existing DoH URL and bootstrap configuration without changing either.
-     */
-    private fun echDohUrl(): String {
-        val custom = Preferences.dohCustomUrl.trim()
-        return if (custom.isNotEmpty()) custom else DohConfig.selectedPreset().url
+    private fun bootstrapClient(timeoutSeconds: Int): OkHttpClient {
+        cachedBootstrapClient?.let {
+            if (cachedBootstrapTimeoutSeconds == timeoutSeconds) return it
+        }
+        return synchronized(this) {
+            cachedBootstrapClient?.takeIf { cachedBootstrapTimeoutSeconds == timeoutSeconds }
+                ?: OkHttpClient.Builder()
+                    .connectTimeout(timeoutSeconds.toLong(), TimeUnit.SECONDS)
+                    .readTimeout(timeoutSeconds.toLong(), TimeUnit.SECONDS)
+                    .build()
+                    .also {
+                        cachedBootstrapTimeoutSeconds = timeoutSeconds
+                        cachedBootstrapClient = it
+                    }
+        }
     }
 
+    /** Clear resolver-bound caches whenever the effective endpoint, bootstrap pins, or timeout changes. */
+    private fun observeResolverIdentity(identity: DohResolverIdentity) {
+        if (observedResolverIdentity == identity) return
+        synchronized(this) {
+            if (observedResolverIdentity == identity) return
+            observedResolverIdentity = identity
+            cachedResolver = null
+            cachedResolverIdentity = null
+            cachedBootstrapClient = null
+            cachedBootstrapTimeoutSeconds = null
+            dnsCache.clear()
+            echCache.clear()
+            ConscryptEch.clearConfiguredEchHosts()
+            ConscryptEch.clearEchUnavailable()
+        }
+    }
+
+    /** Official DoH resolver for A/AAAA lookups; the same selected URL is used for HTTPS-record ECH lookups. */
     private fun resolver(): Dns? {
-        val url = echDohUrl()
-        cachedResolver?.let { if (cachedResolverUrl == url) return it }
+        val identity = DohConfig.resolverIdentity() ?: return null
+        observeResolverIdentity(identity)
+        cachedResolver?.let { if (cachedResolverIdentity == identity) return it }
         return synchronized(this) {
-            cachedResolver?.let { if (cachedResolverUrl == url) return it }
-            val pins = DohConfig.bootstrapIps()
+            if (observedResolverIdentity != identity) return@synchronized null
+            cachedResolver?.let { if (cachedResolverIdentity == identity) return@synchronized it }
+            val pins = identity.bootstrapIps
                 .mapNotNull { runCatching { InetAddress.getByName(it) }.getOrNull() }
-            val r = runCatching {
+            val resolver = runCatching {
                 DnsOverHttps.Builder()
-                    .client(bootstrapClient)
-                    .url(url.toHttpUrl())
+                    .client(bootstrapClient(identity.timeoutSeconds))
+                    .url(identity.url.toHttpUrl())
                     .apply { if (pins.isNotEmpty()) bootstrapDnsHosts(*pins.toTypedArray()) }
                     // ⚠️ 必须启用 IPv6 —— 这是「Chrome 打得开、App 打不开」的根因。
                     // 实测：同一张图走 IPv6 直连（2a02:6ea0:c77a::47）返回 200/47480B，
@@ -88,11 +111,11 @@ object EchDoh {
                     .build()
             }.getOrElse {
                 Log.w(TAG, "DoH resolver build failed (${it.javaClass.simpleName})")
-                return null
+                return@synchronized null
             }
-            cachedResolverUrl = url
-            cachedResolver = r
-            r
+            cachedResolverIdentity = identity
+            cachedResolver = resolver
+            resolver
         }
     }
 
@@ -100,7 +123,10 @@ object EchDoh {
     fun invalidateAll() {
         synchronized(this) {
             cachedResolver = null
-            cachedResolverUrl = null
+            cachedResolverIdentity = null
+            observedResolverIdentity = null
+            cachedBootstrapClient = null
+            cachedBootstrapTimeoutSeconds = null
             dnsCache.clear()
         }
         echCache.clear()
@@ -121,6 +147,8 @@ object EchDoh {
     fun echConfigList(host: String): ByteArray? {
         val name = normalizeDnsName(host)
         if (!EchHosts.shouldTryEch(name)) return null
+        val resolverIdentity = DohConfig.resolverIdentity() ?: return null
+        observeResolverIdentity(resolverIdentity)
         val sourceName = if (EchHosts.isCoreDomain(name)) LIVE_SOURCE_HOST else name
         val now = System.currentTimeMillis()
         echCache[sourceName]?.let {
@@ -129,7 +157,7 @@ object EchDoh {
         }
 
         val hit = try {
-            fetchConfig(echDohUrl(), sourceName)
+            fetchConfig(resolverIdentity, sourceName)
         } catch (t: Throwable) {
             Log.w(TAG, "ECH HTTPS-record query failed for host=$name source=$sourceName: ${t.javaClass.simpleName}")
             null
@@ -145,8 +173,8 @@ object EchDoh {
     }
 
     /** Follow only CNAMEs reachable from the queried owner, then parse its HTTPS(65) record. */
-    private fun fetchConfig(url: String, name: String): Pair<ByteArray, Long>? {
-        val body = query(url, name, "HTTPS") ?: return null
+    private fun fetchConfig(resolverIdentity: DohResolverIdentity, name: String): Pair<ByteArray, Long>? {
+        val body = query(resolverIdentity, name, "HTTPS") ?: return null
         val answers = runCatching { JSONObject(body).optJSONArray("Answer") }.getOrNull()
             ?: return null
         var owner = name
@@ -270,6 +298,8 @@ object EchDoh {
             }
         }
 
+        val resolverIdentity = DohConfig.resolverIdentity() ?: return emptyList()
+        observeResolverIdentity(resolverIdentity)
         val now = System.currentTimeMillis()
         dnsCache[host]?.let { if (it.expireAt > now) return it.addrs }
 
@@ -286,10 +316,11 @@ object EchDoh {
     }
 
     /** 底层 JSON 查询（仅用于 HTTPS(65) 记录；A/AAAA 交给 DnsOverHttps） */
-    private fun query(dohUrl: String, host: String, type: String): String? {
+    private fun query(resolverIdentity: DohResolverIdentity, host: String, type: String): String? {
         // DoH 网关域名本身不能走系统 DNS（被污染），用 bootstrap IP 钉住
-        val pins = DohConfig.bootstrapIps()
+        val pins = resolverIdentity.bootstrapIps
             .mapNotNull { runCatching { java.net.InetAddress.getByName(it) }.getOrNull() }
+        val bootstrapClient = bootstrapClient(resolverIdentity.timeoutSeconds)
         val client = if (pins.isNotEmpty()) {
             val pinnedDns = object : okhttp3.Dns {
                 override fun lookup(hostname: String): List<java.net.InetAddress> = pins
@@ -298,7 +329,7 @@ object EchDoh {
         } else {
             bootstrapClient
         }
-        val requestUrl = dohUrl.toHttpUrl().newBuilder()
+        val requestUrl = resolverIdentity.url.toHttpUrl().newBuilder()
             .addQueryParameter("name", host)
             .addQueryParameter("type", type)
             .build()

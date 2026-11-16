@@ -690,9 +690,20 @@ private fun DohDialog(
         mutableStateOf(preset.ifBlank { DohConfig.presets.first().key })
     }
     var customValue by rememberSaveable(customUrl) { mutableStateOf(customUrl) }
-    var bootstrapValue by rememberSaveable(bootstrapIps) { mutableStateOf(bootstrapIps) }
+    var bootstrapValue by rememberSaveable(bootstrapIps) {
+        mutableStateOf(DohConfig.bootstrapInputValue(presetValue, bootstrapIps))
+    }
+    var previousPresetValue by remember { mutableStateOf(presetValue) }
     var timeoutValue by rememberSaveable(timeoutSeconds) { mutableStateOf(timeoutSeconds.toString()) }
     var showPresetDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(presetValue) {
+        val previousDefault = DohConfig.bootstrapInputValue(previousPresetValue, "")
+        if (bootstrapValue.isBlank() || bootstrapValue == previousDefault) {
+            bootstrapValue = DohConfig.bootstrapInputValue(presetValue, bootstrapIps)
+        }
+        previousPresetValue = presetValue
+    }
 
     if (showPresetDialog) {
         NetworkChoiceDialog(
