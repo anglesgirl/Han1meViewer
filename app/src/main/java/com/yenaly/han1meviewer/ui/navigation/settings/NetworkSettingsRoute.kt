@@ -277,6 +277,16 @@ fun NetworkSettingsRouteScreen() {
             refreshKey++
             showHostsRestartConfirm = true
         },
+        onMediaCdnRegionChange = { region ->
+            Preferences.mediaCdnRegion = region
+            Preferences.mediaCdnCustomIp = ""
+            refreshKey++
+        },
+        onMediaCdnCustomIpSave = { ip ->
+            Preferences.mediaCdnCustomIp = ip
+            Preferences.mediaCdnRegion = ""
+            refreshKey++
+        },
         onUseBuiltInHostsChange = { value ->
             if (value && Preferences.useDoH) {
                 showDohConflictConfirm = true
@@ -585,6 +595,9 @@ private fun buildNetworkSettingsUiState(context: Context): NetworkSettingsUiStat
         },
         useBuiltInHosts = Preferences.useBuiltInHosts,
         useBackupMediaCdn = Preferences.useBackupMediaCdn,
+        mediaCdnRegion = Preferences.mediaCdnRegion,
+        mediaCdnRegionSummary = buildMediaCdnSummary(),
+        mediaCdnCustomIp = Preferences.mediaCdnCustomIp,
         useCustomMirrorSite = Preferences.useCustomMirrorSite,
         customMirrorSite = Preferences.customMirrorSite,
         appendCustomMirrorPath = Preferences.appendCustomMirrorPath,
@@ -676,6 +689,13 @@ private fun testCustomMirrorWatchUrl(context: Context, apiBaseUrl: String): Stri
             throwable.message ?: throwable::class.java.simpleName,
         )
     }
+}
+
+private fun buildMediaCdnSummary(): String {
+    val ips = Preferences.mediaCdnNodeIps
+    if (ips.isEmpty()) return "未指定（走正常 DNS 解析）"
+    val region = Preferences.mediaCdnRegion
+    return if (region.isNotEmpty()) "$region (${ips.size} 个 IP)" else "${ips.size} 个 IP"
 }
 
 private fun buildCustomMirrorApiBaseUrl(homeUrl: String, appendPath: Boolean): String {

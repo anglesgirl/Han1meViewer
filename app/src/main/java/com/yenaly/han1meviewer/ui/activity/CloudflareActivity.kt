@@ -15,6 +15,7 @@ import com.yenaly.han1meviewer.Preferences.cloudFlareCookie
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.USER_AGENT
 import com.yenaly.han1meviewer.base.BaseActivity
+import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
 import com.yenaly.han1meviewer.ui.screen.web.CloudflareScreen
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
 import com.yenaly.han1meviewer.util.CookieString
@@ -69,6 +70,15 @@ class CloudflareActivity : BaseActivity() {
             }
 
             webViewClient = object : WebViewClient() {
+                // co3 架构：直接加载真实 URL，GET 由 HyWebViewHelper 在进程内经 ECH 拦截
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): android.webkit.WebResourceResponse? {
+                    return HyWebViewHelper.intercept(request)
+                        ?: super.shouldInterceptRequest(view, request)
+                }
+
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,

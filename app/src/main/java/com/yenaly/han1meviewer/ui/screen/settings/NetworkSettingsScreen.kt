@@ -22,8 +22,11 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.yenaly.han1meviewer.CDN_REGION_NODES
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.network.DohConfig
 import com.yenaly.han1meviewer.logic.network.HProxySelector
@@ -40,6 +44,11 @@ import com.yenaly.han1meviewer.ui.component.SettingNavigationItem
 import com.yenaly.han1meviewer.ui.component.SettingSwitchItem
 import com.yenaly.han1meviewer.ui.component.lazy.LazyColumn
 import com.yenaly.han1meviewer.ui.preview.ComponentPreview
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import java.net.InetSocketAddress
+import java.net.Socket
 
 data class NetworkSettingsUiState(
     val domainName: String,
@@ -47,6 +56,9 @@ data class NetworkSettingsUiState(
     val proxySummary: String,
     val useBuiltInHosts: Boolean,
     val useBackupMediaCdn: Boolean,
+    val mediaCdnRegion: String,
+    val mediaCdnRegionSummary: String,
+    val mediaCdnCustomIp: String,
     val useCustomMirrorSite: Boolean,
     val customMirrorSite: String,
     val appendCustomMirrorPath: Boolean,
@@ -101,6 +113,8 @@ fun NetworkSettingsScreen(
     onTestCustomMirrorSite: (String, Boolean) -> Unit,
     useBackupMediaCdn: Boolean,
     onUseBackupMediaCdnChange: (Boolean) -> Unit,
+    onMediaCdnRegionChange: (String) -> Unit,
+    onMediaCdnCustomIpSave: (String) -> Unit,
     onUseBuiltInHostsChange: (Boolean) -> Unit,
     onSaveCustomHosts: (String) -> Unit,
     onSaveDohSettings: (Boolean, String, String, String, Int) -> Unit,
@@ -117,6 +131,7 @@ fun NetworkSettingsScreen(
     var showDohDialog by rememberSaveable { mutableStateOf(false) }
     var showCustomHostsDialog by rememberSaveable { mutableStateOf(false) }
     var showCustomMirrorSiteDialog by rememberSaveable { mutableStateOf(false) }
+    var showMediaCdnRegionDialog by rememberSaveable { mutableStateOf(false) }
 
     if (showDomainDialog) {
         NetworkChoiceDialog(
@@ -186,6 +201,22 @@ fun NetworkSettingsScreen(
         )
     }
 
+    if (showMediaCdnRegionDialog) {
+        MediaCdnRegionDialog(
+            selectedRegion = state.mediaCdnRegion,
+            customIp = state.mediaCdnCustomIp,
+            onDismiss = { showMediaCdnRegionDialog = false },
+            onSelectRegion = { region ->
+                showMediaCdnRegionDialog = false
+                onMediaCdnRegionChange(region)
+            },
+            onSaveCustomIp = { ip ->
+                showMediaCdnRegionDialog = false
+                onMediaCdnCustomIpSave(ip)
+            },
+        )
+    }
+
     if (isDelayTesting) {
         DelayTestDialog(
             currentHost = currentHost,
@@ -231,6 +262,15 @@ fun NetworkSettingsScreen(
                 summary = state.proxySummary,
                 iconRes = R.drawable.baseline_vpn_24,
                 onClick = { showProxyDialog = true },
+            )
+        }
+
+        item {
+            SettingNavigationItem(
+                title = stringResource(R.string.media_cdn_region),
+                valueText = state.mediaCdnRegionSummary,
+                iconRes = R.drawable.baseline_domain_24,
+                onClick = { showMediaCdnRegionDialog = true },
             )
         }
 
@@ -319,6 +359,128 @@ private fun NetworkChoiceDialog(
         selectedValue = selectedValue,
         onDismiss = onDismiss,
         onSelect = onSelect,
+    )
+}
+
+/**
+ * 测试到指定 IP 端口的 TCP 连接延迟。
+ * @return 延迟毫秒数，超时/失败返回 null
+ */
+private fun testTcpLatency(host: String, port: Int, timeoutMs: Int): Long? {
+    return try {
+        val start = android.os.SystemClock.elapsedRealtime()
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(host, port), timeoutMs)
+        }
+        android.os.SystemClock.elapsedRealtime() - start
+    } catch (e: Exception) {
+        null
+    }
+}
+
+@Composable
+private fun MediaCdnRegionDialog(
+    selectedRegion: String,
+    customIp: String,
+    onDismiss: () -> Unit,
+    onSelectRegion: (String) -> Unit,
+    onSaveCustomIp: (String) -> Unit,
+) {
+    var ip by rememberSaveable(customIp) { mutableStateOf(customIp) }
+    var tab by rememberSaveable { mutableStateOf(if (customIp.isNotBlank()) 1 else 0) }
+    // 区域 -> 延迟 ms；key 不存在 = 测试中，value 为 null = 超时/失败
+    val latencies = remember { mutableStateMapOf<String, Long?>() }
+    // 对话框打开时并发测试各区域首个 IP 的 TCP 443 延迟；关闭时自动取消
+    LaunchedEffect(Unit) {
+        CDN_REGION_NODES.map { node ->
+            async(Dispatchers.IO) {
+                val latency = node.ips.firstOrNull()?.let { testTcpLatency(it, 443, 3000) }
+                latencies[node.region] = latency
+            }
+        }.awaitAll()
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.media_cdn_region)) },
+        text = {
+            Column {
+                Row {
+                    TextButton(onClick = { tab = 0 }) {
+                        Text(
+                            stringResource(R.string.media_cdn_region_preset),
+                            color = if (tab == 0) MaterialTheme.colorScheme.primary else Color.Gray,
+                        )
+                    }
+                    TextButton(onClick = { tab = 1 }) {
+                        Text(
+                            stringResource(R.string.media_cdn_region_custom),
+                            color = if (tab == 1) MaterialTheme.colorScheme.primary else Color.Gray,
+                        )
+                    }
+                }
+                if (tab == 0) {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        Row(
+                            Modifier.fillMaxWidth().selectable(
+                                selected = selectedRegion.isBlank(),
+                                onClick = { onSelectRegion("") },
+                            ).padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = selectedRegion.isBlank(), onClick = { onSelectRegion("") })
+                            Text(stringResource(R.string.media_cdn_region_auto), Modifier.padding(start = 8.dp))
+                        }
+                        CDN_REGION_NODES.forEach { node ->
+                            Row(
+                                Modifier.fillMaxWidth().selectable(
+                                    selected = selectedRegion == node.region,
+                                    onClick = { onSelectRegion(node.region) },
+                                ).padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(selected = selectedRegion == node.region, onClick = { onSelectRegion(node.region) })
+                                Text(node.region, Modifier.padding(start = 8.dp).weight(1f))
+                                val latency = latencies[node.region]
+                                Text(
+                                    text = when {
+                                        !latencies.containsKey(node.region) -> "..."
+                                        latency == null -> stringResource(R.string.media_cdn_latency_timeout)
+                                        else -> "${latency}ms"
+                                    },
+                                    color = when {
+                                        latency == null -> Color.Gray
+                                        latency < 100 -> Color(0xFF4CAF50)
+                                        latency <= 300 -> Color(0xFFFFA000)
+                                        else -> Color(0xFFF44336)
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = ip,
+                        onValueChange = { ip = it },
+                        label = { Text(stringResource(R.string.media_cdn_custom_ip_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (tab == 1) {
+                TextButton(onClick = { onSaveCustomIp(ip.trim()) }) {
+                    Text(stringResource(R.string.confirm))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
     )
 }
 
@@ -806,6 +968,9 @@ private fun NetworkSettingsScreenPreview() {
                 proxySummary = "系统代理",
                 useBuiltInHosts = false,
                 useBackupMediaCdn = false,
+                mediaCdnRegion = "",
+                mediaCdnRegionSummary = "未指定（走正常 DNS 解析）",
+                mediaCdnCustomIp = "",
                 useCustomMirrorSite = false,
                 customMirrorSite = "",
                 appendCustomMirrorPath = true,
@@ -846,6 +1011,8 @@ private fun NetworkSettingsScreenPreview() {
             onTestCustomMirrorSite = { _, _ -> },
             useBackupMediaCdn = false,
             onUseBackupMediaCdnChange = {},
+            onMediaCdnRegionChange = {},
+            onMediaCdnCustomIpSave = {},
             onUseBuiltInHostsChange = {},
             onSaveCustomHosts = {},
             customHostsData = "",
