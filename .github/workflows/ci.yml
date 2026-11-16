@@ -1,13 +1,23 @@
 permissions:
   contents: read
+  actions: read
 name: CI
 
 on:
   push:
-    branches: [ "main", "upstream-player" ]
+    branches: [ "main" ]
     paths-ignore:
       - "**.md"
   workflow_dispatch:
+    inputs:
+      apk_upload_id:
+        description: 'Resume a 24-hour Oracle upload session for the exact same APK SHA-256'
+        required: false
+        type: string
+      apk_source_run_id:
+        description: 'Original GitHub Actions run ID containing the APK artifact'
+        required: false
+        type: string
 
 jobs:
   build:
@@ -51,8 +61,43 @@ jobs:
           HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN }}
           HA1_VERSION_SOURCE: 'ci'
 
-      - name: Upload APK Zip
+      - name: Archive APK for resumable upload
+        id: apk_artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-release-${{ github.sha }}
           path: app/build/outputs/apk/release/Han1meViewer-v*.apk
+          if-no-files-found: error
+
+
+
+      - name: Submit main APK to Oracle offline smoke test
+        id: oracle_smoke
+        if: github.ref == 'refs/heads/main'
+        env:
+          APK_TEST_API_TOKEN: ${{ secrets.APK_TEST_API_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.APK_TEST_CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.APK_TEST_CF_ACCESS_CLIENT_SECRET }}
+          APK_UPLOAD_ID: ${{ github.event.inputs.apk_upload_id }}
+          APK_SOURCE_RUN_ID: ${{ github.event.inputs.apk_source_run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/oracle-apk-smoke.sh
+
+      - name: Upload Oracle smoke-test evidence
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-smoke-${{ github.sha }}
+          path: ${{ runner.temp }}/apk-test-evidence
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Fail the build if Oracle smoke test did not pass
+        if: always() && github.ref == 'refs/heads/main'
+        env:
+          ORACLE_TEST_RESULT: ${{ steps.oracle_smoke.outputs.result }}
+        run: |
+          if [[ "$ORACLE_TEST_RESULT" != 'passed' ]]; then
+            echo "::error::Oracle smoke test result: ${ORACLE_TEST_RESULT:-missing}"
+            exit 1
+          fi
