@@ -3,10 +3,10 @@ set -euo pipefail
 base='https://apk-test.anglesya.win'
 evidence_dir="$RUNNER_TEMP/apk-test-evidence"
 mkdir -m 700 -p "$evidence_dir"
-if [[ -n "${APK_UPLOAD_ID:-}" || -n "${APK_SOURCE_RUN_ID:-}" ]]; then
-  if [[ ! "${APK_UPLOAD_ID:-}" =~ ^[0-9a-f]{32}$ || ! "${APK_SOURCE_RUN_ID:-}" =~ ^[0-9]+$ ]]; then
-    echo '::error::To resume, provide both the 32-character upload ID and the original numeric GitHub Actions run ID.'
-    echo 'result=invalid_resume_parameters' >> "$GITHUB_OUTPUT"
+if [[ -n "${APK_SOURCE_RUN_ID:-}" ]]; then
+  if [[ ! "$APK_SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+    echo '::error::APK_SOURCE_RUN_ID must be the original numeric GitHub Actions run ID.'
+    echo 'result=invalid_source_run_id' >> "$GITHUB_OUTPUT"
     exit 1
   fi
   source_sha=$(gh run view "$APK_SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)
