@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
@@ -230,6 +231,24 @@ fun VideoRouteHostScreen(
     }
 
     SideEffect { fullscreenHandler.value = ::setFullscreen }
+
+    // 布局切换（手机 ↔ 分栏）会触发 AndroidView 工厂同步搬运 videoPlayerHost；
+    // 若此时正处全屏（宿主在 DecorView），工厂在 layout 遍历里把它从 DecorView
+    // 摘下，会撞上 DecorView.onMeasure 读到 null 子 View（CRASHX-AF2B9D483A5D，
+    // Android 17，26111523 已带 post 修复仍崩——post 只修了 enter/exitFullscreen
+    // 两条路，没修工厂这条路）。所以布局状态延迟切换：先退全屏、等一帧
+    // （让 post 的 DecorView 摘除跑完），再切布局，工厂永远见不到 DecorView
+    // 里的宿主。其它用到 useLargeVideoLayout 的地方（播放器高度、PiP）不走
+    // 工厂搬运，继续用即时值。
+    var deferredLargeLayout by remember { mutableStateOf(useLargeVideoLayout) }
+    LaunchedEffect(useLargeVideoLayout) {
+        if (useLargeVideoLayout == deferredLargeLayout) return@LaunchedEffect
+        if (isFullscreen) {
+            setFullscreen(false)
+            withFrameNanos { } // 等一帧，post 的 DecorView 摘除先跑完
+        }
+        deferredLargeLayout = useLargeVideoLayout
+    }
 
     fun updatePipAction() {
         if (!activity.isInPictureInPictureMode) return
@@ -763,7 +782,7 @@ fun VideoRouteHostScreen(
     }
 
     VideoShellContent(
-        isExpandedLayout = useLargeVideoLayout,
+        isExpandedLayout = deferredLargeLayout,
         isInPipMode = hostUiState.isInPipMode,
         relatedItems = relatedItems,
         relatedAsTab = Preferences.relatedVideoAsTab,
