@@ -56,6 +56,7 @@ import com.yenaly.han1meviewer.logic.model.HanimeInfo
 @Composable
 fun VideoShellContent(
     isExpandedLayout: Boolean,
+    isFullscreen: Boolean,
     isInPipMode: Boolean,
     relatedItems: List<HanimeInfo>,
     relatedAsTab: Boolean,
@@ -115,10 +116,17 @@ fun VideoShellContent(
                             .background(Color.Black),
                         contentAlignment = Alignment.Center,
                     ) {
-                        AndroidView(
-                            factory = { playerHostFactory() },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        // 全屏时播放器宿主在 DecorView，不在此挂 AndroidView——
+                        // 否则工厂会把它从 DecorView 同步摘下，撞上 onMeasure。
+                        // 全屏盖住整屏，底下留黑块占位即可。
+                        if (isFullscreen) {
+                            Box(modifier = Modifier.fillMaxWidth().background(Color.Black))
+                        } else {
+                            AndroidView(
+                                factory = { playerHostFactory() },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 } else {
                     // 开关关闭：左栏为播放器 + 下方相关影片列表
@@ -132,10 +140,14 @@ fun VideoShellContent(
                                 .fillMaxWidth()
                                 .background(Color.Black),
                         ) {
-                            AndroidView(
-                                factory = { playerHostFactory() },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            if (isFullscreen) {
+                                Box(modifier = Modifier.fillMaxWidth().background(Color.Black))
+                            } else {
+                                AndroidView(
+                                    factory = { playerHostFactory() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                         Column(
                             modifier = Modifier
@@ -176,14 +188,25 @@ fun VideoShellContent(
             }
         }
     } else {
-        AndroidView(
-            factory = {
-                mainHostFactory().also { view ->
-                    (view.parent as? ViewGroup)?.removeView(view)
-                }
-            },
-            modifier = modifier.fillMaxSize(),
-        )
+        // 全屏时播放器宿主在 DecorView，不在此挂 mainHost AndroidView——
+        // 否则 mainHostFactory 的 restoreCollapsedStructure 会把它从
+        // DecorView 同步摘下，撞上 onMeasure。全屏盖住整屏，底下留黑块占位。
+        if (isFullscreen) {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+            )
+        } else {
+            AndroidView(
+                factory = {
+                    mainHostFactory().also { view ->
+                        (view.parent as? ViewGroup)?.removeView(view)
+                    }
+                },
+                modifier = modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
