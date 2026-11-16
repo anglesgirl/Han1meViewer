@@ -8,6 +8,11 @@ on:
     paths-ignore:
       - "**.md"
   workflow_dispatch:
+    inputs:
+      apk_upload_id:
+        description: 'Resume a 24-hour Oracle upload session for the exact same APK SHA-256'
+        required: false
+        type: string
 
 jobs:
   build:
@@ -58,6 +63,7 @@ jobs:
           APK_TEST_API_TOKEN: ${{ secrets.APK_TEST_API_TOKEN }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.APK_TEST_CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.APK_TEST_CF_ACCESS_CLIENT_SECRET }}
+          APK_UPLOAD_ID: ${{ github.event.inputs.apk_upload_id }}
         run: ./scripts/oracle-apk-smoke.sh
 
       - name: Upload Oracle smoke-test evidence
