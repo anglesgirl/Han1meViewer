@@ -71,6 +71,10 @@ object HyWebViewHelper {
             .sslSocketFactory(ConscryptEch.socketFactory, ConscryptEch.trustManager)
             .dns(EchDns())
             .cookieJar(CookieJar.NO_COOKIES)
+            // ⓪ vdownload.hembed.com 被移动按 SNI 封锁（登录页 3 张图全在这上面）：
+            //    改写到同一 CDN 的备用域名再握手，ECH 藏不住它（CDN77 不发 ECHConfig）。
+            //    必须排在 ECH 之前，后续链路用改写后的 URL（与 echTransport 同序）。
+            .addInterceptor(CdnHostRewriter())
             .addInterceptor(EchRetryInterceptor())
             .followRedirects(false)
             .followSslRedirects(false)
@@ -85,6 +89,8 @@ object HyWebViewHelper {
         OkHttpClient.Builder()
             .dns(EchDns())
             .cookieJar(CookieJar.NO_COOKIES)
+            // 同 echClient：直连回退也得先改写，否则一样撞上被封的 SNI。
+            .addInterceptor(CdnHostRewriter())
             .followRedirects(false)
             .followSslRedirects(false)
             .connectTimeout(15, TimeUnit.SECONDS)
