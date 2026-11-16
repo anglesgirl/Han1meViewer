@@ -3,7 +3,22 @@ set -euo pipefail
 base='https://apk-test.anglesya.win'
 evidence_dir="$RUNNER_TEMP/apk-test-evidence"
 mkdir -m 700 -p "$evidence_dir"
-apk=$(find app/build/outputs/apk/release -maxdepth 1 -type f -name 'Han1meViewer-v*.apk' -print -quit)
+if [[ -n "${APK_UPLOAD_ID:-}" || -n "${APK_SOURCE_RUN_ID:-}" ]]; then
+  if [[ ! "${APK_UPLOAD_ID:-}" =~ ^[0-9a-f]{32}$ || ! "${APK_SOURCE_RUN_ID:-}" =~ ^[0-9]+$ ]]; then
+    echo '::error::To resume, provide both the 32-character upload ID and the original numeric GitHub Actions run ID.'
+    echo 'result=invalid_resume_parameters' >> "$GITHUB_OUTPUT"
+    exit 1
+  fi
+  source_sha=$(gh run view "$APK_SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)
+  [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Could not resolve source run commit.'; exit 1; }
+  resume_dir="$RUNNER_TEMP/original-apk"
+  mkdir -m 700 -p "$resume_dir"
+  gh run download "$APK_SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "app-release-$source_sha" --dir "$resume_dir"
+  apk=$(find "$resume_dir" -maxdepth 2 -type f -name 'Han1meViewer-v*.apk' -print -quit)
+  echo "Using original APK artifact from Actions run $APK_SOURCE_RUN_ID."
+else
+  apk=$(find app/build/outputs/apk/release -maxdepth 1 -type f -name 'Han1meViewer-v*.apk' -print -quit)
+fi
 if [[ -z "$apk" ]]; then
   echo '::error::No arm64 Han1meViewer APK was produced.'
   echo 'result=missing_apk' >> "$GITHUB_OUTPUT"
