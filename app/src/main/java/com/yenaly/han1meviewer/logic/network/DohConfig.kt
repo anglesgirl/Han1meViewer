@@ -89,5 +89,5 @@ object DohConfig {
     }
 
     /** Probe and ECH lookups use the selected endpoint even when the ordinary DoH toggle is off. */
-    fun probeUrl(): String = configuredUrl() ?: selectedPreset().url
+    fun probeUrl(): String? = configuredUrl()
 }

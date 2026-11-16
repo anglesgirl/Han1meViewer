@@ -58,11 +58,16 @@ object EchProbe {
 
         log("== 本机网络检测（ECH） ==")
         log("测试域名：$testHost")
-        log("DoH: ${DohConfig.probeUrl()}")
+        val dohUrl = DohConfig.probeUrl()
+        if (dohUrl == null) {
+            log("✗ 自定义 DoH URL 为空，请在网络设置中填写有效的 DoH 地址")
+            return ProbeResult("本机网络检测", lines, false)
+        }
+        log("DoH: $dohUrl")
 
         // --- 1. 取 ECH 配置（用 App 的现成逻辑，与实际握手一致） ---
         log("[1/4] 获取 $testHost 的 ECH 配置…")
-        log("  DoH 网关：${DohConfig.probeUrl()}")
+        log("  DoH 网关：$dohUrl")
         log("  Bootstrap IP：${DohConfig.bootstrapIps().joinToString()}")
         val echWire = EchDoh.echConfigList(testHost)
         if (echWire == null) {
@@ -192,8 +197,9 @@ object EchProbe {
 
     /** 经 DoH 解析 A 记录。 */
     fun resolveViaDoh(host: String): String? {
+        val dohUrl = DohConfig.probeUrl() ?: return null
         return try {
-            val url = "${DohConfig.probeUrl()}?name=$host&type=A"
+            val url = "$dohUrl?name=$host&type=A"
             val req = Request.Builder()
                 .url(url)
                 .header("Accept", "application/dns-json")

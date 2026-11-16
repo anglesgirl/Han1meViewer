@@ -43,6 +43,7 @@ object EchDoh {
 
     @Volatile
     private var observedResolverIdentity: DohResolverIdentity? = null
+    private val resolverEpoch = ResolverEpoch<DohResolverIdentity>()
     @Volatile
     private var cachedResolver: Dns? = null
     @Volatile
@@ -70,10 +71,10 @@ object EchDoh {
     }
 
     /** Clear resolver-bound caches whenever the effective endpoint, bootstrap pins, or timeout changes. */
-    private fun observeResolverIdentity(identity: DohResolverIdentity) {
-        if (observedResolverIdentity == identity) return
-        synchronized(this) {
-            if (observedResolverIdentity == identity) return
+    private fun observeResolverIdentity(identity: DohResolverIdentity): Long? = synchronized(this) {
+        // A request that captured old preferences must never switch the current epoch back.
+        if (DohConfig.resolverIdentity() != identity) return@synchronized null
+        if (observedResolverIdentity != identity) {
             observedResolverIdentity = identity
             cachedResolver = null
             cachedResolverIdentity = null
@@ -84,15 +85,13 @@ object EchDoh {
             ConscryptEch.clearConfiguredEchHosts()
             ConscryptEch.clearEchUnavailable()
         }
+        resolverEpoch.observe(identity)
     }
 
     /** Official DoH resolver for A/AAAA lookups; the same selected URL is used for HTTPS-record ECH lookups. */
-    private fun resolver(): Dns? {
-        val identity = DohConfig.resolverIdentity() ?: return null
-        observeResolverIdentity(identity)
-        cachedResolver?.let { if (cachedResolverIdentity == identity) return it }
+    private fun resolver(identity: DohResolverIdentity, ticket: Long): Dns? {
         return synchronized(this) {
-            if (observedResolverIdentity != identity) return@synchronized null
+            if (!isCurrent(identity, ticket)) return@synchronized null
             cachedResolver?.let { if (cachedResolverIdentity == identity) return@synchronized it }
             val pins = identity.bootstrapIps
                 .mapNotNull { runCatching { InetAddress.getByName(it) }.getOrNull() }
@@ -119,19 +118,24 @@ object EchDoh {
         }
     }
 
+    /** Caller holds this object's monitor, including during cache reads and writes. */
+    private fun isCurrent(identity: DohResolverIdentity, ticket: Long): Boolean =
+        resolverEpoch.isCurrent(identity, ticket) && DohConfig.resolverIdentity() == identity
+
     /** 用户改了 DoH 设置后调用，让解析器与 ECH 缓存都跟着刷新 */
     fun invalidateAll() {
         synchronized(this) {
             cachedResolver = null
             cachedResolverIdentity = null
             observedResolverIdentity = null
+            resolverEpoch.invalidate()
             cachedBootstrapClient = null
             cachedBootstrapTimeoutSeconds = null
             dnsCache.clear()
+            echCache.clear()
+            ConscryptEch.clearConfiguredEchHosts()
+            ConscryptEch.clearEchUnavailable()
         }
-        echCache.clear()
-        ConscryptEch.clearConfiguredEchHosts()
-        ConscryptEch.clearEchUnavailable()
     }
 
     // ---------------- ECH 配置 ----------------
@@ -148,12 +152,15 @@ object EchDoh {
         val name = normalizeDnsName(host)
         if (!EchHosts.shouldTryEch(name)) return null
         val resolverIdentity = DohConfig.resolverIdentity() ?: return null
-        observeResolverIdentity(resolverIdentity)
+        val ticket = observeResolverIdentity(resolverIdentity) ?: return null
         val sourceName = if (EchHosts.isCoreDomain(name)) LIVE_SOURCE_HOST else name
         val now = System.currentTimeMillis()
-        echCache[sourceName]?.let {
-            if (it.expireAt > now) return it.wire
-            echCache.remove(sourceName, it)
+        synchronized(this) {
+            if (!isCurrent(resolverIdentity, ticket)) return null
+            echCache[sourceName]?.let {
+                if (it.expireAt > now) return it.wire
+                echCache.remove(sourceName, it)
+            }
         }
 
         val hit = try {
@@ -167,7 +174,10 @@ object EchDoh {
             return null
         }
         val (wire, ttlMs) = hit
-        if (ttlMs > 0L) echCache[sourceName] = EchEntry(wire, now + ttlMs)
+        synchronized(this) {
+            if (!isCurrent(resolverIdentity, ticket)) return null
+            if (ttlMs > 0L) echCache[sourceName] = EchEntry(wire, now + ttlMs)
+        }
         EchTrace.event("ECHConfig loaded for host=$name source=$sourceName (${wire.size}B, ttl=${ttlMs}ms)")
         return wire
     }
@@ -299,14 +309,20 @@ object EchDoh {
         }
 
         val resolverIdentity = DohConfig.resolverIdentity() ?: return emptyList()
-        observeResolverIdentity(resolverIdentity)
+        val ticket = observeResolverIdentity(resolverIdentity) ?: return emptyList()
         val now = System.currentTimeMillis()
-        dnsCache[host]?.let { if (it.expireAt > now) return it.addrs }
+        synchronized(this) {
+            if (!isCurrent(resolverIdentity, ticket)) return emptyList()
+            dnsCache[host]?.let { if (it.expireAt > now) return it.addrs }
+        }
 
-        val r = resolver() ?: return emptyList()
+        val r = resolver(resolverIdentity, ticket) ?: return emptyList()
         return try {
             val addrs = r.lookup(host)
-            if (addrs.isNotEmpty()) dnsCache[host] = DnsEntry(addrs, now + DNS_CACHE_TTL_MS)
+            synchronized(this) {
+                if (!isCurrent(resolverIdentity, ticket)) return emptyList()
+                if (addrs.isNotEmpty()) dnsCache[host] = DnsEntry(addrs, now + DNS_CACHE_TTL_MS)
+            }
             EchTrace.event("doh resolve $host -> ${addrs.joinToString { it.hostAddress ?: "?" }}")
             addrs
         } catch (t: Throwable) {

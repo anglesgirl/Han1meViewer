@@ -484,6 +484,7 @@ fun NetworkSettingsRouteScreen() {
         dismissText = stringResource(R.string.cancel),
         cancelable = false,
         onConfirm = {
+            val previousResolver = DohConfig.resolverIdentity()
             Preferences.preferenceSp.edit(commit = true) {
                 when (pendingDohConflictTarget) {
                     DohConflictTarget.EnableDoH -> {
@@ -501,6 +502,7 @@ fun NetworkSettingsRouteScreen() {
                     }
                 }
             }
+            if (previousResolver != DohConfig.resolverIdentity()) EchHttp.onDohSettingsChanged()
             showDohConflictConfirm = false
             refreshKey++
             HanimeNetwork.rebuildNetwork()
