@@ -23,6 +23,7 @@ import com.yenaly.han1meviewer.base.AppLocale
 import com.yenaly.han1meviewer.base.BaseApplication
 import com.yenaly.han1meviewer.logic.network.HDns
 import com.yenaly.han1meviewer.logic.network.HProxySelector
+import com.yenaly.han1meviewer.logic.network.ech.CdnHostRewriter
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.util.AnimeShaders
@@ -67,6 +68,9 @@ class HanimeApplication : BaseApplication(), SingletonImageLoader.Factory {
                         OkHttpClient.Builder()
                             .connectTimeout(5, TimeUnit.SECONDS)
                             .dns(HDns())
+                            // 封面/头像全在 vdownload.hembed.com（移动按 SNI 封），与登录页
+                            // 图片同一根因：改写到 CDN77 备用域名再握手（与 HyWebViewHelper 同理）。
+                            .addInterceptor(CdnHostRewriter())
                             .build()
                     )
                 )
