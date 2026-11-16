@@ -12,22 +12,10 @@ data class DohPreset(
 object DohConfig {
     val presets = listOf(
         DohPreset(
-            key = "alidns",
-            title = "AliDNS",
-            url = "https://dns.alidns.com/dns-query",
-            bootstrapIps = listOf("223.5.5.5", "223.6.6.6"),
-        ),
-        DohPreset(
-            key = "dnspod",
-            title = "DNSPod",
-            url = "https://doh.pub/dns-query",
-            bootstrapIps = listOf("1.12.12.12", "120.53.53.53"),
-        ),
-        DohPreset(
-            key = "cloudflare",
-            title = "Cloudflare",
-            url = "https://cloudflare-dns.com/dns-query",
-            bootstrapIps = listOf("1.1.1.1", "1.0.0.1", "2606:4700:4700::1111", "2606:4700:4700::1001"),
+            key = "cf-gateway",
+            title = "Cloudflare Gateway",
+            url = "https://82sew1c85i.cloudflare-gateway.com/dns-query",
+            bootstrapIps = listOf("172.64.229.69"),
         ),
     )
 
@@ -52,6 +40,14 @@ object DohConfig {
         if (!Preferences.useDoH) return null
         return when (Preferences.dohPreset) {
             "custom" -> customUrl().takeIf { it.isNotBlank() }
+            else -> selectedPreset().url
+        }
+    }
+
+    /** 探针用：不检查 useDoH 开关，直接返回当前配置的 DoH URL。 */
+    fun probeUrl(): String {
+        return when (Preferences.dohPreset) {
+            "custom" -> customUrl().takeIf { it.isNotBlank() } ?: selectedPreset().url
             else -> selectedPreset().url
         }
     }

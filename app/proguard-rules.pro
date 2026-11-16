@@ -33,3 +33,6 @@
 -keep class androidx.window.extensions.embedding.** { *; }
 -keep class is.xyz.mpv.** { *; }
 -keep class lis.xyz.mpv.** { *; }
+# ECH: Conscrypt 反射调用 getNetworkSecurityPolicy()，R8 会误杀，必须保留
+-keep class com.yenaly.han1meviewer.logic.network.ech.ConscryptEch$PolicyTrustManager { *; }
+-keep class org.conscrypt.** { *; }

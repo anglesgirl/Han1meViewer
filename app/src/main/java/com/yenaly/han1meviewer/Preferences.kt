@@ -126,6 +126,15 @@ object Preferences {
             true
         )
 
+    /**
+     * Media3 是否使用 Cronet。預設關閉；指定媒體 CDN 節點 IP 時仍優先走 ECH OkHttp。
+     */
+    val useCronet: Boolean
+        get() = preferenceSp.getBoolean(
+            SettingsPreferenceKeys.USE_CRONET,
+            false
+        )
+
     val playerSpeed: Float
         get() = preferenceSp.getString(
             SettingsPreferenceKeys.PLAYER_SPEED,
@@ -259,14 +268,39 @@ object Preferences {
     val useBackupMediaCdn: Boolean
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_BACKUP_MEDIA_CDN, false)
 
+    var mediaCdnRegion: String
+        get() = preferenceSp.getString(SettingsPreferenceKeys.MEDIA_CDN_REGION, "").orEmpty()
+        set(value) = preferenceSp.edit { putString(SettingsPreferenceKeys.MEDIA_CDN_REGION, value) }
+
+    var mediaCdnCustomIp: String
+        get() = preferenceSp.getString(SettingsPreferenceKeys.MEDIA_CDN_CUSTOM_IP, "").orEmpty()
+        set(value) = preferenceSp.edit { putString(SettingsPreferenceKeys.MEDIA_CDN_CUSTOM_IP, value) }
+
+    /**
+     * 当前生效的媒体 CDN 节点 IP 列表：手动填写优先，否则用所选区域的预设 IP。
+     * 返回空列表表示不指定，走正常 DoH 解析。
+     */
+    val mediaCdnNodeIps: List<String>
+        get() {
+            val custom = mediaCdnCustomIp.trim()
+            if (custom.isNotEmpty()) {
+                return custom.split(',', ' ', '\n').map { it.trim() }.filter { it.isNotEmpty() }
+            }
+            val region = mediaCdnRegion
+            if (region.isNotEmpty()) {
+                return CDN_REGION_NODES.find { it.region == region }?.ips.orEmpty()
+            }
+            return emptyList()
+        }
+
     val customHostsData: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.CUSTOM_HOSTS_DATA, EMPTY_STRING).orEmpty()
 
     val useDoH: Boolean
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_DOH, false)
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.USE_DOH, true)
 
     val dohPreset: String
-        get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_PRESET, "alidns") ?: "alidns"
+        get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_PRESET, "cf-gateway") ?: "cf-gateway"
 
     val dohCustomUrl: String
         get() = preferenceSp.getString(SettingsPreferenceKeys.DOH_CUSTOM_URL, EMPTY_STRING).orEmpty()

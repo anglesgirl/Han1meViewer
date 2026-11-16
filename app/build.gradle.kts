@@ -33,7 +33,9 @@ android {
 
 
     defaultConfig {
-        applicationId = "com.yenaly.han1meviewer"
+        // fork: 与官方版共存（可同时安装），对应我们自己的 Firebase 应用
+        // （han1meviewer-fdb61，google-services.json 里的包名）
+        applicationId = "com.yenaly.han1meviewer.ech"
         minSdk = property("min.sdk")?.toString()?.toIntOrNull()
         targetSdk = property("target.sdk")?.toString()?.toIntOrNull()
         val (code, name) = createVersion(major = 1, minor = 4, patch = 0)
@@ -181,6 +183,7 @@ dependencies {
     implementation(libs.converter.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.dns.over.https)
+    implementation(libs.conscrypt.android)
 
     // pic
 
@@ -190,6 +193,9 @@ dependencies {
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.datasource.cronet)
+    implementation(libs.media3.datasource.okhttp)
+    implementation(libs.cronet.embedded)
     implementation(libs.mpv.lib)
 
     // firebase

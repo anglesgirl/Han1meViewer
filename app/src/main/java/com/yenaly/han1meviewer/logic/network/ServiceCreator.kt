@@ -11,6 +11,7 @@ import com.yenaly.han1meviewer.logic.network.interceptor.GetchuInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.UrlLoggingInterceptor
 import com.yenaly.han1meviewer.logic.network.interceptor.UserAgentInterceptor
+import com.yenaly.han1meviewer.logic.network.ech.echTransport
 import com.yenaly.han1meviewer.util.applicationContext
 import com.yenaly.han1meviewer.util.unsafeLazy
 import okhttp3.Cache
@@ -21,6 +22,9 @@ import okhttp3.Protocol
 import retrofit2.Retrofit
 import java.io.File
 import java.util.concurrent.TimeUnit
+
+internal fun isGitHubApiUrl(host: String, isHttps: Boolean): Boolean =
+    isHttps && host.equals("api.github.com", ignoreCase = true)
 
 /**
  * @project Hanime1
@@ -89,7 +93,7 @@ object ServiceCreator {
             .addInterceptor(GetchuInterceptor())
             .cookieJar(CookieJar.NO_COOKIES)
             .proxySelector(HProxySelector())
-            .dns(dns)
+            .echTransport(dns)
             .build()
     }
 
@@ -99,7 +103,7 @@ object ServiceCreator {
             .protocols(listOf(Protocol.HTTP_1_1))
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(downloadSpeedLimitInterceptor)
-            .dns(dns)
+            .echTransport(dns)
             .build()
     }
 
@@ -115,7 +119,7 @@ object ServiceCreator {
             .cache(cache)
             .cookieJar(HCookieJar())
             .proxySelector(HProxySelector())
-            .dns(dns)
+            .echTransport(dns)
             .build()
     }
 
@@ -133,9 +137,11 @@ object ServiceCreator {
             .addInterceptor(UserAgentInterceptor)
             .addInterceptor(UrlLoggingInterceptor())
             .addInterceptor { chain ->
-                val builder = chain.request().newBuilder()
-                if (token.isNotEmpty()) {
-                    builder.addHeader("Authorization", "Bearer $token")
+                val request = chain.request()
+                val builder = request.newBuilder()
+                // Release APK 下载会改写到 gh.anglesya.win；令牌仅发给 GitHub 官方 API。
+                if (token.isNotEmpty() && isGitHubApiUrl(request.url.host, request.url.isHttps)) {
+                    builder.header("Authorization", "Bearer $token")
                 }
                 return@addInterceptor chain.proceed(builder.build())
             }

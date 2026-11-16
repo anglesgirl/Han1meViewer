@@ -2,6 +2,7 @@ package com.yenaly.han1meviewer.ui.player.kernel
 
 import android.app.ActivityManager
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
@@ -17,6 +18,8 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cronet.CronetDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -26,6 +29,12 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import com.yenaly.han1meviewer.HANIME_BACKUP_MEDIA_CDN_HOST
+import com.yenaly.han1meviewer.HANIME_MEDIA_CDN_HOST
+import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.logic.network.ech.echTransport
+import okhttp3.OkHttpClient
+import org.chromium.net.CronetEngine
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -275,13 +284,38 @@ class ExoPlayerKernel(
             .build()
         player.addListener(exoListener)
 
-        val dataSourceFactory = DefaultDataSource.Factory(
-            context,
-            DefaultHttpDataSource.Factory()
-                .setDefaultRequestProperties(request.headers),
-        )
         val url = request.url
-        Log.i(TAG, "URL Link = $url")
+        val host = try {
+            Uri.parse(url).host
+        } catch (_: Exception) {
+            null
+        }
+        val useNodeIps = Preferences.mediaCdnNodeIps.isNotEmpty() &&
+                (host.equals(HANIME_MEDIA_CDN_HOST, ignoreCase = true) ||
+                        host.equals(HANIME_BACKUP_MEDIA_CDN_HOST, ignoreCase = true))
+        // Preserve the fork's transport routing: explicit CDN node IPs use the
+        // ECH-capable OkHttp transport first; otherwise Cronet is opt-in only.
+        val httpDataSourceFactory = if (useNodeIps) {
+            OkHttpDataSource.Factory(OkHttpClient.Builder().echTransport().build())
+        } else if (Preferences.useCronet) {
+            try {
+                val cronetEngine = CronetEngine.Builder(context)
+                    .enableHttp2(true)
+                    .enableQuic(true)
+                    .build()
+                CronetDataSource.Factory(
+                    cronetEngine,
+                    java.util.concurrent.Executors.newSingleThreadExecutor(),
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Cronet unavailable, using platform HTTP", e)
+                DefaultHttpDataSource.Factory()
+            }
+        } else {
+            DefaultHttpDataSource.Factory()
+        }.setDefaultRequestProperties(request.headers)
+        val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+        Log.i(TAG, "media source host=${host ?: "unknown"}")
         val mediaSource = if (url.contains(".m3u8")) {
             HlsMediaSource.Factory(dataSourceFactory)
                 .createMediaSource(MediaItem.fromUri(url))
