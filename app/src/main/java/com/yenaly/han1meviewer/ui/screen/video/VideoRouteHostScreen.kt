@@ -9,6 +9,7 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.graphics.drawable.Icon
+import android.os.Build
 import android.util.Log
 import android.util.Rational
 import android.view.View
@@ -97,6 +98,7 @@ import com.yenaly.han1meviewer.util.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
@@ -112,6 +114,8 @@ fun VideoRouteHostScreen(
     val player = remember(route.videoCode, route.localUri) {
         HanimePlayerController(activity, KernelType.ExoPlayer)
     }
+    // 播放器 UI 状态（PiP 宽高比 / 是否可进 PiP 用；上游 #681 后续 42f99166）。
+    val playerUiState by player.uiState.collectAsStateWithLifecycle()
     val shell = remember(route.videoCode, route.localUri) { VideoRouteShell(activity) }
     var isFullscreen by remember(route.videoCode, route.localUri) { mutableStateOf(false) }
     val fullscreenHandler = remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
@@ -248,27 +252,101 @@ fun VideoRouteHostScreen(
         }
     }
 
-    fun updatePipAction() {
-        if (!activity.isInPictureInPictureMode) return
-        val isPlaying = player.isPlaying
-        val icon = if (isPlaying) {
-            Icon.createWithResource(activity, R.drawable.ic_pip_pause_24)
+    // ---------------- PiP（上游 #681 后续 42f99166 移植，适配 clean-ech 单内核 + DecorView 全屏） ----------------
+
+    /** PiP 是否允许（与 MainActivity.onUserLeaveHint 读取同一偏好）。 */
+    val pipAllowed = remember(activity) {
+        android.preference.PreferenceManager
+            .getDefaultSharedPreferences(activity)
+            .getBoolean("allow_pip_mode", true)
+    }
+
+    /** PiP 是否满足进入条件（播放或暂停中）。 */
+    val pipEligible = playerUiState.state == PlayerState.PLAYING ||
+            playerUiState.state == PlayerState.PAUSED
+
+    /**
+     * PiP 窗口宽高比：按视频实际比例（PiP 支持范围外时收敛到边界），
+     * 未知时回落 16:9——窗口形状与视频一致，配合 sourceRectHint 才能无缝。
+     */
+    fun pipAspectRatio(): Rational {
+        val w = playerUiState.videoWidth
+        val h = playerUiState.videoHeight
+        val ratio = if (w > 0 && h > 0) {
+            (w.toFloat() / h).coerceIn(0.41841f, 2.39f)
         } else {
-            Icon.createWithResource(activity, R.drawable.ic_pip_play_arrow_24)
+            16f / 9f
         }
-        val title = if (isPlaying) "Pause Video" else "Play Video"
+        return Rational((ratio * 10_000).roundToInt(), 10_000)
+    }
+
+    /**
+     * 统一构建 PiP 参数（进入/更新/autoEnter 共用）：
+     * - 宽高比按视频实际比例，避免窗口形状跳变；
+     * - [includeSourceHint] 携带 sourceRectHint（进入动画从小窗矩形起）；
+     * - S+ 上按 [eligible] 设置 autoEnterEnabled——手势上滑回主页时
+     *   系统直接把播放器动画进 PiP，全程无缝。
+     */
+    fun buildPipParams(includeSourceHint: Boolean, eligible: Boolean): PictureInPictureParams {
         val intent = PendingIntent.getBroadcast(
             activity,
             0,
             Intent(MainActivity.ACTION_TOGGLE_PLAY).setPackage(activity.packageName),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val action = RemoteAction(icon, title, activity.getString(R.string.play_pause), intent)
-        val params = PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
+        val icon = if (player.isPlaying) {
+            Icon.createWithResource(activity, R.drawable.ic_pip_pause_24)
+        } else {
+            Icon.createWithResource(activity, R.drawable.ic_pip_play_arrow_24)
+        }
+        val action = RemoteAction(
+            icon,
+            activity.getString(R.string.play_pause),
+            activity.getString(R.string.play_pause),
+            intent,
+        )
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(pipAspectRatio())
             .setActions(listOf(action))
-            .build()
-        activity.setPictureInPictureParams(params)
+        if (includeSourceHint) {
+            val sourceRect = Rect()
+            shell.playerHostView.getGlobalVisibleRect(sourceRect)
+            if (sourceRect.width() > 0) builder.setSourceRectHint(sourceRect)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(eligible && pipAllowed)
+        }
+        return builder.build()
+    }
+
+    // 播放状态/视频尺寸/全屏态/PiP 模式变化时刷新 PiP 参数——autoEnter 依赖
+    // 最近一次 setPictureInPictureParams。关键：isInPipMode 也作为键——
+    // 从 PiP 展开回来时必须重设（PiP 期间 updatePipAction 刷新过按钮，
+    // 否则 autoEnter=false 的旧参数会留驻系统，导致第二次回桌面不再进 PiP）
+    LaunchedEffect(
+        pipEligible,
+        playerUiState.videoWidth,
+        playerUiState.videoHeight,
+        isFullscreen,
+        pipAllowed,
+        hostUiState.isInPipMode,
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hostUiState.isInPipMode) {
+            runCatching { activity.setPictureInPictureParams(buildPipParams(true, pipEligible)) }
+        }
+    }
+
+    fun updatePipAction() {
+        if (!activity.isInPictureInPictureMode) return
+        // 刷新播放/暂停按钮；保留 sourceRectHint 与 autoEnter（展开回 app 后
+        // 系统仍用这套参数，重置 autoEnter 会让下一次回桌面进不了 PiP）
+        runCatching { activity.setPictureInPictureParams(buildPipParams(true, pipEligible)) }
+    }
+
+    // PiP 小窗按钮图标随播放状态同步——播完/出错/音频焦点丢失等
+    // 非按钮路径的状态变化也要刷新 RemoteAction 图标
+    LaunchedEffect(hostUiState.isInPipMode, playerUiState.state) {
+        if (hostUiState.isInPipMode) updatePipAction()
     }
 
     fun changeScreenNormal() {
@@ -290,28 +368,7 @@ fun VideoRouteHostScreen(
             }
 
             override fun enterPipMode() {
-                val intent = PendingIntent.getBroadcast(
-                    activity,
-                    0,
-                    Intent(MainActivity.ACTION_TOGGLE_PLAY).setPackage(activity.packageName),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                )
-                val icon =
-                    Icon.createWithResource(activity, R.drawable.ic_pip_pause_24)
-                val action = RemoteAction(
-                    icon,
-                    activity.getString(R.string.play_pause),
-                    activity.getString(R.string.play_pause),
-                    intent,
-                )
-                val sourceRect = Rect()
-                shell.playerHostView.getGlobalVisibleRect(sourceRect)
-                val params = PictureInPictureParams.Builder()
-                    .setSourceRectHint(sourceRect)
-                    .setAspectRatio(Rational(16, 9))
-                    .setActions(listOf(action))
-                    .build()
-                activity.enterPictureInPictureMode(params)
+                activity.enterPictureInPictureMode(buildPipParams(includeSourceHint = true, eligible = true))
             }
 
             override fun onPipModeChanged(isInPip: Boolean) {
