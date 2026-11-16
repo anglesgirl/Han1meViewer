@@ -36,6 +36,8 @@ jobs:
       - name: Decode keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
 
       - name: Set up keystore for signing
         run: |
@@ -45,8 +47,6 @@ jobs:
       - name: Build and sign APK with Gradle
         run: ./gradlew assembleRelease
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.YOUR_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN }}
           HA1_VERSION_SOURCE: 'ci'
