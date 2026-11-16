@@ -1,0 +1,107 @@
+name: Oracle external APK smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_pinned_artifact:
+        description: Run the pinned Hyper Browser APK through the Oracle offline smoke test
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  smoke:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout test client
+        uses: actions/checkout@v4
+
+      - name: Download and verify the pinned Hyper Browser artifact
+        id: apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFIRM: ${{ inputs.confirm_pinned_artifact }}
+          SOURCE_RUN_ID: '43893177032'
+          SOURCE_ARTIFACT_ID: '14238327369'
+          SOURCE_ARTIFACT_NAME: AO3Reader-debug-apk
+          EXPECTED_SHA256: 6b621d16882e63253c994880410756f258460a483e4354144d8ee3d13f9458f1
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRM" != 'true' ]]; then
+            echo '::error::Set confirm_pinned_artifact to true to run this test.'
+            exit 1
+          fi
+
+          metadata="$RUNNER_TEMP/hyper-browser-artifact.json"
+          curl --fail --silent --show-error --max-time 30 \
+            "https://api.github.com/repos/anglesgirl/hyper-browser/actions/artifacts/$SOURCE_ARTIFACT_ID" \
+            -o "$metadata"
+          python3 - "$metadata" "$SOURCE_ARTIFACT_ID" "$SOURCE_RUN_ID" "$SOURCE_ARTIFACT_NAME" <<'PY'
+          import json, sys
+          path, artifact_id, run_id, name = sys.argv[1:]
+          item = json.load(open(path, encoding="utf-8"))
+          run = item.get("workflow_run") or {}
+          if (str(item.get("id")) != artifact_id or item.get("name") != name
+              or item.get("expired") is not False or str(run.get("id")) != run_id
+              or str(run.get("repository_id")) != "1301677741"):
+              raise SystemExit("Source artifact metadata did not match the pinned public artifact.")
+          print("Verified the public source artifact metadata.")
+          PY
+
+          download_dir="$RUNNER_TEMP/hyper-browser-artifact"
+          mkdir -p "$download_dir"
+          gh run download "$SOURCE_RUN_ID" --repo anglesgirl/hyper-browser \
+            --name "$SOURCE_ARTIFACT_NAME" --dir "$download_dir"
+          mapfile -t apks < <(find "$download_dir" -type f -name '*.apk' -print)
+          if [[ "${#apks[@]}" -ne 1 || "$(basename "${apks[0]:-}")" != 'app-arm64-v8a-debug.apk' ]]; then
+            echo '::error::The source artifact did not contain exactly the expected arm64 APK.'
+            exit 1
+          fi
+          actual_sha256=$(sha256sum "${apks[0]}" | awk '{print $1}')
+          if [[ "$actual_sha256" != "$EXPECTED_SHA256" ]]; then
+            echo '::error::The downloaded APK SHA-256 did not match the pinned artifact.'
+            exit 1
+          fi
+          unzip -tq "${apks[0]}" >/dev/null
+          printf 'apk_file=%s\n' "${apks[0]}" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Pinned external APK'
+            echo '- Source: `anglesgirl/hyper-browser`, Actions run `43893177032`'
+            echo '- Artifact ID: `14238327369` (`AO3Reader-debug-apk`)'
+            echo "- SHA-256: `$actual_sha256`"
+            echo '- The APK is downloaded only to the runner; this workflow does not build or publish an APK.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Submit exact APK to Oracle offline smoke test
+        id: oracle_smoke
+        env:
+          APK_TEST_API_TOKEN: ${{ secrets.APK_TEST_API_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.APK_TEST_CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.APK_TEST_CF_ACCESS_CLIENT_SECRET }}
+          APK_FILE: ${{ steps.apk.outputs.apk_file }}
+        run: ./scripts/oracle-apk-smoke.sh
+
+      - name: Upload Oracle test evidence (no APK)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-hyper-browser-smoke-${{ github.run_id }}
+          path: ${{ runner.temp }}/apk-test-evidence
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Fail unless the offline smoke test passed
+        if: always()
+        env:
+          ORACLE_TEST_RESULT: ${{ steps.oracle_smoke.outputs.result }}
+        run: |
+          if [[ "$ORACLE_TEST_RESULT" != 'passed' ]]; then
+            echo "::error::Oracle smoke test result: ${ORACLE_TEST_RESULT:-missing}"
+            exit 1
+          fi

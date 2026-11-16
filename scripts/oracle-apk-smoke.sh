@@ -3,7 +3,15 @@ set -euo pipefail
 base='https://apk-test.anglesya.win'
 evidence_dir="$RUNNER_TEMP/apk-test-evidence"
 mkdir -m 700 -p "$evidence_dir"
-if [[ -n "${APK_SOURCE_RUN_ID:-}" ]]; then
+if [[ -n "${APK_FILE:-}" ]]; then
+  apk=$APK_FILE
+  if [[ ! -f "$apk" ]]; then
+    echo '::error::APK_FILE does not point to a downloaded APK file.'
+    echo 'result=missing_supplied_apk' >> "$GITHUB_OUTPUT"
+    exit 1
+  fi
+  echo 'Using the explicitly supplied APK file.'
+elif [[ -n "${APK_SOURCE_RUN_ID:-}" ]]; then
   if [[ ! "$APK_SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
     echo '::error::APK_SOURCE_RUN_ID must be the original numeric GitHub Actions run ID.'
     echo 'result=invalid_source_run_id' >> "$GITHUB_OUTPUT"
