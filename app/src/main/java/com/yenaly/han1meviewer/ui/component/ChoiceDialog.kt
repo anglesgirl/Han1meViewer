@@ -60,9 +60,9 @@ fun ChoiceDialog(
 private fun ChoiceDialogPreview() {
     ComponentPreview {
         ChoiceDialog(
-            title = "选择播放器",
-            options = listOf("ExoPlayer" to "exo", "MPV" to "mpv"),
-            selectedValue = "exo",
+            title = "选择倍速",
+            options = listOf("1.0x" to "1.0", "1.5x" to "1.5", "2.0x" to "2.0"),
+            selectedValue = "1.0",
             onDismiss = {},
             onSelect = {},
             visible = true,

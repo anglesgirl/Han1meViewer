@@ -61,9 +61,6 @@ data class PlayerUiState(
     /** 手势是否锁定（锁定后禁用全部手势与控件，仅保留锁开关）。 */
     val isGestureLocked: Boolean = false,
 
-    /** Anime4K 超分档位（0 关闭 / 1 性能 / 2 画质，仅 MPV 内核生效）。 */
-    val superResolutionIndex: Int = PlayerDefaults.DEF_SUPER_RESOLUTION_INDEX,
-
     /** 视频像素宽（含像素宽高比换算），未就绪为 0。 */
     val videoWidth: Int = 0,
 

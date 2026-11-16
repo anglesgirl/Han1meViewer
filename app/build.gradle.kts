@@ -196,7 +196,6 @@ dependencies {
     implementation(libs.media3.datasource.cronet)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.cronet.embedded)
-    implementation(libs.mpv.lib)
 
     // firebase
 

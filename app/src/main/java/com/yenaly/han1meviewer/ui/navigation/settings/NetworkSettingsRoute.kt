@@ -96,7 +96,6 @@ fun NetworkSettingsRouteScreen() {
     var showCustomMirrorValidationError by remember { mutableStateOf(false) }
     var showCustomMirrorWarningConfirm by remember { mutableStateOf(false) }
     var showDohConflictConfirm by remember { mutableStateOf(false) }
-    var showSocks5Warning by remember { mutableStateOf(false) }
     var showApplyDeepLinksDialog by remember { mutableStateOf(false) }
     var pendingDomainValue by remember { mutableStateOf("") }
     var pendingUseCustomMirrorSite by remember { mutableStateOf(Preferences.useCustomMirrorSite) }
@@ -366,9 +365,6 @@ fun NetworkSettingsRouteScreen() {
                 GlobalToasts.show(invalidIpOrPort, level = GlobalToasts.ToastLevel.WARNING)
                 return@NetworkSettingsScreen
             }
-            if (type == HProxySelector.TYPE_SOCKS) {
-                showSocks5Warning = true
-            }
             Preferences.preferenceSp.edit(commit = true) {
                 putInt(NETWORK_PROXY_TYPE, type)
                 putString(NETWORK_PROXY_IP, ip)
@@ -506,19 +502,6 @@ fun NetworkSettingsRouteScreen() {
         },
         onDismiss = { showDohConflictConfirm = false },
     )
-
-    if (showSocks5Warning) {
-        AlertDialog(
-            onDismissRequest = { showSocks5Warning = false },
-            title = { Text(stringResource(R.string.warning)) },
-            text = { Text(stringResource(R.string.mpv_socks5_warning)) },
-            confirmButton = {
-                TextButton(onClick = { showSocks5Warning = false }) {
-                    Text(stringResource(R.string.confirm))
-                }
-            },
-        )
-    }
 
     if (showApplyDeepLinksDialog) {
         AlertDialog(

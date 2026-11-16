@@ -3,30 +3,8 @@ package com.yenaly.han1meviewer.ui.player.kernel
 import android.content.Context
 import android.view.Surface
 
-/**
- * 播放内核类型。
- *
- * @property ExoPlayer Media3 ExoPlayer，默认内核，支持 HLS 与普通媒体流。
- * @property MpvPlayer libmpv 内核，支持 Anime4K 超分、插帧等高级渲染特性。
- */
-enum class KernelType {
-    ExoPlayer,
-    MpvPlayer;
-
-    companion object {
-
-        /**
-         * 从设置存储的字符串解析内核类型。
-         *
-         * 旧版本的 `MediaPlayer`（android.media.MediaPlayer）内核已移除，
-         * 读到旧值时回落到 [ExoPlayer]，保证老用户设置不失效。
-         */
-        fun fromString(name: String?): KernelType = when (name) {
-            MpvPlayer.name -> MpvPlayer
-            else -> ExoPlayer
-        }
-    }
-}
+// 单播放器：只保留 Media3 ExoPlayer。MPV 内核已移除（2026-11-16，
+// 上游分支跟随单播放器定案），不再提供内核切换。
 
 /**
  * 一次播放请求。
@@ -98,9 +76,6 @@ interface KernelListener {
  */
 interface PlayerKernel {
 
-    /** 内核类型标识。 */
-    val type: KernelType
-
     /** 事件回调，内核持有弱引用语义由实现决定，调用方负责置空避免泄漏。 */
     var listener: KernelListener?
 
@@ -149,22 +124,6 @@ interface PlayerKernel {
      */
     fun setSurface(surface: Surface?)
 
-    /**
-     * surface 尺寸变化通知。
-     *
-     * 仅 MPV 内核需要（更新 `android-surface-size`），默认空实现。
-     */
-    fun onSurfaceSizeChanged(width: Int, height: Int) {}
-
-    /**
-     * 设置 Anime4K 超分档位。
-     *
-     * 仅 MPV 内核支持，默认空实现。
-     *
-     * @param index 0 关闭 / 1 性能 / 2 画质
-     */
-    fun setSuperResolution(index: Int) {}
-
     /** 释放内核资源，幂等。 */
     fun release()
 }
@@ -172,18 +131,14 @@ interface PlayerKernel {
 /**
  * 内核工厂。
  *
- * 按类型创建内核实例，内核不设计为可跨类型切换，
- * 切换内核 = 释放旧实例 + 以新类型重新创建。
+ * 单播放器：固定创建 ExoPlayer 内核。
  */
 object PlayerKernelFactory {
 
     /**
-     * 创建指定类型的播放内核。
+     * 创建 ExoPlayer 播放内核。
      */
-    fun create(type: KernelType, context: Context): PlayerKernel {
-        return when (type) {
-            KernelType.ExoPlayer -> ExoPlayerKernel(context.applicationContext)
-            KernelType.MpvPlayer -> MpvKernel(context.applicationContext)
-        }
+    fun create(context: Context): PlayerKernel {
+        return ExoPlayerKernel(context.applicationContext)
     }
 }

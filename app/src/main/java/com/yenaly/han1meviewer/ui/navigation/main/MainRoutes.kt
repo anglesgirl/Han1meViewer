@@ -7,7 +7,6 @@ import com.yenaly.han1meviewer.ui.navigation.settings.DownloadSettingsRoute
 import com.yenaly.han1meviewer.ui.navigation.settings.HKeyframeSettingsRoute
 import com.yenaly.han1meviewer.ui.navigation.settings.HKeyframesRoute
 import com.yenaly.han1meviewer.ui.navigation.settings.HomeSettingsRoute
-import com.yenaly.han1meviewer.ui.navigation.settings.MpvPlayerSettingsRoute
 import com.yenaly.han1meviewer.ui.navigation.settings.NetworkSettingsRoute
 import com.yenaly.han1meviewer.ui.navigation.settings.PlayerSettingsRoute
 import com.yenaly.han1meviewer.ui.navigation.settings.SettingsCategoryRoute
@@ -179,11 +178,6 @@ enum class MainDestinationSpec(
     SettingsDownload(
         topLevelDestination = MainTopLevelDestination.Profile,
         routeClass = DownloadSettingsRoute::class,
-        showNavigationSuite = false,
-    ),
-    SettingsMpv(
-        topLevelDestination = MainTopLevelDestination.Profile,
-        routeClass = MpvPlayerSettingsRoute::class,
         showNavigationSuite = false,
     ),
     SettingsHKeyframes(

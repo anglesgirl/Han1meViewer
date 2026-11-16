@@ -12,7 +12,6 @@ import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.ResolutionLinkMap
 import com.yenaly.han1meviewer.ui.player.HanimePlayerController.Companion.RESUME_THRESHOLD_MS
 import com.yenaly.han1meviewer.ui.player.kernel.KernelListener
-import com.yenaly.han1meviewer.ui.player.kernel.KernelType
 import com.yenaly.han1meviewer.ui.player.kernel.MediaRequest
 import com.yenaly.han1meviewer.ui.player.kernel.PlayerKernel
 import com.yenaly.han1meviewer.ui.player.kernel.PlayerKernelFactory
@@ -38,19 +37,16 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * 取代旧版 JZVD（`Jzvd` / `HJzvdStd`）的静态状态机与 UI View 混合职责：
  * - 持有一个 [PlayerKernel]，把它的事件翻译成 [PlayerUiState]（低频）与 [PlayerProgress]（约 100ms 高频）两条流；
- * - 对 UI 暴露命令方法（播放/暂停/seek/倍速/循环/清晰度切换/超分/手势锁…）；
+ * - 对 UI 暴露命令方法（播放/暂停/seek/倍速/循环/清晰度切换/手势锁…）；
  * - 收编音频焦点、流量确认、观看进度恢复、长按倍速等原散落在 `HJzvdStd` 的逻辑。
  *
  * 一个播放页面持有一个实例；随 [release] 释放全部资源。
  * 页面层（全屏/小窗/PiP）只消费状态流，不直接触碰内核。
  *
  * @param context 任意 Context，内部持有应用级
- * @param kernelType 播放内核类型
  */
 class HanimePlayerController(
     context: Context,
-    /** 内核类型（UI 判断 MPV 专属功能显隐用）。 */
-    val kernelType: KernelType,
 ) : KernelListener {
 
     companion object {
@@ -69,7 +65,7 @@ class HanimePlayerController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /** 当前内核；换源/重试时释放重建。 */
-    private var kernel: PlayerKernel = PlayerKernelFactory.create(kernelType, appContext)
+    private var kernel: PlayerKernel = PlayerKernelFactory.create(appContext)
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -169,9 +165,8 @@ class HanimePlayerController(
         val index = links.indexOfFirst { it.first == preferredQuality }
             .takeIf { it >= 0 } ?: 0
 
-        // 会话倍速从用户偏好初始化（此前仅 MPV 内核在 FILE_LOADED 里生效，
-        // 换清晰度时还会被重置回偏好值）；随后由 MediaRequest.speed 随每次
-        // prepare 应用到内核，两个内核行为一致。
+        // 会话倍速从用户偏好初始化；随后由 MediaRequest.speed 随每次
+        // prepare 应用到内核。
         val preferredSpeedIndex = PlayerDefaults.speedArray
             .indexOfFirst { it == Preferences.playerSpeed }
             .takeIf { it >= 0 } ?: PlayerDefaults.DEF_SPEED_INDEX
@@ -244,12 +239,11 @@ class HanimePlayerController(
     /**
      * 释放并按当前状态重建内核，随后以给定位置准备媒体。
      *
-     * 重建后先把当前 surface 挂回新内核（MPV 必须在 loadfile 前 attach surface，
-     * 否则 vo 初始化会原生崩溃）。
+     * 重建后先把当前 surface 挂回新内核。
      */
     private fun reprepareKernel(positionMs: Long) {
         kernel.release()
-        kernel = PlayerKernelFactory.create(kernel.type, appContext)
+        kernel = PlayerKernelFactory.create(appContext)
         kernel.listener = this
         currentSurface?.let { kernel.setSurface(it) }
         val state = _uiState.value
@@ -347,12 +341,6 @@ class HanimePlayerController(
         kernel.setLooping(looping)
     }
 
-    /** 设置 Anime4K 超分档位（仅 MPV 内核生效）。 */
-    fun setSuperResolution(index: Int) {
-        _uiState.update { it.copy(superResolutionIndex = index) }
-        kernel.setSuperResolution(index)
-    }
-
     /** 锁定/解锁手势。 */
     fun setGestureLocked(locked: Boolean) {
         _uiState.update { it.copy(isGestureLocked = locked) }
@@ -370,13 +358,6 @@ class HanimePlayerController(
         currentSurface?.release()
         currentSurface = Surface(surfaceTexture)
         kernel.setSurface(currentSurface)
-    }
-
-    /**
-     * Surface 尺寸变化（MPV 内核需要同步 `android-surface-size`）。
-     */
-    fun onSurfaceSizeChanged(width: Int, height: Int) {
-        kernel.onSurfaceSizeChanged(width, height)
     }
 
     // ---------------- 内核事件 ----------------

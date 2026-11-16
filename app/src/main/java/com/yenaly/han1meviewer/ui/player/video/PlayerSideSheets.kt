@@ -64,9 +64,6 @@ enum class PlayerSheetType {
     /** 清晰度。 */
     Quality,
 
-    /** Anime4K 超分（仅 MPV 内核）。 */
-    SuperResolution,
-
     /** 关键 H 帧列表。 */
     Keyframes,
 }
@@ -112,7 +109,7 @@ private fun BubbleOptionItem(
 }
 
 /**
- * 漫画对话泡样式的气泡弹窗（倍速 / 清晰度 / 超分共用）。
+ * 漫画对话泡样式的气泡弹窗（倍速 / 清晰度共用）。
  *
  * 从触发按钮的位置弹出，气泡带一枚指向锚点的小三角；高度按
  * [itemCount] 预计算（每行 [ITEM_HEIGHT]，最多同时展示 [maxVisibleItems] 行，
@@ -261,28 +258,6 @@ internal fun QualityBubble(
     onSelect: (Int) -> Unit,
 ) {
     qualities.forEachIndexed { index, item ->
-        BubbleOptionItem(
-            text = item,
-            selected = index == currentIndex,
-            onClick = { onSelect(index) },
-        )
-    }
-}
-
-/**
- * Anime4K 超分气泡内容（仅 MPV 内核显示）。
- */
-@Composable
-internal fun SuperResolutionBubble(
-    currentIndex: Int,
-    onSelect: (Int) -> Unit,
-) {
-    val options = listOf(
-        stringResource(R.string.super_resolution_off),
-        stringResource(R.string.super_resolution_performance),
-        stringResource(R.string.super_resolution_quality),
-    )
-    options.forEachIndexed { index, item ->
         BubbleOptionItem(
             text = item,
             selected = index == currentIndex,

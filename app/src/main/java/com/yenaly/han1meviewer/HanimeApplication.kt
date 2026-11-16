@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Process
-import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
 import coil3.ImageLoader
@@ -26,9 +25,7 @@ import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.logic.network.ech.CdnHostRewriter
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
-import com.yenaly.han1meviewer.util.AnimeShaders
 import com.yenaly.han1meviewer.util.ThemeUtils
-import `is`.xyz.mpv.MPVLib
 import okhttp3.OkHttpClient
 import java.net.ProxySelector
 import java.util.concurrent.TimeUnit
@@ -41,8 +38,6 @@ import java.util.concurrent.TimeUnit
 class HanimeApplication : BaseApplication(), SingletonImageLoader.Factory {
 
     companion object {
-        const val TAG = "HanimeApplication"
-
         /**
          * 全局图片内存缓存上限。
          *
@@ -127,15 +122,7 @@ class HanimeApplication : BaseApplication(), SingletonImageLoader.Factory {
         HProxySelector.rebuildNetwork()
         initFirebase()
         initNotificationChannel()
-        MPVLib.create(applicationContext)
-        MPVLib.init()
 
-        if (AnimeShaders.copyShaderAssets(applicationContext) <= 0) {
-            Log.w(TAG, "Shader 复制失败")
-        }
-        if (AnimeShaders.copyCertAssets(applicationContext) <= 0) {
-            Log.w(TAG, "cert 复制失败")
-        }
         val selected = Preferences.fakeLauncherIcon
         switchLauncher(selected)
     }

@@ -104,7 +104,6 @@ import com.yenaly.han1meviewer.ui.navigation.main.VideoRoute
 import com.yenaly.han1meviewer.ui.navigation.navigateSafely
 import com.yenaly.han1meviewer.ui.player.HanimePlayerController
 import com.yenaly.han1meviewer.ui.player.PlayerState
-import com.yenaly.han1meviewer.ui.player.kernel.KernelType
 import com.yenaly.han1meviewer.ui.player.surface.rememberMovablePlayerSurface
 import com.yenaly.han1meviewer.ui.player.video.HanimeVideoPlayer
 import com.yenaly.han1meviewer.ui.viewmodel.CommentViewModel
@@ -187,9 +186,8 @@ fun VideoRouteHostScreen(
 
     // ---------------- 播放器核心 ----------------
 
-    val kernelType = remember { KernelType.fromString(Preferences.switchPlayerKernel) }
     val controller = remember(route.videoCode, route.localUri) {
-        HanimePlayerController(activity, kernelType)
+        HanimePlayerController(activity)
     }
     val playerUiState by controller.uiState.collectAsStateWithLifecycle()
 

@@ -108,8 +108,6 @@ class ExoPlayerKernel(
         }
     }
 
-    override val type = KernelType.ExoPlayer
-
     override var listener: KernelListener? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -360,7 +358,7 @@ class ExoPlayerKernel(
                     // seek 目标超出已缓冲范围，显示 loading
                     mainHandler.post { listener?.onBuffering() }
                 }
-                // 不强制 playWhenReady：暂停中 seek 保持暂停（对齐 MPV 内核）。
+                // 不强制 playWhenReady：暂停中 seek 保持暂停。
                 // 暂停中的远端 seek 会先进入 BUFFERING，seek 完成后由
                 // onPositionDiscontinuity 的 onPaused 恢复暂停态。
                 player.seekTo(positionMs)

@@ -197,25 +197,22 @@ private fun batteryIcon(pct: Int): ImageVector = when {
 /**
  * 播放器顶栏。
  *
- * 全屏：返回 + 标题 +（🥵 / 倍速 / Anime4K）胶囊 + 电量时间；
+ * 全屏：返回 + 标题 +（🥵 / 倍速）胶囊 + 电量时间；
  * 普通窗口：返回 + 回到首页（标题不展示，对齐旧版行为）。
  *
- * 倍速/超分点击回调携带按钮锚点坐标，供气泡弹窗定位。
+ * 倍速点击回调携带按钮锚点坐标，供气泡弹窗定位。
  */
 @Composable
 internal fun PlayerTopBar(
     isFullscreen: Boolean,
     title: String,
     showHKeyframeButton: Boolean,
-    showSuperResolution: Boolean,
     speedLabel: String,
-    superResLabel: String,
     onBack: () -> Unit,
     onGoHome: () -> Unit,
     onSpeedClick: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit,
     onKeyframeClick: () -> Unit,
     onKeyframeLongClick: () -> Unit,
-    onSuperResolutionClick: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (isFullscreen) {
@@ -258,11 +255,7 @@ internal fun PlayerTopBar(
                     Spacer(modifier = Modifier.width(6.dp))
                 }
                 CompactChip(text = speedLabel, onClick = onSpeedClick)
-                Spacer(modifier = Modifier.width(6.dp))
-                if (showSuperResolution) {
-                    CompactChip(text = superResLabel, onClick = onSuperResolutionClick)
-                    Spacer(modifier = Modifier.width(10.dp))
-                }
+                Spacer(modifier = Modifier.width(10.dp))
                 BatteryTimeChip()
             }
         }

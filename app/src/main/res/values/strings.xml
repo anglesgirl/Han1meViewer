@@ -459,7 +459,6 @@
     <string name="apply_deep_links">預設開啟</string>
     <string name="apply_deep_links_summary">允許在這個應用程式中開啟網頁連結</string>
     <string name="apply_deep_links_tips">MIUI 隱藏了這個介面，所以你需要從這裡打開然後添加連結</string>
-    <string name="switch_player_kernel">切換播放器內核</string>
     <string name="switch_to_year">切換至年</string>
     <string name="switch_to_year_month">切換至年月</string>
     <string name="subscribe">訂閱</string>
@@ -719,10 +718,6 @@
     <string name="save_image_confirm">是否儲存圖片？</string>
     <string name="japanese_lang" translatable="false">日本語</string>
     <string name="simplified_chinese" translatable="false">简体中文</string>
-    <string name="anime_4k" translatable="false">Anime 4K</string>
-    <string name="super_resolution_off">關閉</string>
-    <string name="super_resolution_performance">效能優先</string>
-    <string name="super_resolution_quality">品質優先</string>
     <string name="advanced_search_combination">進階搜尋組合</string>
     <string name="app_tampered">本應用已被惡意篡改！請注意資訊安全！</string>
     <string name="download_complete">下載完成</string>
@@ -734,41 +729,9 @@
     <string name="load_failed_retry">載入失敗，請重試</string>
     <string name="video_count">%d部影片</string>
     <string name="load_complete_with_pages">載入完畢，共%d頁</string>
-    <string name="mpv_advanced_settings">MPV 播放核心設定</string>
-    <string name="mpv_settings_disabled_summary">僅當播放核心為 MPV 播放器時可設定</string>
-    <string name="mpv_advanced_settings_summary">設定畫質、效能與網路快取等進階選項</string>
-    <string name="player_settings_quality_performance">畫質與效能</string>
-    <string name="player_settings_network_cache">網路與快取</string>
-    <string name="mpv_profile">渲染品質級別 (profile)</string>
-    <string name="mpv_interpolation">啟用插幀增強 (interpolation)</string>
-    <string name="mpv_interpolation_summary">提升低幀率影片流暢度，但會增加功耗</string>
-    <string name="mpv_deband">去色帶增強 (deband)</string>
-    <string name="mpv_deband_summary">減少暗場或漸變區域的色帶現象</string>
-    <string name="mpv_framedrop">允許跳幀保持流暢 (framedrop)</string>
-    <string name="mpv_framedrop_summary">GPU 繁忙時可略微丟幀以避免卡頓</string>
-    <string name="mpv_hwdec">解碼方式 (hwdec)</string>
-    <string name="mpv_hwdec_summary">利用硬體加速提升播放效能，部分裝置無法使用硬解播放黑屏可嘗試關閉</string>
-    <string name="mpv_cache_secs">預快取時長</string>
-    <string name="mpv_cache_secs_summary">調整快取大小以適應網路波動</string>
-    <string name="mpv_tls_verify">忽略 HTTPS 憑證驗證</string>
-    <string name="mpv_tls_verify_summary">部分站點憑證異常時可臨時關閉驗證</string>
-    <string name="mpv_network_timeout">網路逾時時間</string>
-    <string name="mpv_network_timeout_summary">控制請求等待時間</string>
-    <string name="enable_gpu_next">啟用GPU NEXT渲染器</string>
-    <string name="enable_gpu_next_summary">新版渲染器，可能不穩定 (不支援Anime4K)</string>
     <string name="profile_fast">效能優先 (fast)</string>
     <string name="profile_gpu_hq">畫質優先 (gpu-hq)</string>
-    <string name="custom_parameters">自訂參數</string>
-    <string name="custom_parameters_summary">設定播放器啟動參數/設定，格式為key,parameters，使用英文分號分隔</string>
     <string name="advanced">進階</string>
-    <string name="custom_parameters_example">例如：vo,gpu;profile,gpu-hq;framedrop,no</string>
-    <string name="custom_parameters_title">注意：因播放器平台不同，部分參數可能不會生效</string>
-    <string name="decoding_sw">軟體解碼 (SW: no)</string>
-    <string name="decoding_hw_plus">標準硬體解碼 + 渲染直通 (HW+: mediacodec)</string>
-    <string name="decoding_hw">硬體解碼 (HW: mediacodec-copy)</string>
-    <string name="decoding_auto">自動選擇 (auto)</string>
-    <string name="decoding_vulkan_copy">Vulkan (實驗性: vulkan-copy)</string>
-    <string name="decoding_vulkan">Vulkan + 渲染直通 (實驗性: vulkan)</string>
     <string name="complete_cloudflare_verification">Cloudflare 驗證</string>
     <string name="complete_cloudflare_verification_with_warning">請完成 Cloudflare 驗證，並等待頁面主動關閉。\n WebView元件版本過低可能會驗證失敗，如循環驗證！如驗證失敗，請升級WebView或到 設定->網路設定->網域 更換其他備選網域（其他網域可能風控程度較低）。</string>
     <string name="search_artist_ignore_video_type">搜尋藝術家忽略影片類型</string>
@@ -812,7 +775,6 @@
     <string name="download_group_script_traditional">繁體</string>
     <string name="disable_mobile_data_warning">關閉流量提醒</string>
     <string name="disable_mobile_data_warning_summary">開啟後使用行動流量播放時將不再提醒</string>
-    <string name="mpv_socks5_warning">注意：MPV播放核心不支援Socks代理，可能會播放失敗</string>
     <string name="warning">警告</string>
     <string name="collapse_downloaded_groups">預設折疊已下載群組</string>
     <string name="collapse_downloaded_groups_summary">開啟後，進入已下載頁面時，將預設折疊群組</string>

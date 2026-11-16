@@ -22,7 +22,7 @@ import com.yenaly.han1meviewer.ui.player.HanimePlayerController
  * - 跨容器移动时系统会回调 `onSurfaceTextureAvailable` 提供新纹理，
  *   此时把旧纹理 `setSurfaceTexture` 塞回去，渲染管线无缝衔接。
  *
- * @param controller 播放器控制器，负责把纹理挂载到内核并同步尺寸
+ * @param controller 播放器控制器，负责把纹理挂载到内核
  */
 @Composable
 fun rememberMovablePlayerSurface(
@@ -50,16 +50,13 @@ fun rememberMovablePlayerSurface(
                                     // 换回旧纹理避免画面重建、播放中断。
                                     setSurfaceTexture(saved)
                                 }
-                                controller.onSurfaceSizeChanged(width, height)
                             }
 
                             override fun onSurfaceTextureSizeChanged(
                                 surfaceTexture: SurfaceTexture,
                                 width: Int,
                                 height: Int,
-                            ) {
-                                controller.onSurfaceSizeChanged(width, height)
-                            }
+                            ) = Unit
 
                             override fun onSurfaceTextureDestroyed(
                                 surfaceTexture: SurfaceTexture,

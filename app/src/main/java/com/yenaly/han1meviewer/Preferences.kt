@@ -11,7 +11,6 @@ import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.logic.network.interceptor.SpeedLimitInterceptor
 import com.yenaly.han1meviewer.ui.navigation.settings.SettingsPreferenceKeys
 import com.yenaly.han1meviewer.ui.player.PlayerDefaults
-import com.yenaly.han1meviewer.ui.player.kernel.KernelType
 import com.yenaly.han1meviewer.util.CookieString
 import com.yenaly.han1meviewer.util.SafFileManager
 import com.yenaly.han1meviewer.util.applicationContext
@@ -113,12 +112,6 @@ object Preferences {
         }
 
     // 設定 相關
-
-    val switchPlayerKernel: String
-        get() = preferenceSp.getString(
-            SettingsPreferenceKeys.SWITCH_PLAYER_KERNEL,
-            KernelType.ExoPlayer.name
-        ) ?: KernelType.ExoPlayer.name
 
     val showBottomProgress: Boolean
         get() = preferenceSp.getBoolean(
@@ -433,39 +426,6 @@ object Preferences {
 
     val showExitConfirm: Boolean
         get() = preferenceSp.getBoolean(SettingsPreferenceKeys.SHOW_EXIT_CONFIRM, true)
-
-    /**
-     * MPV播放器设置
-     */
-    val mpvProfile: String // 预设模式
-        get() = preferenceSp.getString(SettingsPreferenceKeys.MPV_PROFILE, "fast") ?: "fast"
-
-    val enableGPUNextRenderer: Boolean // gpu-next 渲染器
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.ENABLE_GPU_NEXT_RENDERER, false)
-
-    val mpvInterpolation: Boolean  // 插帧相关
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.MPV_INTERPOLATION, false)
-
-    val mpvDeband: Boolean  // 去色带
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.MPV_DEBAND, true)
-
-    val mpvFramedrop: Boolean  // GPU 繁忙时允许丢帧
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.MPV_FRAMEDROP, true)
-
-    val mpvHwdec: String  // 硬件解码
-        get() = preferenceSp.getString(SettingsPreferenceKeys.MPV_HWDEC, "Auto")?: "Auto"
-
-    val mpvCacheSecs: Int  // 预缓存秒数
-        get() = preferenceSp.getInt(SettingsPreferenceKeys.MPV_CACHE_SECS, 60)
-
-    val mpvTlsVerify: Boolean  // 忽略证书验证
-        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.MPV_TLS_VERIFY, true)
-
-    val mpvNetworkTimeout: Int  // 请求超时
-        get() = preferenceSp.getInt(SettingsPreferenceKeys.MPV_NETWORK_TIMEOUT, 10)
-
-    val customMpvParams: String
-        get() = preferenceSp.getString(SettingsPreferenceKeys.CUSTOM_PARAMS,"")?: ""
 
     /**
      * 对应关系详见 [SpeedLimitInterceptor.SPEED_BYTES]

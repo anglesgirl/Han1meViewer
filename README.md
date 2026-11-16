@@ -6,7 +6,7 @@
 
 🔞 R18 警告：未满 18 岁禁止下载和使用。
 
-Han1meViewer 是一个使用 Kotlin 开发的 Android 客户端，用于浏览、搜索、播放和管理 hanime 相关公开视频页面内容。当前项目以 Jetpack Compose、Navigation Compose、ViewModel、StateFlow、Retrofit、Jsoup、Room、WorkManager、Media3/MPV（Compose 播放器）为主要技术栈，围绕视频浏览、详情播放、搜索、用户列表、下载管理、评论、订阅、设置和隐私保护等功能组织。
+Han1meViewer 是一个使用 Kotlin 开发的 Android 客户端，用于浏览、搜索、播放和管理 hanime 相关公开视频页面内容。当前项目以 Jetpack Compose、Navigation Compose、ViewModel、StateFlow、Retrofit、Jsoup、Room、WorkManager、Media3（Compose 播放器）为主要技术栈，围绕视频浏览、详情播放、搜索、用户列表、下载管理、评论、订阅、设置和隐私保护等功能组织。
 
 本应用没有任何官方网站。GitHub Release 与 CI 构建产物是唯一下载及更新渠道。
 
@@ -71,7 +71,7 @@ Telegram 群组：[https://t.me/Han1meViewer](https://t.me/Han1meViewer)
 - 💬 评论系统：支持评论排序、回复查看、举报和复制分享文本。
 - 📥 下载管理：支持后台下载、下载分组（下载时可按系列名自动创建分组）、导入本地文件、自定义下载目录和下载后播放。
 - 🔐 账号能力：支持登录、手动录入 cookies、账号资料、头像裁剪、登录状态检测和退出登录。
-- 🎨 主题与设置：支持 Material 3 主题、动态颜色、首页布局、播放设置、MPV 设置、下载设置和网络设置。
+- 🎨 主题与设置：支持 Material 3 主题、动态颜色、首页布局、播放设置、下载设置和网络设置。
 - 🕵️ 隐私保护：支持应用锁、启动器图标伪装和手动 Cookie 管理。
 - 🌐 网络辅助：支持 Cloudflare 处理、备用域名、代理相关设置、CDN/网络检测和更新检查。
 - 📅 健康打卡：内置冲了么打卡页面和桌面小组件。
@@ -194,7 +194,7 @@ DownloadScreen -> DownloadViewModel -> HanimeDownloadManagerV2 -> WorkManager Wo
 - Room + KSP
 - WorkManager 后台任务
 - Coil 3 Compose 图片加载
-- Media3 ExoPlayer、MPV Android（Compose 播放器）
+- Media3 ExoPlayer（Compose 播放器）
 - Firebase Analytics、Crashlytics、Performance、Remote Config、Realtime Database
 - AndroidX Window、Biometric、SplashScreen、Preference
 - AboutLibraries 开源许可展示

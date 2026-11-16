@@ -50,7 +50,6 @@ composeBom = "2026.08.00"
 compose-material3 = "1.5.0-beta02"
 compose-material3-adaptive-navigation-suite = "1.5.0-beta02"
 ui-test-junit4 = "1.12.0"
-mpv = "v0.1.7"
 
 [libraries]
 # Android
@@ -121,7 +120,6 @@ media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls
 media3-datasource-cronet = { group = "androidx.media3", name = "media3-datasource-cronet", version.ref = "exoplayer" }
 media3-datasource-okhttp = { group = "androidx.media3", name = "media3-datasource-okhttp", version.ref = "exoplayer" }
 cronet-embedded = { group = "org.chromium.net", name = "cronet-embedded", version.ref = "cronetBundled" }
-mpv-lib = { group = "com.github.abdallahmehiz", name = "mpv-android", version.ref = "mpv" }
 
 # Other
 datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "datetime" }

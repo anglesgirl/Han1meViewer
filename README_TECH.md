@@ -18,7 +18,7 @@ Han1meViewer 当前是以 Kotlin + Jetpack Compose 为主的 Android 应用，�
 - Room + KSP。
 - WorkManager 后台下载和更新任务。
 - Coil 3 Compose 图片加载。
-- Media3 ExoPlayer、MPV Android 播放链路。
+- Media3 ExoPlayer 播放链路。
 - Firebase Analytics、Crashlytics、Performance、Remote Config、Realtime Database。
 
 当前主业务页面与播放器均为 Compose 实现，不再保留 JZVD 或其它播放器相关 View/XML 组件。
@@ -265,7 +265,7 @@ VideoRoute(videoCode = "-1", localUri) -> VideoViewModel.buildLocalPlayInfo -> H
 
 ## 8. 播放器架构
 
-播放器为纯 Compose 实现（`ui/player/`），JZVD 依赖已彻底移除。内核保留 Media3 ExoPlayer 与 libmpv 两种，通过统一接口抽象；页面、控件、手势全部 Compose 化，跨布局移动播放器不中断画面。
+播放器为纯 Compose 实现（`ui/player/`），JZVD 依赖已彻底移除。内核只用 Media3 ExoPlayer 单播放器；页面、控件、手势全部 Compose 化，跨布局移动播放器不中断画面。
 
 ### 8.1 分层总览
 
@@ -276,9 +276,8 @@ ui/player/
 ├── PlayerUiState.kt           PlayerState / PlayerUiState / PlayerProgress / PlayerEvent
 ├── HanimePlayerController.kt  状态中枢（内核编排、进度 ticker、音频焦点等）
 ├── kernel/
-│   ├── PlayerKernel.kt        内核接口 + KernelType + MediaRequest + 工厂
+│   ├── PlayerKernel.kt        内核接口 + MediaRequest + 工厂
 │   ├── ExoPlayerKernel.kt     Media3 ExoPlayer 实现
-│   └── MpvKernel.kt           libmpv 实现（Anime4K、fd:// 本地播放）
 ├── surface/
 │   └── PlayerSurface.kt       movableContent 视频 Surface
 └── video/                     播放器 UI 组件
@@ -286,7 +285,7 @@ ui/player/
     ├── PlayerGestureLayer.kt  Modifier.playerGestures 手势层
     ├── PlayerControls.kt      顶栏 / 底栏 / 电量时钟
     ├── PlayerSlider.kt        三层轨道进度条
-    ├── PlayerSideSheets.kt    气泡弹窗（倍速/清晰度/超分）+ 关键帧侧栏
+    ├── PlayerSideSheets.kt    气泡弹窗（倍速/清晰度）+ 关键帧侧栏
     ├── PlayerGestureIndicator.kt  音量/亮度/进度手势指示浮层
     └── KeyframeCountdown.kt   关键 H 帧倒计时
 
@@ -299,7 +298,7 @@ ui/screen/video/
 
 ### 8.2 内核层（kernel/）
 
-`PlayerKernel` 接口定义一路媒体的完整生命周期：`prepare → start/pause/seekTo/setSpeed/setLooping → release`，外加 `setSurface` / `onSurfaceSizeChanged` / `setSuperResolution`（MPV 专属，其余空实现）。`KernelType.fromString` 对旧版 `MediaPlayer` 设置值回落 ExoPlayer。
+`PlayerKernel` 接口定义一路媒体的完整生命周期：`prepare → start/pause/seekTo/setSpeed/setLooping → release`，外加 `setSurface`。单播放器，只保留 Media3 ExoPlayer 实现。
 
 **ExoPlayerKernel**：
 
@@ -308,14 +307,6 @@ ui/screen/video/
 - 起播缓冲按 `ActivityManager.memoryClass` 分档（48/64/96 MB），低内存设备防 OOM。
 - HLS（`.m3u8`）与普通媒体自动选择对应 MediaSource。
 - 释放时延迟 500ms 再 `quitSafely()`：media3 的 `release()` 内部还会向该 looper 投递收尾消息，立即退出会触发 dead thread 警告。
-
-**MpvKernel**：
-
-- `MPVLib` 为进程级单例（`HanimeApplication` 中 `create` + `init`），内核实例只做选项配置与事件观察。
-- **surface 迟到时延迟 loadfile**：`prepare()` 时若 surface 尚未就绪，先记下待播路径，等 `setSurface()` 到来后再 `loadfile`——否则 mpv 的 vo 初始化会因 WinID 无效直接原生崩溃（SIGABRT）。
-- 换源（切清晰度）时由控制器先释放旧内核、创建新内核并把当前 surface 挂回，再 prepare。
-- 本地 `file://` / `content://` 经 `ParcelFileDescriptor.detachFd()` 转为 `fd://` 播放。
-- Anime4K 超分通过 `change-list glsl-shaders` 动态加载 shader。
 
 ### 8.3 控制器（HanimePlayerController）
 
@@ -342,7 +333,7 @@ ui/screen/video/
 手势层迁移自旧版 `HJzvdStd.onTouch` 全部行为：单击切换控件、双击播放暂停、长按临时倍速（触觉反馈）、横滑调进度（灵敏度可调、越界钳制、ERROR 态禁用）、左半屏竖滑亮度、右半屏竖滑音量。两个要点：
 
 - **消费让位**：拖动中若事件被子组件（弹窗列表、进度条）消费（`change.isConsumed`），手势立即放弃，否则拖列表仍会触发音量/亮度。
-- 倍速/清晰度/超分弹窗为**锚定气泡**（对话泡 + 指向按钮的三角，按锚点坐标与方向定位、水平钳制在播放器内），弹出期间控件保持显示；关键帧列表内容长，仍用右侧滑入面板。
+- 倍速/清晰度弹窗为**锚定气泡**（对话泡 + 指向按钮的三角，按锚点坐标与方向定位、水平钳制在播放器内），弹出期间控件保持显示；关键帧列表内容长，仍用右侧滑入面板。
 
 ### 8.6 页面层：折叠头部与布局
 
@@ -391,7 +382,6 @@ exitFullscreen  → movable Surface 移回头部小窗 → 恢复系统栏/亮�
 
 - 画质信息由 `HanimeResolution` 解析后交给 `controller.setMedia`；播放器 UI 状态不写入网络模型，统一经 `HanimePlayerController` 状态流。
 - 页面级状态（Tab 选中、PiP、播放器高度）归 `VideoViewModel.VideoHostUiState`；播放器内部状态由 `HanimePlayerController.uiState` 驱动。
-- MPV 相关设置归 `MpvPlayerSettingsRouteScreen` 和偏好设置管理。
 - **勿在组合期间读取折叠比例**（新增折叠相关 UI 时走 layout/draw 阶段），否则列表闪烁回归。
 - **勿在内核 `prepare` 前让 `release()` 清掉 `pendingSurface`/`listener`**（Exo 双恢复逻辑），否则有声无画或永久 loading。
 - **播放页内的列表禁用 item 入场动画**（`enableItemAnimation = false`）：折叠联动会持续扩展视口，新进入的 item 以淡入动画进场会造成闪烁，每项动画协程在快速滚动时也会掉帧。
@@ -608,7 +598,6 @@ Room 主要用于：
 - `ui/navigation/settings/HomeSettingsRoute.kt`
 - `ui/screen/settings/HomeSettingsScreen.kt`
 - `ui/screen/settings/PlayerSettingsScreen.kt`
-- `ui/screen/settings/MpvPlayerSettingsScreen.kt`
 - `ui/screen/settings/DownloadSettingsScreen.kt`
 - `ui/screen/settings/NetworkSettingsScreen.kt`
 - `ui/screen/settings/HKeyframeSettingsScreen.kt`

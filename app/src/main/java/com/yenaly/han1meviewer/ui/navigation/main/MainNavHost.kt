@@ -36,8 +36,6 @@ import com.yenaly.han1meviewer.ui.navigation.settings.HKeyframesRoute
 import com.yenaly.han1meviewer.ui.navigation.settings.HKeyframesRouteScreen
 import com.yenaly.han1meviewer.ui.navigation.settings.HKeyframesTopBarActions
 import com.yenaly.han1meviewer.ui.navigation.settings.HomeSettingsRoute
-import com.yenaly.han1meviewer.ui.navigation.settings.MpvPlayerSettingsRoute
-import com.yenaly.han1meviewer.ui.navigation.settings.MpvPlayerSettingsRouteScreen
 import com.yenaly.han1meviewer.ui.navigation.settings.NetworkSettingsRoute
 import com.yenaly.han1meviewer.ui.navigation.settings.NetworkSettingsRouteScreen
 import com.yenaly.han1meviewer.ui.navigation.settings.PlayerSettingsRoute
@@ -327,11 +325,7 @@ fun MainNavHost(
                 navController = navController,
                 fallbackDestination = HomeSettingsRoute,
             ) {
-                PlayerSettingsRouteScreen(
-                    onNavigateToMpvSettings = {
-                        navController.navigateSettingsDestination(MpvPlayerSettingsRoute)
-                    },
-                )
+                PlayerSettingsRouteScreen()
             }
         }
         composable<NetworkSettingsRoute> {
@@ -348,14 +342,6 @@ fun MainNavHost(
                 fallbackDestination = HomeSettingsRoute,
             ) {
                 DownloadSettingsRouteScreen(activity = activity)
-            }
-        }
-        composable<MpvPlayerSettingsRoute> {
-            SettingsScaffold(
-                navController = navController,
-                fallbackDestination = PlayerSettingsRoute,
-            ) {
-                MpvPlayerSettingsRouteScreen()
             }
         }
         composable<HKeyframesRoute> {

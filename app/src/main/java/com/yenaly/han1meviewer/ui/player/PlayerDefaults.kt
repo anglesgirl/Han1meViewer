@@ -47,11 +47,6 @@ object PlayerDefaults {
     const val DEF_LONG_PRESS_SPEED_TIMES = 2.5f
 
     /**
-     * 默认超分（Anime4K）选项下标，0 表示关闭。
-     */
-    const val DEF_SUPER_RESOLUTION_INDEX = 0
-
-    /**
      * 可选倍速列表，从 0.1x 到 3.0x 共 13 档。
      */
     val speedArray = floatArrayOf(

@@ -68,7 +68,6 @@ import com.yenaly.han1meviewer.ui.player.PlayerDefaults
 import com.yenaly.han1meviewer.ui.player.PlayerEvent
 import com.yenaly.han1meviewer.ui.player.PlayerState
 import com.yenaly.han1meviewer.ui.player.PlayerUtils
-import com.yenaly.han1meviewer.ui.player.kernel.KernelType
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -84,7 +83,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * 3. 手势层（[Modifier.playerGestures]）
  * 4. 控件层（顶栏/底栏/中键/锁/倒计时/迷你进度条）
  * 5. 浮层（手势指示、从头开始、重试）
- * 6. 侧边弹窗（倍速/清晰度/超分/关键帧）
+ * 6. 侧边弹窗（倍速/清晰度/关键帧）
  *
  * @param controller 播放器控制器（唯一状态来源）
  * @param playerSurface 可移动的视频 Surface（[com.yenaly.han1meviewer.ui.player.surface.rememberMovablePlayerSurface] 的返回值）
@@ -126,13 +125,6 @@ fun HanimeVideoPlayer(
     val remindAheadMs = remember { Preferences.whenCountdownRemind }
     val showCommentCountdown = remember { Preferences.showCommentWhenCountdown }
     val showBottomProgress = remember { Preferences.showBottomProgress }
-    val superResLabels = remember {
-        listOf(
-            R.string.super_resolution_off,
-            R.string.super_resolution_performance,
-            R.string.super_resolution_quality,
-        )
-    }
 
     // ---------------- 本地 UI 状态 ----------------
 
@@ -145,7 +137,7 @@ fun HanimeVideoPlayer(
     /** 当前打开的侧边弹窗（仅关键帧列表使用右侧滑入面板）。 */
     var currentSheet by remember { mutableStateOf<PlayerSheetType?>(null) }
 
-    /** 当前打开的气泡弹窗（倍速/清晰度/超分）。 */
+    /** 当前打开的气泡弹窗（倍速/清晰度）。 */
     var bubble by remember { mutableStateOf<PlayerSheetType?>(null) }
 
     /** 气泡锚点（相对播放器左上，px）。 */
@@ -243,11 +235,6 @@ fun HanimeVideoPlayer(
         stringResource(R.string.speed)
     } else {
         PlayerDefaults.speedStringArray[uiState.speedIndex]
-    }
-    val superResLabel = if (uiState.superResolutionIndex == PlayerDefaults.DEF_SUPER_RESOLUTION_INDEX) {
-        stringResource(R.string.anime_4k)
-    } else {
-        stringResource(superResLabels[uiState.superResolutionIndex])
     }
 
     /**
@@ -399,9 +386,7 @@ fun HanimeVideoPlayer(
                 isFullscreen = isFullscreen,
                 title = uiState.title,
                 showHKeyframeButton = showHKeyframe,
-                showSuperResolution = controller.kernelType == KernelType.MpvPlayer,
                 speedLabel = speedLabel,
-                superResLabel = superResLabel,
                 onBack = onBack,
                 onGoHome = onGoHome,
                 onSpeedClick = { coords ->
@@ -412,9 +397,6 @@ fun HanimeVideoPlayer(
                     currentSheet = PlayerSheetType.Keyframes
                 },
                 onKeyframeLongClick = { onAddHKeyframeAt(progress.positionMs) },
-                onSuperResolutionClick = { coords ->
-                    openBubble(PlayerSheetType.SuperResolution, coords, preferAbove = false)
-                },
             )
         }
 
@@ -566,7 +548,7 @@ fun HanimeVideoPlayer(
             modifier = Modifier.fillMaxSize(),
         )
 
-        // 12. 气泡弹窗（倍速/清晰度/超分）：指向触发按钮，弹出期间控件保持显示
+        // 12. 气泡弹窗（倍速/清晰度）：指向触发按钮，弹出期间控件保持显示
         if (bubble != null) {
             // 点击气泡外区域关闭（吞掉点击，不透传给播放器手势）
             BubbleDismissScrim(
@@ -576,7 +558,6 @@ fun HanimeVideoPlayer(
             val itemCount = when (bubble) {
                 PlayerSheetType.Speed -> PlayerDefaults.speedArray.size
                 PlayerSheetType.Quality -> uiState.qualities.size.coerceAtLeast(1)
-                PlayerSheetType.SuperResolution -> 3
                 else -> 1
             }
             PlayerBubblePopup(
@@ -602,14 +583,6 @@ fun HanimeVideoPlayer(
                         currentIndex = uiState.currentQualityIndex,
                         onSelect = { index ->
                             controller.switchQuality(index)
-                            bubble = null
-                        },
-                    )
-
-                    PlayerSheetType.SuperResolution -> SuperResolutionBubble(
-                        currentIndex = uiState.superResolutionIndex,
-                        onSelect = { index ->
-                            controller.setSuperResolution(index)
                             bubble = null
                         },
                     )
