@@ -8,6 +8,12 @@ on:
     paths-ignore:
       - "**.md"
   workflow_dispatch:
+    inputs:
+      version_source:
+        description: 'Version source'
+        type: choice
+        options: [ci, release]
+        default: 'ci'
 
 jobs:
   build:
@@ -49,7 +55,7 @@ jobs:
         env:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           HA_GITHUB_TOKEN: ${{ secrets.HA_GITHUB_TOKEN }}
-          HA1_VERSION_SOURCE: 'ci'
+          HA1_VERSION_SOURCE: ${{ inputs.version_source || 'ci' }}
 
       - name: Upload APK Zip
         uses: actions/upload-artifact@v4
