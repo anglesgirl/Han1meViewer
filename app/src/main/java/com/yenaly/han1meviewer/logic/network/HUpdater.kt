@@ -66,6 +66,8 @@ object HUpdater {
      * @throws HUpdaterException.VersionCheck 无法从 GitHub 获取版本信息时
      */
     suspend fun checkForUpdate(forceCheck: Boolean = false): Latest? {
+        // Fork 没有 CI 更新渠道，应用内检查更新已停用，直接返回无更新。
+        return null
         if (!forceCheck && !Preferences.isUpdateDialogVisible) return null
         val channel = currentChannel()
         Log.d(TAG, "开始检查更新，渠道：${channel.logName}")

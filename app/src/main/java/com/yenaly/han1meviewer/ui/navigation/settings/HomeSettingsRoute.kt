@@ -39,7 +39,6 @@ import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.edit
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.firebase.Firebase
 import com.google.firebase.analytics.analytics
 import com.yenaly.han1meviewer.BuildConfig
@@ -50,7 +49,6 @@ import com.yenaly.han1meviewer.HanimeConstants
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.logic.BackupManager
-import com.yenaly.han1meviewer.logic.state.WebsiteState
 import com.yenaly.han1meviewer.ui.activity.MainActivity
 import com.yenaly.han1meviewer.ui.component.ConfirmDialog
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
@@ -63,7 +61,6 @@ import com.yenaly.han1meviewer.ui.screen.settings.HomeSettingsScreen
 import com.yenaly.han1meviewer.ui.screen.settings.dialog.LicenseDialog
 import com.yenaly.han1meviewer.ui.screen.settings.model.HomeSettingsUiState
 import com.yenaly.han1meviewer.ui.theme.ThemeColorPreset
-import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.util.ActivityManager
 import com.yenaly.han1meviewer.util.ThemeUtils
 import com.yenaly.han1meviewer.util.browse
@@ -79,8 +76,6 @@ private const val HOME_WATCHED_PROGRESS_THRESHOLD = "watched_progress_threshold"
 private const val HOME_SEARCH_PAGINATION = "search_pagination"
 private const val HOME_RELATED_VIDEO_AS_TAB = "related_video_as_tab"
 private const val HOME_ALLOW_PIP_MODE = "allow_pip_mode"
-private const val HOME_UPDATE_POPUP_INTERVAL_DAYS = "update_popup_interval_days"
-private const val HOME_USE_CI_UPDATE_CHANNEL = "use_ci_update_channel"
 private const val HOME_USE_ANALYTICS = "use_analytics"
 private const val HOME_FAKE_LAUNCHER_ICON = "pref_fake_launcher_icon"
 private const val HOME_USE_DARK_MODE = "use_dark_mode"
@@ -138,7 +133,6 @@ fun SettingsCategoryRouteScreen(
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val versionState by AppViewModel.versionFlow.collectAsStateWithLifecycle()
     var refreshKey by remember { mutableIntStateOf(0) }
     var cacheKey by remember { mutableIntStateOf(0) }
     var showClearCacheConfirm by remember { mutableStateOf(false) }
@@ -219,33 +213,10 @@ fun SettingsCategoryRouteScreen(
         }
     }
 
-    val updateSummary = remember(versionState, context) {
-        // 注意：versionState 是委托属性，只能在这里取一次快照，无法智能转换
-        when (val state = versionState) {
-            is WebsiteState.Error -> {
-                // 更新模块会把「限额耗尽 / 密钥失效 / 网络异常」等具体原因带在异常里，
-                // 优先展示具体原因，拿不到才回退到笼统的「检查更新失败，点击重试」
-                state.throwable.message?.takeIf { it.isNotBlank() }
-                    ?: context.getString(R.string.check_update_failed)
-            }
-
-            is WebsiteState.Loading -> context.getString(R.string.checking_update)
-
-            is WebsiteState.Success -> {
-                val info = state.info
-                if (info == null) {
-                    context.getString(R.string.already_latest_update)
-                } else {
-                    context.getString(R.string.check_update_success, info.version)
-                }
-            }
-        }
-    }
-    val uiState = remember(refreshKey, updateSummary, cacheSummary, launcherItems, context) {
+    val uiState = remember(refreshKey, cacheSummary, launcherItems, context) {
         buildHomeSettingsUiState(
             context = context,
             launcherItems = launcherItems,
-            updateSummary = updateSummary,
             cacheSummary = cacheSummary,
         )
     }
@@ -357,11 +328,6 @@ fun SettingsCategoryRouteScreen(
             saveHomeCategoryPreferences(order, hiddenKeys)
             refreshKey++
         },
-        onUseCIUpdateChannelChange = { value ->
-            saveBoolean(HOME_USE_CI_UPDATE_CHANNEL, value)
-            refreshKey++
-            AppViewModel.getLatestVersion()
-        },
         onUseAnalyticsChange = { value ->
             if (!value) {
                 showAnalyticsDialog = true
@@ -390,18 +356,6 @@ fun SettingsCategoryRouteScreen(
                 refreshKey++
                 recreateAfterDialogDismiss()
             }
-        },
-        onCheckUpdate = {
-            val currentVersion = versionState
-            if (currentVersion is WebsiteState.Success && currentVersion.info != null) {
-                AppViewModel.showUpdateDialogIfAvailable()
-            } else {
-                AppViewModel.getLatestVersion(forceShow = true)
-            }
-        },
-        onUpdatePopupIntervalDaysChange = {
-            Preferences.preferenceSp.edit { putInt(HOME_UPDATE_POPUP_INTERVAL_DAYS, it) }
-            refreshKey++
         },
         onOpenFakeLauncherIcon = { showLauncherPicker = true },
         onOpenOpenSourceLicense = { showLicenseScreen = true },
@@ -591,7 +545,6 @@ private data class LauncherItem(
 private fun buildHomeSettingsUiState(
     context: Context,
     launcherItems: List<LauncherItem>,
-    updateSummary: String,
     cacheSummary: String,
 ): HomeSettingsUiState {
     val currentAlias = Preferences.fakeLauncherIcon
@@ -639,21 +592,14 @@ private fun buildHomeSettingsUiState(
         showExitConfirm = Preferences.showExitConfirm,
         disableComments = Preferences.preferenceSp.getBoolean(HOME_DISABLE_COMMENTS, false),
         collapseDownloadedGroup = Preferences.collapseDownloadedGroup,
-        useCIUpdateChannel = Preferences.useCIUpdateChannel,
         useAnalytics = Preferences.isAnalyticsEnabled,
         useLockScreen = Preferences.preferenceSp.getBoolean(HOME_USE_LOCK_SCREEN, false),
         fakeLauncherIconName = currentItem.name,
-        updateSummary = updateSummary,
         cacheSummary = cacheSummary,
         versionSummary = context.getString(
             R.string.current_version,
             "v${BuildConfig.VERSION_NAME}"
         ),
-        updatePopupIntervalSummary = toIntervalDaysPrettyString(
-            context,
-            Preferences.updatePopupIntervalDays
-        ),
-        updatePopupIntervalDays = Preferences.updatePopupIntervalDays,
         dynamicColorEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
         themeColorKey = Preferences.themeColor ?: ThemeColorPreset.DEFAULT.key,
         themeColorName = context.getString(ThemeColorPreset.fromKey(Preferences.themeColor).displayNameRes),
