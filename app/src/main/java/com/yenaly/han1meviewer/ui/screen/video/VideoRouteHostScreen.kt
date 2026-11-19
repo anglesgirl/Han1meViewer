@@ -99,9 +99,7 @@ import com.yenaly.han1meviewer.ui.component.ConfirmDialog
 import com.yenaly.han1meviewer.ui.component.GlobalDialogs
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import com.yenaly.han1meviewer.ui.component.TextInputField
-import com.yenaly.han1meviewer.ui.navigation.main.HomeRoute
 import com.yenaly.han1meviewer.ui.navigation.main.VideoRoute
-import com.yenaly.han1meviewer.ui.navigation.navigateSafely
 import com.yenaly.han1meviewer.ui.player.HanimePlayerController
 import com.yenaly.han1meviewer.ui.player.PlayerState
 import com.yenaly.han1meviewer.ui.player.surface.rememberMovablePlayerSurface
@@ -316,16 +314,12 @@ fun VideoRouteHostScreen(
 
     // ---------------- PiP ----------------
 
-    /** PiP 是否允许（与 MainActivity.onUserLeaveHint 读取同一偏好）。 */
-    val pipAllowed = remember(activity) {
-        android.preference.PreferenceManager
-            .getDefaultSharedPreferences(activity)
-            .getBoolean("allow_pip_mode", true)
-    }
+    /** PiP 是否允许（与 MainActivity.onUserLeaveHint 读取同一偏好）。
+     *  每次重组直接读取（SharedPreferences 首次加载后在内存），设置页改动后不会残留旧值。 */
+    val pipAllowed = Preferences.allowPipMode
 
-    /** PiP 是否满足进入条件（播放或暂停中）。 */
-    val pipEligible = playerUiState.state == PlayerState.PLAYING ||
-            playerUiState.state == PlayerState.PAUSED
+    /** PiP 是否满足进入条件（仅播放中；暂停/停止/播完等非播放状态一律不进 PiP，issue #684）。 */
+    val pipEligible = playerUiState.state == PlayerState.PLAYING
 
     /**
      * PiP 窗口宽高比：按视频实际比例（PiP 支持范围外时收敛到边界），
@@ -400,6 +394,24 @@ fun VideoRouteHostScreen(
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isInPipMode) {
             runCatching { activity.setPictureInPictureParams(buildPipParams(true, pipEligible)) }
+        }
+    }
+
+    // 离开播放页时必须显式关闭 autoEnter（issue #684）：
+    // setPictureInPictureParams 登记在 Activity 级、留驻系统，不会随本页销毁而失效。
+    // 若不清除，只要本页播放/暂停过一次，之后从 App 任意页面回桌面，
+    // 系统都会把已 release 的播放器塞进 PiP 小窗（黑屏死窗口）。
+    DisposableEffect(activity) {
+        onDispose {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                runCatching {
+                    activity.setPictureInPictureParams(
+                        PictureInPictureParams.Builder()
+                            .setAutoEnterEnabled(false)
+                            .build()
+                    )
+                }
+            }
         }
     }
 
@@ -542,13 +554,8 @@ fun VideoRouteHostScreen(
         if (isFullscreen) {
             exitFullscreen()
         }
-        val navController = activity.navController
-        val currentId = navController.currentBackStackEntry?.destination?.id
-        navController.navigateSafely(VideoRoute(next.videoCode, autoPlay = true)) {
-            if (currentId != null) {
-                popUpTo(currentId) { inclusive = true }
-            }
-        }
+        // 替换栈顶视频页（对应 Navigation 2 时代的 popUpTo(current){inclusive=true}）
+        activity.navigator.replaceTop(VideoRoute(next.videoCode, autoPlay = true))
     }
 
     LaunchedEffect(controller) {
@@ -663,7 +670,7 @@ fun VideoRouteHostScreen(
             onPendingDownloadPromptChange = { pendingDownloadPrompt = it },
             getCheckedQuality = { checkedQuality },
             setCheckedQuality = { checkedQuality = it },
-            onStoragePermissionDenied = { activity.navController.popBackStack() },
+            onStoragePermissionDenied = { activity.navigator.goBack() },
             onRequestUnsubscribeConfirm = { artist -> unsubscribeArtist = artist },
             onRequestDownloadPermissionSettings = { showDownloadPermissionDialog = true },
         )
@@ -691,10 +698,10 @@ fun VideoRouteHostScreen(
                 else activity.onBackPressedDispatcher.onBackPressed()
             },
             onGoHome = {
-                if (activity.resources.getBoolean(R.bool.isTablet)) {
-                    activity.navController.popBackStack(HomeRoute, false)
-                }
-                activity.startActivity(Intent(activity, MainActivity::class.java))
+                // 清空返回栈、让主页回到栈顶。MainActivity 是 singleTask，
+                // 直接 startActivity 只会触发 onNewIntent 而不会清栈，按钮会显得无响应。
+                // Navigation 3：切到 Home 栈并修剪到栈底；其他 Tab 状态保留。
+                activity.navigator.goHome()
             },
             onToggleFullscreen = {
                 if (fullscreen) exitFullscreen() else enterFullscreen()
@@ -1044,8 +1051,8 @@ fun VideoRouteHostScreen(
                         val b = playerWindowBounds
                         val rectValid = b.width > 0 && b.height > 0 &&
                                 b.right <= size.width && b.bottom <= size.height
-                        val sx0 = if (rectValid) b.width / size.width.toFloat() else 1f
-                        val sy0 = if (rectValid) b.height / size.height.toFloat() else 1f
+                        val sx0 = if (rectValid) b.width / size.width else 1f
+                        val sy0 = if (rectValid) b.height / size.height else 1f
                         transformOrigin = TransformOrigin(0f, 0f)
                         scaleX = lerp(sx0, 1f, p)
                         scaleY = lerp(sy0, 1f, p)
@@ -1095,7 +1102,7 @@ fun VideoRouteHostScreen(
             dismissButton = {
                 TextButton(onClick = {
                     showDownloadPermissionDialog = false
-                    activity.navController.popBackStack()
+                    activity.navigator.goBack()
                 }) {
                     Text(activity.getString(R.string.cancel))
                 }

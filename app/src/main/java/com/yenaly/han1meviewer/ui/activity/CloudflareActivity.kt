@@ -19,6 +19,7 @@ import com.yenaly.han1meviewer.logic.network.ech.HyWebViewHelper
 import com.yenaly.han1meviewer.ui.screen.web.CloudflareScreen
 import com.yenaly.han1meviewer.ui.theme.HanimeTheme
 import com.yenaly.han1meviewer.util.CookieString
+import com.yenaly.han1meviewer.util.HAnalytics
 
 class CloudflareActivity : BaseActivity() {
 
@@ -37,6 +38,7 @@ class CloudflareActivity : BaseActivity() {
             finish()
             return
         }
+        HAnalytics.logScreenView("CloudflareVerification", "CloudflareActivity")
 
         tipTextState.value = getString(R.string.complete_cloudflare_verification_with_warning)
 

@@ -427,6 +427,7 @@ Recommendations are as follows:\n
     <string name="download_error_cancelled">Download paused.</string>
     <string name="download_error_storage">Unable to write the downloaded file. Check storage space, folder permission, or choose the download folder again.</string>
     <string name="download_error_range_not_supported">The server cannot resume from the saved position. Delete this task and download it again.</string>
+    <string name="download_error_link_invalid">The download link has expired or was rejected by the server. Delete this task and download it again.</string>
     <string name="download_error_file_info">Unable to get file size or download information. Try again later.</string>
     <string name="custom">Custom</string>
     <string name="show_bottom_progress">Show Bottom Progress Bar</string>
@@ -665,6 +666,8 @@ Recommendations are as follows:\n
     <string name="report_month_format">%1$d</string>
     <string name="report_year_month_format">%2$d/%1$d</string>
     <string name="comment_too_short">The comment is too short, please enter at least 5 characters</string>
+    <string name="comment_post_success">Comment posted successfully!</string>
+    <string name="reply_post_success">Reply posted successfully!</string>
     <string name="sort_by_newest">Newest</string>
     <string name="sort_by_oldest">Oldest</string>
     <string name="sort_by_replies">Most replies</string>
@@ -761,11 +764,15 @@ Recommendations are as follows:\n
     <string name="switch_site">Switch Site</string>
     <string name="confirm_switch_site">Are you sure you want to switch site?</string>
     <string name="disable_predictive_back_title">Disable Predictive Back Animation</string>
+    <string name="disable_predictive_back_summary">When disabled, dragging the back gesture no longer previews pages; releasing still navigates back normally</string>
     <string name="play_trailer">Play Trailer</string>
     <string name="load_complete">Load complete !</string>
     <string name="search_video_hint">Search videos…</string>
     <string name="recent_searches">Recent Searches</string>
     <string name="search_no_results">No results found</string>
+    <string name="hide_watched">Hide watched</string>
+    <string name="show_watched">Show watched</string>
+    <string name="search_all_results_watched_hidden">All current results are watched and hidden</string>
     <string name="search_load_failed_with_reason">Load failed: %1$s</string>
     <string name="load_failed_with_reason">Load failed: %1$s</string>
     <string name="more">More</string>

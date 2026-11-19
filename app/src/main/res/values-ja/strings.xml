@@ -435,6 +435,7 @@ hanime1.me以外のドメインは、特定の時間帯にhanime1.meにリダイ
     <string name="download_error_cancelled">ダウンロードを一時停止しました。</string>
     <string name="download_error_storage">ダウンロードファイルを書き込めません。空き容量、フォルダ権限、またはダウンロード先を確認してください。</string>
     <string name="download_error_range_not_supported">サーバーが保存位置からの再開に対応していません。このタスクを削除して再ダウンロードしてください。</string>
+    <string name="download_error_link_invalid">ダウンロードリンクの有効期限が切れたか、サーバーに拒否されました。このタスクを削除して再ダウンロードしてください。</string>
     <string name="download_error_file_info">ファイルサイズまたはダウンロード情報を取得できません。後でもう一度お試しください。</string>
     <string name="custom">カスタム</string>
     <string name="show_bottom_progress">下部プログレスバー表示</string>
@@ -669,6 +670,8 @@ hanime1.me以外のドメインは、特定の時間帯にhanime1.meにリダイ
     <string name="report_month_format">%1$d月</string>
     <string name="report_year_month_format">%1$d年%2$d月</string>
     <string name="comment_too_short">コメントが短すぎます、5文字以上入力</string>
+    <string name="comment_post_success">コメントを送信しました！</string>
+    <string name="reply_post_success">返信を送信しました！</string>
     <string name="sort_by_newest">最新</string>
     <string name="sort_by_oldest">最古</string>
     <string name="sort_by_replies">返信数順</string>
@@ -754,11 +757,15 @@ hanime1.me以外のドメインは、特定の時間帯にhanime1.meにリダイ
     <string name="switch_site">サイト切替</string>
     <string name="confirm_switch_site">サイトを切り替えますか？</string>
     <string name="disable_predictive_back_title">予測型バックアニメーションを無効化</string>
+    <string name="disable_predictive_back_summary">無効にすると、バックジェスチャーのドラッグ中にページプレビューが表示されなくなります（指を離すと通常どおり戻ります）</string>
     <string name="play_trailer">予告編を再生</string>
     <string name="load_complete">読み込み完了！</string>
     <string name="search_video_hint">動画を検索…</string>
     <string name="recent_searches">最近の検索</string>
     <string name="search_no_results">検索結果が見つかりません</string>
+    <string name="hide_watched">視聴済みを非表示</string>
+    <string name="show_watched">視聴済みを表示</string>
+    <string name="search_all_results_watched_hidden">現在の検索結果はすべて視聴済みのため非表示にしました</string>
     <string name="search_load_failed_with_reason">読み込み失敗：%1$s</string>
     <string name="load_failed_with_reason">読み込み失敗：%1$s</string>
     <string name="more">もっと見る</string>

@@ -31,22 +31,22 @@ import androidx.core.content.edit
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.NavHostController
 import androidx.preference.PreferenceManager
 import com.yenaly.han1meviewer.PermissionRequester
 import com.yenaly.han1meviewer.Preferences
+import com.yenaly.han1meviewer.FirebaseConstants
 import com.yenaly.han1meviewer.R
 import com.yenaly.han1meviewer.base.BaseFragmentActivity
 import com.yenaly.han1meviewer.logout
 import com.yenaly.han1meviewer.ui.bridge.VideoPageHost
 import com.yenaly.han1meviewer.ui.component.GlobalToasts
 import com.yenaly.han1meviewer.ui.navigation.main.VideoRoute
-import com.yenaly.han1meviewer.ui.navigation.navigateSafely
 import com.yenaly.han1meviewer.ui.navigation.settings.SettingsPreferenceKeys
 import com.yenaly.han1meviewer.ui.screen.home.homepage.HomePageViewModel
 import com.yenaly.han1meviewer.ui.screen.main.MainActivityContent
 import com.yenaly.han1meviewer.util.ActivityManager
 import com.yenaly.han1meviewer.util.ClipboardVideoLinkGuard
+import com.yenaly.han1meviewer.util.HAnalytics
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 
@@ -59,7 +59,7 @@ class MainActivity : BaseFragmentActivity(), PermissionRequester {
 
     val viewModel by viewModels<HomePageViewModel>()
 
-    lateinit var navController: NavHostController
+    lateinit var navigator: com.yenaly.han1meviewer.ui.navigation.Navigator
     val snackbarHostState = SnackbarHostState()
     private var showAuthGuard by mutableStateOf(true)
     private val pendingNavigationRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
@@ -108,7 +108,7 @@ class MainActivity : BaseFragmentActivity(), PermissionRequester {
                 onLogoutClick = { requestLogout(false) },
                 onRequireLogin = { gotoLoginActivity() },
                 onSwitchSiteClick = { requestSiteSwitch() },
-                onNavigateControllerReady = { controller -> navController = controller },
+                onNavigateControllerReady = { navigator = it },
             )
         }
     }
@@ -238,7 +238,8 @@ class MainActivity : BaseFragmentActivity(), PermissionRequester {
     }
 
     override fun onSupportNavigateUp(): Boolean {
-        return navController.navigateUp() || super.onSupportNavigateUp()
+        // Navigation 3 无 NavController.navigateUp；返回交给系统返回处理（NavDisplay）。
+        return super.onSupportNavigateUp()
     }
 
     private fun showClipboardLinkSnackbar(videoCode: String) {
@@ -251,6 +252,11 @@ class MainActivity : BaseFragmentActivity(), PermissionRequester {
                 duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) {
+                // 剪贴板链接跳转埋点
+                HAnalytics.logEvent(
+                    FirebaseConstants.EVENT_CLIPBOARD_LINK_OPEN,
+                    FirebaseConstants.PARAM_VIDEO_CODE to videoCode,
+                )
                 showVideoDetailFragment(videoCode)
             }
         }
@@ -267,6 +273,12 @@ class MainActivity : BaseFragmentActivity(), PermissionRequester {
     fun switchSite(targetUrl: String) {
         showSiteSwitchConfirm = false
         if (targetUrl == Preferences.baseUrl) return
+        // 站点切换埋点
+        HAnalytics.logEvent(
+            FirebaseConstants.EVENT_SITE_SWITCH,
+            FirebaseConstants.PARAM_FROM_URL to Preferences.baseUrl,
+            FirebaseConstants.PARAM_TO_URL to targetUrl,
+        )
         Preferences.preferenceSp.edit(true) {
             putString(SettingsPreferenceKeys.SELECTED_BASE_URL, targetUrl)
             putString(SettingsPreferenceKeys.DOMAIN_NAME, targetUrl)
@@ -292,8 +304,10 @@ class MainActivity : BaseFragmentActivity(), PermissionRequester {
 
     fun confirmLogout() {
         showLogoutConfirm = false
+        // 登出埋点
+        HAnalytics.logEvent(FirebaseConstants.EVENT_LOGOUT)
         if (logoutCloseCurrentPage) {
-            navController.popBackStack()
+            navigator.goBack()
         }
         logoutWithRefresh()
     }
@@ -304,7 +318,7 @@ class MainActivity : BaseFragmentActivity(), PermissionRequester {
     }
 
     fun showVideoDetailFragment(videoCode: String, fileUri: String? = null) {
-        navController.navigateSafely(VideoRoute(videoCode, fileUri))
+        navigator.navigate(VideoRoute(videoCode, fileUri))
     }
 
     fun registerCurrentVideoHost(host: VideoPageHost?) {
@@ -379,9 +393,7 @@ class MainActivity : BaseFragmentActivity(), PermissionRequester {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val currentFragment = currentVideoHost
-
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val allowPip = prefs.getBoolean("allow_pip_mode", true)
+        val allowPip = Preferences.allowPipMode
 
         Log.i("pipmode", "enter pip mode?\n$currentFragment\nallowpip:$allowPip\n")
 

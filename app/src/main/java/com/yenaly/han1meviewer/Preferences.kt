@@ -113,6 +113,9 @@ object Preferences {
 
     // 設定 相關
 
+    val allowPipMode: Boolean
+        get() = preferenceSp.getBoolean(SettingsPreferenceKeys.ALLOW_PIP_MODE, true)
+
     val showBottomProgress: Boolean
         get() = preferenceSp.getBoolean(
             SettingsPreferenceKeys.SHOW_BOTTOM_PROGRESS,

@@ -6,6 +6,8 @@ import android.util.Log
 import android.util.SparseArray
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.yenaly.han1meviewer.FirebaseConstants
 import com.yenaly.han1meviewer.HanimeConstants.HANIME_URL
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.base.BaseViewModel
@@ -18,6 +20,7 @@ import com.yenaly.han1meviewer.logic.model.HanimeInfo
 import com.yenaly.han1meviewer.logic.model.HanimeSearchResult
 import com.yenaly.han1meviewer.logic.model.SearchOption
 import com.yenaly.han1meviewer.logic.state.PageLoadingState
+import com.yenaly.han1meviewer.util.HAnalytics
 import com.yenaly.han1meviewer.util.loadAssetAs
 import com.yenaly.han1meviewer.util.unsafeLazy
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +79,13 @@ class SearchViewModel(
     var broad: Boolean
         get() = state["broad"] ?: false
         set(value) { state["broad"] = value }
+
+    /**
+     * 搜索结果中是否隐藏已观看的视频（由搜索结果页右侧按钮切换）。
+     */
+    var hideWatched: Boolean
+        get() = state["hideWatched"] ?: false
+        set(value) { state["hideWatched"] = value }
 
     var duration: String?
         get() = state["duration"]
@@ -162,6 +172,21 @@ class SearchViewModel(
         duration: String?, tags: Set<String>, brands: Set<String>,
     ) {
         viewModelScope.launch {
+            // 搜索行为埋点：使用 GA4 标准 search 事件，便于后台漏斗/搜索词报告
+            val hasAdvancedFilters = genre != null || sort != null || date != null ||
+                    duration != null || tags.isNotEmpty() || brands.isNotEmpty() || broad
+            HAnalytics.logEvent(
+                FirebaseAnalytics.Event.SEARCH,
+                FirebaseAnalytics.Param.SEARCH_TERM to (query ?: ""),
+                FirebaseConstants.PARAM_SEARCH_TYPE to if (hasAdvancedFilters) "advanced" else "simple",
+                FirebaseConstants.PARAM_PAGE to page,
+                FirebaseConstants.PARAM_BROAD to broad,
+                FirebaseConstants.PARAM_GENRE to genre,
+                FirebaseConstants.PARAM_SORT to sort,
+                FirebaseConstants.PARAM_DURATION to duration,
+                FirebaseConstants.PARAM_TAG_COUNT to tags.size,
+                FirebaseConstants.PARAM_BRAND_COUNT to brands.size,
+            )
             NetworkRepo.getHanimeSearchResult(
                 page, query, genre,
                 sort, broad, date ,
@@ -169,18 +194,23 @@ class SearchViewModel(
             ).collect { state ->
                 _searchStateFlow.value = state
                 if (state is PageLoadingState.Success) {
+                    HAnalytics.logEvent(
+                        FirebaseAnalytics.Event.VIEW_SEARCH_RESULTS,
+                        FirebaseAnalytics.Param.SEARCH_TERM to (query ?: ""),
+                        FirebaseConstants.PARAM_PAGE to page,
+                        FirebaseConstants.PARAM_RESULT_COUNT to state.info.list.size,
+                        FirebaseConstants.PARAM_TOTAL_PAGES to state.info.totalPages,
+                    )
                     _totalPagesFlow.value = state.info.totalPages
                     val list = state.info.list
-                    val updatedList = if (Preferences.showPlayedIndicator) {
-                        val codes = list.map { it.videoCode }
-                        val watchedCodes = withContext(Dispatchers.IO) {
-                            DatabaseRepo.WatchHistory.getWatched(codes).toSet()
-                        }
-                        list.map { item ->
-                            item.copy(watched = watchedCodes.contains(item.videoCode))
-                        }
-                    } else {
-                        list
+                    // 无论是否显示“已观看”角标，都查询已观看状态，
+                    // 这样搜索结果页的“隐藏已观看”过滤始终可用。
+                    val codes = list.map { it.videoCode }
+                    val watchedCodes = withContext(Dispatchers.IO) {
+                        DatabaseRepo.WatchHistory.getWatched(codes).toSet()
+                    }
+                    val updatedList = list.map { item ->
+                        item.copy(watched = watchedCodes.contains(item.videoCode))
                     }
                     if (Preferences.searchPagination) {
                         _searchFlow.value = updatedList
