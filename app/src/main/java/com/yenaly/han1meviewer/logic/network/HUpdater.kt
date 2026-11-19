@@ -1,10 +1,7 @@
 package com.yenaly.han1meviewer.logic.network
 
 import android.util.Log
-import com.google.firebase.Firebase
-import com.google.firebase.remoteconfig.remoteConfig
 import com.yenaly.han1meviewer.BuildConfig
-import com.yenaly.han1meviewer.FirebaseConstants
 import com.yenaly.han1meviewer.Preferences
 import com.yenaly.han1meviewer.logic.exception.HUpdaterException
 import com.yenaly.han1meviewer.logic.model.github.CommitComparison
@@ -66,8 +63,6 @@ object HUpdater {
      * @throws HUpdaterException.VersionCheck 无法从 GitHub 获取版本信息时
      */
     suspend fun checkForUpdate(forceCheck: Boolean = false): Latest? {
-        // Fork 没有 CI 更新渠道，应用内检查更新已停用，直接返回无更新。
-        return null
         if (!forceCheck && !Preferences.isUpdateDialogVisible) return null
         val channel = currentChannel()
         Log.d(TAG, "开始检查更新，渠道：${channel.logName}")
@@ -80,31 +75,12 @@ object HUpdater {
     /**
      * 用户当前选择的更新渠道。
      *
-     * 渠道只由用户设置决定。CI 开关（Remote Config 的 `enable_ci_update`）只用于让作者
-     * 在 CI 出故障时临时下线 CI 频道，默认开启；用户主动勾选 CI 频道时也始终以 CI 为准。
+     * 本 fork 没有 CI 更新频道：CI 渠道走 GitHub Actions API，需要 token，普通用户
+     * 打开会直接报 token 错误，因此固定走 Release 频道。旧版本保存过的
+     * `Preferences.useCIUpdateChannel` 一律忽略，绝不能再切回 CI 频道。
      */
     private fun currentChannel(): Channel {
-        if (!Preferences.useCIUpdateChannel) return Channel.RELEASE
-        // Remote Config 未初始化完成时读取会抛异常，这里不再吞掉并回落到 Release，
-        // 而是作为一次明确的失败上报（界面提示具体原因，用户可手动重试）
-        val ciEnabled = try {
-            Firebase.remoteConfig.getBoolean(FirebaseConstants.ENABLE_CI_UPDATE)
-        } catch (e: Exception) {
-            Log.w(TAG, "读取 Remote Config 的 ${FirebaseConstants.ENABLE_CI_UPDATE} 失败：${e.message}")
-            throw HUpdaterException.VersionCheck(
-                message = "无法读取远端配置（${FirebaseConstants.ENABLE_CI_UPDATE}）：${e.message}",
-                cause = e,
-                reason = HUpdaterException.VersionCheck.Reason.NETWORK,
-            )
-        }
-        if (!ciEnabled) {
-            Log.w(TAG, "CI 频道已被 Remote Config（${FirebaseConstants.ENABLE_CI_UPDATE}）下线")
-            throw HUpdaterException.VersionCheck(
-                message = "CI 更新频道已被远端开关（${FirebaseConstants.ENABLE_CI_UPDATE}）下线",
-                reason = HUpdaterException.VersionCheck.Reason.NO_RELEASE,
-            )
-        }
-        return Channel.CI
+        return Channel.RELEASE
     }
 
     /**

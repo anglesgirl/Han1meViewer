@@ -24,6 +24,7 @@ import com.yenaly.han1meviewer.logic.network.HDns
 import com.yenaly.han1meviewer.logic.network.HProxySelector
 import com.yenaly.han1meviewer.logic.network.ech.CdnHostRewriter
 import com.yenaly.han1meviewer.ui.activity.MainActivity
+import com.yenaly.han1meviewer.ui.viewmodel.AppViewModel
 import com.yenaly.han1meviewer.util.HAnalytics
 import com.yenaly.han1meviewer.util.ThemeUtils
 import okhttp3.OkHttpClient
@@ -153,7 +154,9 @@ class HanimeApplication : BaseApplication(), SingletonImageLoader.Factory {
                 fetchTimeoutInSeconds = 10
             })
             setDefaultsAsync(FirebaseConstants.remoteConfigDefaults)
-            fetchAndActivate()
+            fetchAndActivate().addOnCompleteListener {
+                AppViewModel.getLatestVersion(delayMillis = 200)
+            }
         }
         Firebase.database.setPersistenceEnabled(true)
     }

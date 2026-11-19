@@ -73,6 +73,8 @@ fun HomeSettingsScreen(
     onHomeCategoryPreferencesChange: (List<String>, Set<String>) -> Unit,
     onOpenPlayerSettings: () -> Unit,
     onOpenAppLanguageSettings: (String) -> Unit,
+    onCheckUpdate: () -> Unit,
+    onUpdatePopupIntervalDaysChange: (Int) -> Unit,
     onOpenFakeLauncherIcon: () -> Unit,
     onOpenOpenSourceLicense: () -> Unit,
     onOpenAboutPage: () -> Unit,
@@ -467,6 +469,26 @@ fun HomeSettingsScreen(
             }
 
             SettingsCategory.About -> {
+                item { SettingsGroupTitle(stringResource(R.string.update)) }
+                item {
+                    SettingNavigationItem(
+                        title = stringResource(R.string.check_update),
+                        summary = state.updateSummary,
+                        iconRes = R.drawable.ic_baseline_update_24,
+                        onClick = onCheckUpdate,
+                    )
+                }
+                item {
+                    SettingSliderItem(
+                        title = stringResource(R.string.update_popup_interval_days),
+                        summary = state.updatePopupIntervalSummary,
+                        value = state.updatePopupIntervalDays,
+                        valueRange = 0..30,
+                        iconRes = R.drawable.ic_clock,
+                        onValueChange = onUpdatePopupIntervalDaysChange,
+                    )
+                }
+
                 item { SettingsGroupTitle(stringResource(R.string.settings_group_feedback)) }
                 item {
                     SettingNavigationItem(
